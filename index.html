@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bakafrawi — Studio Web & Aplikasi</title>
+<meta name="description" content="Bakafrawi adalah studio pengembang web & aplikasi. Kami membangun website, aplikasi, dan sistem manajemen yang rapi, cepat, dan andal untuk bisnis & lembaga." />
+
+<!-- ====== Open Graph (untuk preview saat dibagikan) ====== -->
+<meta property="og:title" content="Bakafrawi — Studio Web & Aplikasi" />
+<meta property="og:description" content="Kami membangun website, aplikasi, dan sistem manajemen yang rapi, cepat, dan andal." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://bakafrawi.com" />
+<meta name="theme-color" content="#0c0e12" />
+<link rel="canonical" href="https://bakafrawi.com" />
+<link rel="icon" type="image/png" href="logo.png" />
+<link rel="apple-touch-icon" href="logo.png" />
+<meta property="og:image" content="https://bakafrawi.com/logo.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Bakafrawi — Studio Web & Aplikasi" />
+<meta name="twitter:description" content="Kami membangun website, aplikasi, dan sistem manajemen yang rapi, cepat, dan andal." />
+<meta name="twitter:image" content="https://bakafrawi.com/logo.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap" rel="stylesheet" />
+
+<style>
+  :root{
+    --bg:#0c0e12;
+    --bg-soft:#13161c;
+    --bg-card:#15191f;
+    --text:#e9eaee;
+    --muted:#9aa1ad;
+    --faint:#6b727e;
+    --accent:#c9a24b;        /* emas lembut */
+    --accent-soft:#e3c989;
+    --border:rgba(255,255,255,.08);
+    --border-strong:rgba(255,255,255,.14);
+    --shadow:0 24px 60px -28px rgba(0,0,0,.85);
+    --radius:16px;
+    --maxw:1120px;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  img{max-width:100%;display:block}
+  section{padding:110px 0;position:relative}
+  .wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 24px}
+
+  /* ===== Tipografi ===== */
+  h1,h2,h3{font-weight:600;line-height:1.15;letter-spacing:-.02em}
+  .display{font-family:'Fraunces',Georgia,serif;font-weight:500}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:.78rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--accent);margin-bottom:18px;
+  }
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--accent);opacity:.7}
+  .section-title{font-size:clamp(1.8rem,4vw,2.6rem);margin-bottom:16px}
+  .section-intro{color:var(--muted);max-width:560px;font-size:1.02rem}
+
+  /* ===== Navbar ===== */
+  header.nav{
+    position:fixed;top:0;left:0;right:0;z-index:50;
+    transition:background .3s ease, border-color .3s ease, backdrop-filter .3s;
+    border-bottom:1px solid transparent;
+  }
+  header.nav.scrolled{
+    background:rgba(12,14,18,.72);
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;height:74px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.15rem;letter-spacing:-.01em}
+  .brand .brand-logo{width:34px;height:34px;object-fit:contain;display:block}
+  .brand .dot{color:var(--accent)}
+  .nav-links{display:flex;align-items:center;gap:30px}
+  .nav-links a{color:var(--muted);font-size:.95rem;font-weight:500;position:relative;transition:color .2s}
+  .nav-links a::after{
+    content:"";position:absolute;left:0;bottom:-6px;width:0;height:1.5px;
+    background:var(--accent);transition:width .25s ease;
+  }
+  .nav-links a:hover{color:var(--text)}
+  .nav-links a:hover::after{width:100%}
+  .btn{
+    display:inline-flex;align-items:center;gap:9px;
+    padding:12px 22px;border-radius:999px;font-weight:600;font-size:.95rem;
+    transition:transform .2s ease, box-shadow .2s ease, background .2s ease, border-color .2s;
+    cursor:pointer;border:1px solid transparent;white-space:nowrap;
+  }
+  .btn-primary{background:var(--accent);color:#1a1408;box-shadow:0 10px 30px -12px rgba(201,162,75,.6)}
+  .btn-primary:hover{transform:translateY(-2px);background:var(--accent-soft)}
+  .btn-ghost{border-color:var(--border-strong);color:var(--text);background:transparent}
+  .btn-ghost:hover{transform:translateY(-2px);border-color:var(--accent);color:var(--accent)}
+  .nav-cta{display:inline-flex}
+  .menu-toggle{display:none;background:none;border:0;color:var(--text);cursor:pointer;padding:6px}
+  .menu-toggle svg{width:26px;height:26px}
+
+  /* ===== Hero ===== */
+  .hero{padding-top:160px;padding-bottom:120px;overflow:hidden}
+  .hero-glow{
+    position:absolute;top:-160px;right:-120px;width:560px;height:560px;border-radius:50%;
+    background:radial-gradient(circle,rgba(201,162,75,.16),transparent 62%);
+    filter:blur(20px);pointer-events:none;z-index:0;
+  }
+  .hero .wrap{position:relative;z-index:1}
+  .hero h1{font-size:clamp(2.6rem,7vw,5rem);margin:6px 0 22px;max-width:15ch}
+  .hero h1 .accent{color:var(--accent);font-style:italic}
+  .hero p.lead{font-size:clamp(1.05rem,2.2vw,1.28rem);color:var(--muted);max-width:620px;margin-bottom:38px}
+  .hero-actions{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  .hero-meta{display:flex;flex-wrap:wrap;gap:30px;margin-top:64px;padding-top:34px;border-top:1px solid var(--border)}
+  .hero-meta .item .num{font-family:'Fraunces',serif;font-size:2rem;color:var(--text);line-height:1}
+  .hero-meta .item .lbl{color:var(--faint);font-size:.86rem;margin-top:6px}
+  .avail{
+    display:inline-flex;align-items:center;gap:9px;font-size:.88rem;color:var(--muted);
+    border:1px solid var(--border);border-radius:999px;padding:7px 16px;margin-bottom:26px;
+  }
+  .avail .pulse{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(74,222,128,.5)}70%{box-shadow:0 0 0 10px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+
+  /* ===== Tentang ===== */
+  .about-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:60px;align-items:start}
+  .about-text p{color:var(--muted);margin-bottom:18px;font-size:1.04rem}
+  .about-text p strong{color:var(--text);font-weight:600}
+  .about-card{
+    background:linear-gradient(160deg,var(--bg-soft),var(--bg-card));
+    border:1px solid var(--border);border-radius:var(--radius);padding:30px;box-shadow:var(--shadow);
+  }
+  .about-card h3{font-size:1.05rem;margin-bottom:20px;color:var(--text)}
+  .fact{display:flex;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--border);font-size:.96rem}
+  .fact:last-child{border-bottom:0;padding-bottom:0}
+  .fact span:first-child{color:var(--faint)}
+  .fact span:last-child{color:var(--text);font-weight:500;text-align:right}
+
+  /* ===== Layanan ===== */
+  .skills-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:50px}
+  .skill-card{
+    background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius);
+    padding:28px;transition:transform .25s ease, border-color .25s ease;
+  }
+  .skill-card:hover{transform:translateY(-6px);border-color:var(--border-strong)}
+  .skill-card .ic{
+    width:46px;height:46px;border-radius:12px;display:grid;place-items:center;margin-bottom:18px;
+    background:rgba(201,162,75,.12);color:var(--accent);
+  }
+  .skill-card .ic svg{width:24px;height:24px}
+  .skill-card h3{font-size:1.12rem;margin-bottom:10px}
+  .skill-card p.svc{color:var(--muted);font-size:.95rem;margin-bottom:16px}
+  .tags{display:flex;flex-wrap:wrap;gap:8px}
+  .tag{font-size:.82rem;color:var(--muted);background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:999px;padding:5px 13px}
+
+  /* ===== Produk Unggulan ===== */
+  .product-card{
+    background:linear-gradient(160deg,var(--bg-soft),var(--bg-card));
+    border:1px solid var(--border);border-radius:var(--radius);
+    padding:clamp(28px,4vw,48px);box-shadow:var(--shadow);margin-top:50px;
+    display:grid;grid-template-columns:1fr 1fr;gap:46px;align-items:center;position:relative;overflow:hidden;
+  }
+  .product-card .glow3{position:absolute;top:-120px;right:-80px;width:380px;height:380px;border-radius:50%;background:radial-gradient(circle,rgba(201,162,75,.12),transparent 65%);pointer-events:none}
+  .product-card>div{position:relative;z-index:1}
+  .product-badge{display:inline-flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;letter-spacing:.04em;color:var(--accent);background:rgba(201,162,75,.12);border:1px solid rgba(201,162,75,.25);border-radius:999px;padding:6px 14px;margin-bottom:18px}
+  .product-card h3{font-size:clamp(1.5rem,3vw,2.05rem);margin-bottom:14px}
+  .product-card p.desc{color:var(--muted);margin-bottom:24px;font-size:1.02rem}
+  .product-cta{display:flex;gap:14px;flex-wrap:wrap}
+  .feature-list{display:grid;gap:16px}
+  .feature-list .f{display:flex;gap:13px;align-items:flex-start;font-size:.98rem;color:var(--muted)}
+  .feature-list .f svg{flex:none;width:22px;height:22px;color:var(--accent);margin-top:1px}
+  .feature-list .f b{color:var(--text);font-weight:600}
+
+  /* ===== Showcase: window desktop & mockup HP ===== */
+  .windowshot{max-width:940px;margin:44px auto 0;border:1px solid var(--border-strong);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);background:#0a0c10}
+  .windowshot img{width:100%;display:block}
+  .shot-cap{text-align:center;color:var(--faint);font-size:.86rem;margin-top:12px}
+  .shots2{display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:940px;margin:20px auto 0}
+  .shots2 figure{margin:0}
+  .shots2 figcaption{text-align:center;color:var(--faint);font-size:.82rem;margin-top:10px}
+  .phones{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-top:40px}
+  .phone-fig{display:flex;flex-direction:column;align-items:center;gap:12px;width:228px;margin:0}
+  .phone{width:228px;background:#0a0c10;border:1px solid var(--border-strong);border-radius:30px;padding:9px;box-shadow:var(--shadow)}
+  .phone img{width:100%;display:block;border-radius:22px}
+  .phone-fig figcaption{font-size:.84rem;color:var(--faint);text-align:center}
+  @media (max-width:560px){ .shots2{grid-template-columns:1fr} .phone-fig,.phone{width:78vw;max-width:300px} }
+
+  /* ===== Proses ===== */
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-top:50px}
+  .step{background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius);padding:26px;transition:transform .25s ease, border-color .25s ease}
+  .step:hover{transform:translateY(-6px);border-color:var(--border-strong)}
+  .step .n{font-family:'Fraunces',serif;font-size:1.7rem;color:var(--accent);line-height:1;margin-bottom:14px}
+  .step h3{font-size:1.05rem;margin-bottom:8px}
+  .step p{color:var(--muted);font-size:.92rem}
+
+  /* ===== Kontak ===== */
+  .contact{padding-bottom:60px}
+  .contact-box{
+    background:linear-gradient(150deg,#181c22,#0f1216);
+    border:1px solid var(--border);border-radius:24px;padding:clamp(34px,5vw,64px);
+    text-align:center;box-shadow:var(--shadow);position:relative;overflow:hidden;
+  }
+  .contact-box .glow2{position:absolute;bottom:-140px;left:50%;transform:translateX(-50%);width:480px;height:300px;background:radial-gradient(circle,rgba(201,162,75,.14),transparent 65%);pointer-events:none}
+  .contact-box h2{font-size:clamp(1.9rem,4.5vw,2.9rem);margin-bottom:16px;position:relative}
+  .contact-box p.sub{color:var(--muted);max-width:480px;margin:0 auto 34px;position:relative}
+
+  /* ===== Form ===== */
+  .demo-form{display:grid;gap:15px;max-width:540px;margin:0 auto;text-align:left;position:relative;z-index:1}
+  .demo-form .row{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+  .demo-form label{display:block;font-size:.8rem;color:var(--faint);margin-bottom:7px}
+  .demo-form input,.demo-form textarea{
+    width:100%;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;
+    padding:12px 14px;color:var(--text);font:inherit;font-size:.95rem;transition:border-color .2s, background .2s;
+  }
+  .demo-form input::placeholder,.demo-form textarea::placeholder{color:#5b626d}
+  .demo-form input:focus,.demo-form textarea:focus{outline:none;border-color:var(--accent);background:rgba(255,255,255,.05)}
+  .demo-form textarea{resize:vertical;min-height:120px}
+  .demo-form button{justify-content:center;width:100%;margin-top:4px}
+  .form-status{font-size:.9rem;color:var(--accent-soft);min-height:1.2em;text-align:center}
+  .contact-actions{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;position:relative;margin-top:28px}
+  .socials{display:flex;gap:18px;justify-content:center;margin-top:36px;position:relative}
+  .socials a{
+    width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+    border:1px solid var(--border);color:var(--muted);transition:all .2s ease;
+  }
+  .socials a:hover{color:var(--accent);border-color:var(--accent);transform:translateY(-3px)}
+  .socials svg{width:20px;height:20px}
+
+  /* ===== Footer ===== */
+  footer{border-top:1px solid var(--border);padding:36px 0}
+  .foot-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--faint);font-size:.9rem}
+  .foot-inner a{color:var(--muted)}
+  .foot-inner a:hover{color:var(--accent)}
+
+  /* ===== Reveal animasi ===== */
+  .reveal{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1)}
+  .reveal.in{opacity:1;transform:none}
+
+  /* ===== Responsif ===== */
+  @media (max-width:860px){
+    section{padding:80px 0}
+    .nav-links,.nav-cta{display:none}
+    .menu-toggle{display:inline-flex}
+    .nav-links.open{
+      display:flex;flex-direction:column;align-items:flex-start;gap:4px;
+      position:absolute;top:74px;left:0;right:0;
+      background:rgba(12,14,18,.96);backdrop-filter:blur(14px);
+      border-bottom:1px solid var(--border);padding:14px 24px 22px;
+    }
+    .nav-links.open a{padding:10px 0;width:100%;border-bottom:1px solid var(--border)}
+    .about-grid{grid-template-columns:1fr;gap:34px}
+    .skills-grid{grid-template-columns:1fr}
+    .product-card{grid-template-columns:1fr;gap:30px}
+    .steps{grid-template-columns:1fr 1fr}
+    .hero-meta{gap:22px}
+  }
+  @media (max-width:480px){
+    .steps{grid-template-columns:1fr}
+    .demo-form .row{grid-template-columns:1fr}
+  }
+  @media (max-width:420px){
+    .hero-actions .btn{width:100%;justify-content:center}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= NAVBAR ================= -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a href="#beranda" class="brand"><img src="logo.png" alt="Logo Bakafrawi" class="brand-logo" />Bakafrawi<span class="dot">.</span></a>
+    <nav class="nav-links" id="navLinks">
+      <a href="#layanan">Layanan</a>
+      <a href="#produk">Produk</a>
+      <a href="#proses">Proses</a>
+      <a href="#tentang">Tentang</a>
+      <a href="#kontak">Kontak</a>
+    </nav>
+    <a href="#kontak" class="btn btn-primary nav-cta">Minta Demo</a>
+    <button class="menu-toggle" id="menuToggle" aria-label="Buka menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="21" y2="17"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ================= HERO ================= -->
+<section class="hero" id="beranda">
+  <div class="hero-glow"></div>
+  <div class="wrap">
+    <span class="avail reveal"><span class="pulse"></span> Menerima proyek baru</span>
+    <span class="eyebrow reveal">Studio Web &amp; Aplikasi</span>
+    <h1 class="display reveal">Ubah ide jadi produk digital yang <span class="accent">rapi</span> &amp; <span class="accent">andal</span>.</h1>
+    <p class="lead reveal">Bakafrawi adalah studio pengembang. Kami membantu bisnis dan lembaga membangun website, aplikasi, dan sistem manajemen yang cepat, aman, dan mudah dirawat.</p>
+    <div class="hero-actions reveal">
+      <a href="#kontak" class="btn btn-primary">Minta Demo
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+      <a href="#produk" class="btn btn-ghost">Lihat Produk</a>
+    </div>
+
+    <div class="hero-meta reveal">
+      <div class="item"><div class="num">5+</div><div class="lbl">Tahun pengalaman</div></div>
+      <div class="item"><div class="num">30+</div><div class="lbl">Proyek selesai</div></div>
+      <div class="item"><div class="num">15+</div><div class="lbl">Klien puas</div></div>
+      <div class="item"><div class="num">100%</div><div class="lbl">Komitmen kualitas</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LAYANAN ================= -->
+<section id="layanan">
+  <div class="wrap">
+    <div class="reveal">
+      <span class="eyebrow">Layanan</span>
+      <h2 class="section-title display">Apa yang kami kerjakan</h2>
+      <p class="section-intro">Dari halaman profil sederhana hingga sistem operasional lengkap — kami bangun sesuai kebutuhan dan anggaran Anda.</p>
+    </div>
+    <div class="skills-grid">
+      <div class="skill-card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div>
+        <h3>Website &amp; Landing Page</h3>
+        <p class="svc">Company profile, landing page produk, dan situs yang cepat serta siap SEO untuk membangun kepercayaan.</p>
+        <div class="tags">
+          <span class="tag">Company Profile</span><span class="tag">Landing Page</span><span class="tag">SEO</span><span class="tag">Responsif</span>
+        </div>
+      </div>
+      <div class="skill-card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div>
+        <h3>Aplikasi &amp; Sistem Custom</h3>
+        <p class="svc">Aplikasi web, dashboard, dan SaaS yang dirancang mengikuti alur kerja bisnis Anda — bukan sebaliknya.</p>
+        <div class="tags">
+          <span class="tag">Web App</span><span class="tag">Dashboard</span><span class="tag">SaaS</span><span class="tag">Integrasi API</span>
+        </div>
+      </div>
+      <div class="skill-card reveal">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></div>
+        <h3>Sistem Manajemen Lembaga</h3>
+        <p class="svc">Sistem data, akademik, dan keuangan untuk pesantren, sekolah, dan organisasi — transparan dan akuntabel.</p>
+        <div class="tags">
+          <span class="tag">Data &amp; Keuangan</span><span class="tag">Akademik</span><span class="tag">Multi-peran</span><span class="tag">Laporan</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PRODUK & KARYA ================= -->
+<section id="produk">
+  <div class="wrap">
+    <div class="reveal">
+      <span class="eyebrow">Produk &amp; Karya</span>
+      <h2 class="section-title display">Produk yang kami bangun</h2>
+      <p class="section-intro">Aplikasi nyata yang kami rancang, bangun, dan rawat — dari sistem manajemen pesantren sampai kasir kedai kopi.</p>
+    </div>
+
+    <!-- Ammu Online -->
+    <div class="product-card reveal">
+      <div class="glow3"></div>
+      <div>
+        <span class="product-badge">Ammu Online · Sistem Pesantren</span>
+        <h3 class="display">Satu sistem untuk data, akademik &amp; keuangan</h3>
+        <p class="desc">Ammu Online adalah aplikasi berbasis web (juga dapat diakses lewat Android &amp; komputer) yang mencatat data santri, prestasi tahfizh &amp; Qiraati, kehadiran, rapor digital, hingga keuangan — dengan hak akses berjenjang dan jejak audit yang dapat ditelusuri.</p>
+        <div class="product-cta">
+          <a href="#kontak" class="btn btn-primary">Minta Demo</a>
+          <a href="https://almanshur.id" target="_blank" rel="noopener" class="btn btn-ghost">Lihat Penerapan
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17L17 7M9 7h8v8"/></svg>
+          </a>
+        </div>
+      </div>
+      <div class="feature-list">
+        <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><b>Pendataan</b> santri, guru &amp; kelas, lengkap dengan kartu santri digital.</span></div>
+        <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><b>Akademik &amp; Tahfizh:</b> prestasi, kehadiran, dan rapor semester digital berkop lembaga.</span></div>
+        <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><b>Keuangan:</b> pembayaran berstruk, tabungan santri, slip gaji guru &amp; buku kas.</span></div>
+        <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><b>Akuntabilitas:</b> hak akses per peran, verifikasi berjenjang &amp; riwayat perubahan data.</span></div>
+        <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><b>Komunikasi:</b> kanal berita, notifikasi ke ponsel &amp; halaman wali &ldquo;Anak Saya&rdquo;.</span></div>
+      </div>
+    </div>
+
+    <figure class="windowshot reveal" style="margin-top:48px">
+      <img src="assets/ammu-desktop-dashboard.jpg" alt="Ammu Online versi desktop — dashboard statistik pendidikan" loading="lazy" />
+    </figure>
+    <p class="shot-cap reveal">Versi desktop (Electron) — dashboard statistik pendidikan dalam satu jendela.</p>
+    <div class="shots2 reveal">
+      <figure><div class="windowshot"><img src="assets/ammu-desktop-tentang.jpg" alt="Ammu Online — tentang aplikasi" loading="lazy" /></div><figcaption>Tentang aplikasi</figcaption></figure>
+      <figure><div class="windowshot"><img src="assets/ammu-desktop-bantuan.jpg" alt="Ammu Online — pusat bantuan" loading="lazy" /></div><figcaption>Pusat bantuan</figcaption></figure>
+    </div>
+
+    <div class="phones reveal">
+      <figure class="phone-fig"><div class="phone"><img src="assets/ammu-statistik.jpg" alt="Ammu Online Android — statistik pondok" loading="lazy" /></div><figcaption>Statistik pondok</figcaption></figure>
+      <figure class="phone-fig"><div class="phone"><img src="assets/ammu-keuangan.jpg" alt="Ammu Online Android — dashboard keuangan" loading="lazy" /></div><figcaption>Keuangan pondok</figcaption></figure>
+      <figure class="phone-fig"><div class="phone"><img src="assets/ammu-kalender.jpg" alt="Ammu Online Android — kalender kegiatan" loading="lazy" /></div><figcaption>Kalender kegiatan</figcaption></figure>
+    </div>
+
+    <!-- Lek Kopi POS -->
+    <div class="product-card reveal" style="margin-top:72px">
+      <div class="glow3"></div>
+      <div>
+        <span class="product-badge">Lek Kopi · Aplikasi Kasir (POS)</span>
+        <h3 class="display">Kasir kedai kopi yang ringkas &amp; rapi</h3>
+        <p class="desc">Lek Kopi POS membantu kedai mencatat penjualan dengan cepat — katalog menu berfoto, keranjang, mode online/offline, manajemen shift, stok &amp; bahan baku, hingga laporan omzet harian.</p>
+        <div class="product-cta">
+          <a href="#kontak" class="btn btn-primary">Minta Demo</a>
+        </div>
+      </div>
+      <div class="feature-list">
+        <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><b>Kasir cepat:</b> katalog menu berfoto, kategori, keranjang &amp; mode online/offline.</span></div>
+        <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><b>Manajemen shift:</b> buka/tutup shift &amp; ringkasan penjualan harian.</span></div>
+        <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><b>Stok &amp; bahan baku:</b> kelola produk dan inventori bahan + harga.</span></div>
+        <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><b>Laporan:</b> produk terlaris &amp; grafik omzet 7 hari.</span></div>
+        <div class="f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><b>Multi-peran:</b> akses berbeda untuk owner &amp; pegawai.</span></div>
+      </div>
+    </div>
+    <div class="phones reveal">
+      <figure class="phone-fig"><div class="phone"><img src="assets/lek-pos.jpg" alt="Lek Kopi POS Android — kasir &amp; menu" loading="lazy" /></div><figcaption>Kasir &amp; menu</figcaption></figure>
+      <figure class="phone-fig"><div class="phone"><img src="assets/lek-laris.jpg" alt="Lek Kopi POS Android — produk terlaris &amp; omzet" loading="lazy" /></div><figcaption>Terlaris &amp; omzet</figcaption></figure>
+      <figure class="phone-fig"><div class="phone"><img src="assets/lek-ringkasan.jpg" alt="Lek Kopi POS Android — ringkasan penjualan" loading="lazy" /></div><figcaption>Ringkasan penjualan</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PROSES ================= -->
+<section id="proses">
+  <div class="wrap">
+    <div class="reveal">
+      <span class="eyebrow">Proses</span>
+      <h2 class="section-title display">Cara kami bekerja</h2>
+      <p class="section-intro">Alur yang sederhana dan transparan, dari obrolan pertama sampai sistem berjalan di domain Anda.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><div class="n">01</div><h3>Diskusi &amp; Rencana</h3><p>Kami pahami kebutuhan, tujuan, dan anggaran Anda lebih dulu.</p></div>
+      <div class="step reveal"><div class="n">02</div><h3>Desain</h3><p>Rancang alur dan tampilan yang jelas serta mudah dipakai.</p></div>
+      <div class="step reveal"><div class="n">03</div><h3>Bangun &amp; Uji</h3><p>Kembangkan dengan rapi, uji menyeluruh, dan iterasi cepat.</p></div>
+      <div class="step reveal"><div class="n">04</div><h3>Rilis &amp; Rawat</h3><p>Luncurkan ke domain Anda, lalu dukungan berkelanjutan.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TENTANG ================= -->
+<section id="tentang">
+  <div class="wrap">
+    <div class="about-grid">
+      <div class="about-text reveal">
+        <span class="eyebrow">Tentang</span>
+        <h2 class="section-title display">Detail kecil,<br />dampak besar.</h2>
+        <p>Bakafrawi adalah <strong>studio web &amp; aplikasi</strong> yang membantu bisnis, UMKM, dan lembaga menghadirkan produk digital yang bersih, cepat, dan stabil di setiap perangkat.</p>
+        <p>Pendekatan kami sederhana: pahami masalahnya dulu, lalu bangun solusi yang tepat — bukan yang paling rumit. Kami percaya sistem yang baik adalah yang <strong>mudah dirawat, cepat, dan jelas</strong>.</p>
+        <p>Setiap proyek kami kerjakan dengan komunikasi terbuka dan hasil yang bisa Anda andalkan untuk jangka panjang.</p>
+      </div>
+      <aside class="about-card reveal">
+        <h3>Sekilas</h3>
+        <div class="fact"><span>Nama</span><span>Bakafrawi</span></div>
+        <div class="fact"><span>Jenis</span><span>Studio Web &amp; Aplikasi</span></div>
+        <div class="fact"><span>Lokasi</span><span>Sidoarjo, Indonesia</span></div>
+        <div class="fact"><span>Fokus</span><span>Web &middot; Aplikasi &middot; Sistem</span></div>
+        <div class="fact"><span>Email</span><span>halo@bakafrawi.com</span></div>
+        <div class="fact"><span>WhatsApp</span><span>0871-0477-372</span></div>
+        <div class="fact"><span>Status</span><span>Menerima proyek baru</span></div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ================= KONTAK ================= -->
+<section id="kontak" class="contact">
+  <div class="wrap">
+    <div class="contact-box reveal">
+      <div class="glow2"></div>
+      <span class="eyebrow" style="justify-content:center">Kontak</span>
+      <h2 class="display">Punya proyek? Minta demo atau konsultasi.</h2>
+      <p class="sub">Ceritakan kebutuhan Anda — website, aplikasi, atau sistem lembaga. Kami balas dengan rekomendasi &amp; estimasi secepatnya.</p>
+
+      <form class="demo-form" id="demoForm">
+        <input type="hidden" name="access_key" value="GANTI_DENGAN_ACCESS_KEY_WEB3FORMS" />
+        <input type="hidden" name="subject" value="Permintaan Demo / Konsultasi — bakafrawi.com" />
+        <input type="hidden" name="from_name" value="Website bakafrawi.com" />
+        <input type="checkbox" name="botcheck" style="display:none" tabindex="-1" autocomplete="off" />
+        <div class="row">
+          <div>
+            <label for="f-name">Nama</label>
+            <input id="f-name" name="name" required placeholder="Nama Anda" />
+          </div>
+          <div>
+            <label for="f-wa">WhatsApp / Telepon</label>
+            <input id="f-wa" name="whatsapp" inputmode="tel" placeholder="08xx xxxx xxxx" />
+          </div>
+        </div>
+        <div>
+          <label for="f-email">Email</label>
+          <input id="f-email" type="email" name="email" required placeholder="email@anda.com" />
+        </div>
+        <div>
+          <label for="f-msg">Kebutuhan Anda</label>
+          <textarea id="f-msg" name="message" required placeholder="Ceritakan singkat proyek atau sistem yang Anda butuhkan…"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Kirim Permintaan
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4 20-7Z"/></svg>
+        </button>
+        <div class="form-status" id="formStatus" role="status" aria-live="polite"></div>
+      </form>
+
+      <div class="contact-actions">
+        <a href="mailto:halo@bakafrawi.com" class="btn btn-ghost">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>
+          halo@bakafrawi.com
+        </a>
+        <a href="https://wa.me/628710477372?text=Halo%20Bakafrawi%2C%20saya%20ingin%20konsultasi%20%2F%20demo." target="_blank" rel="noopener" class="btn btn-ghost">WhatsApp</a>
+      </div>
+
+      <div class="socials">
+        <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor" stroke="none"/></svg></a>
+        <a href="#" aria-label="LinkedIn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.07 2.07 0 1 1 0-4.14 2.07 2.07 0 0 1 0 4.14zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg></a>
+        <a href="#" aria-label="GitHub"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.09.68-.22.68-.49 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05A9.4 9.4 0 0 1 12 6.84c.85 0 1.71.12 2.51.34 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .27.18.59.69.49A10.04 10.04 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <div class="wrap foot-inner">
+    <div>© <span id="year">2026</span> Bakafrawi — Studio Web &amp; Aplikasi.</div>
+    <div>Dibuat dengan ketelitian di <a href="https://bakafrawi.com">bakafrawi.com</a></div>
+  </div>
+</footer>
+
+<script>
+  // Navbar berubah saat scroll
+  const nav = document.getElementById('nav');
+  const onScroll = () => nav.classList.toggle('scrolled', window.scrollY > 20);
+  onScroll();
+  window.addEventListener('scroll', onScroll, {passive:true});
+
+  // Menu mobile
+  const toggle = document.getElementById('menuToggle');
+  const links = document.getElementById('navLinks');
+  toggle.addEventListener('click', () => links.classList.toggle('open'));
+  links.querySelectorAll('a').forEach(a => a.addEventListener('click', () => links.classList.remove('open')));
+
+  // Animasi reveal saat masuk layar
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting){ e.target.style.transitionDelay = (i % 4) * 60 + 'ms'; e.target.classList.add('in'); io.unobserve(e.target); }
+    });
+  }, {threshold:.12, rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+  // Tahun otomatis
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  // Form: Minta Demo / Konsultasi
+  // Kirim via Web3Forms bila Access Key sudah diisi; jika belum, otomatis buka aplikasi email (mailto).
+  const demoForm = document.getElementById('demoForm');
+  if (demoForm){
+    const st = document.getElementById('formStatus');
+    demoForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(demoForm).entries());
+      const key = (d.access_key || '').trim();
+      const openMail = () => {
+        const body = 'Nama: ' + (d.name||'') + '\nWhatsApp: ' + (d.whatsapp||'-') + '\nEmail: ' + (d.email||'') + '\n\n' + (d.message||'');
+        window.location.href = 'mailto:halo@bakafrawi.com?subject=' + encodeURIComponent('Permintaan Demo / Konsultasi — bakafrawi.com') + '&body=' + encodeURIComponent(body);
+        st.textContent = 'Membuka aplikasi email Anda…';
+      };
+      if (!key || key.indexOf('GANTI') !== -1){ openMail(); return; }
+      try{
+        st.textContent = 'Mengirim…';
+        const res = await fetch('https://api.web3forms.com/submit', {
+          method:'POST',
+          headers:{'Content-Type':'application/json', Accept:'application/json'},
+          body: JSON.stringify(d)
+        });
+        const j = await res.json();
+        if (j.success){ demoForm.reset(); st.textContent = 'Terima kasih! Permintaan Anda terkirim. Kami akan membalas secepatnya.'; }
+        else { openMail(); }
+      }catch(_){ openMail(); }
+    });
+  }
+</script>
+</body>
+</html>
