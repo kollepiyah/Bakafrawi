@@ -580,26 +580,50 @@
 
 <!-- ================= FOOTER ================= -->
 <footer>
-    <div class="wrap foot-inner" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
-        <!-- Bagian Kiri: Hak Cipta -->
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-            <div>&copy; 2026 Bakafrawi. All rights reserved.</div>
-            <div>Dibuat dengan ketelitian di <a href="#beranda">bakafrawi.com</a></div>
-        </div>
+    <div class="wrap foot-inner">
+        <div>&copy; 2026 Bakafrawi Group. All Rights Reserved.</div>
         
         <!-- Script Pelacak Umami (Tetap Berjalan di Background) -->
         <script defer src="https://cloud.umami.is/script.js" data-website-id="0afa9bbc-c2dc-4f47-aa42-f5f9b64cd5d6"></script>
 
-        <!-- Bagian Kanan Pojok: Flag Counter Tanpa Tulisan & Ukuran Lebih Besar -->
-        <div style="display: inline-flex; align-items: center;">
-            <a href="https://info.flagcounter.com/Xb5m" target="_blank">
-                <img src="https://s11.flagcounter.com/count2/Xb5m/bg_13161C/txt_E9EAEE/border_C9A24B/columns_3/maxflags_6/viewers_0/labels_0/pageviews_0/flags_1/percent_0/" 
-                     alt="Flag Counter" 
-                     border="0" 
-                     style="border-radius: 6px; transform: scale(1.2); transform-origin: right center; max-height: 60px;">
-            </a>
+        <!-- Widget Pengunjung Per Negara (Live Teks) -->
+        <div style="font-size: 0.9rem; color: var(--muted); display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <span style="display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-users" style="color: var(--accent);"></i> 
+                <span id="visitor-count">122</span> Kunjungan
+            </span>
+            <span style="color: var(--border-strong);">|</span>
+            <span id="country-stats" style="display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-globe" style="color: var(--accent);"></i> Memuat lokasi...
+            </span>
         </div>
+
+        <div>Dibuat dengan ketelitian di <a href="#beranda">bakafrawi.com</a></div>
     </div>
+
+    <!-- Script Counter & Deteksi Negara -->
+    <script>
+        // 1. Script Counter Utama
+        fetch('https://api.countapi.xyz/hit/bakafrawi.com/visits')
+            .then(res => res.json())
+            .then(data => {
+                if(data.value) document.getElementById('visitor-count').innerText = data.value;
+            })
+            .catch(() => {});
+
+        // 2. Script Deteksi Negara Pengunjung saat ini
+        fetch('https://ipapi.co/json/')
+            .then(res => res.json())
+            .then(data => {
+                if(data.country_code) {
+                    const flag = data.country_code.toUpperCase().replace(/./g, char => String.fromCodePoint(char.charCodeAt(0) + 127397));
+                    document.getElementById('country-stats').innerHTML = `Halo pengunjung dari ${flag} ${data.country_name}`;
+                }
+            })
+            .catch(() => {
+                document.getElementById('country-stats').innerHTML = `<i class="fa-solid fa-globe" style="color: var(--accent);"></i> Indonesia & Global`;
+            });
+    </script>
 </footer>
 <script>
   // Navbar berubah saat scroll
