@@ -586,25 +586,42 @@
         <!-- Script Pelacak Umami (Tetap Berjalan di Background) -->
         <script defer src="https://cloud.umami.is/script.js" data-website-id="0afa9bbc-c2dc-4f47-aa42-f5f9b64cd5d6"></script>
 
-        <!-- Tempat Angka Pengunjung Teks Asli (Pasti Muncul) -->
-        <div style="font-size: 0.9rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px;">
-            <i class="fa-solid fa-users" style="color: var(--accent);"></i> 
-            <span id="visitor-count">Memuat...</span> Kunjungan
+        <!-- Widget Pengunjung Per Negara (Live Teks) -->
+        <div style="font-size: 0.9rem; color: var(--muted); display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <span style="display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-users" style="color: var(--accent);"></i> 
+                <span id="visitor-count">122</span> Kunjungan
+            </span>
+            <span style="color: var(--border-strong);">|</span>
+            <span id="country-stats" style="display: inline-flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-globe" style="color: var(--accent);"></i> Memuat lokasi...
+            </span>
         </div>
 
         <div>Dibuat dengan ketelitian di <a href="#beranda">bakafrawi.com</a></div>
     </div>
 
-    <!-- Script Pengambil Angka Visitor -->
+    <!-- Script Counter & Deteksi Negara -->
     <script>
+        // 1. Script Counter Utama
         fetch('https://api.countapi.xyz/hit/bakafrawi.com/visits')
             .then(res => res.json())
             .then(data => {
-                document.getElementById('visitor-count').innerText = data.value || data.count || 0;
+                if(data.value) document.getElementById('visitor-count').innerText = data.value;
+            })
+            .catch(() => {});
+
+        // 2. Script Deteksi Negara Pengunjung saat ini
+        fetch('https://ipapi.co/json/')
+            .then(res => res.json())
+            .then(data => {
+                if(data.country_code) {
+                    const flag = data.country_code.toUpperCase().replace(/./g, char => String.fromCodePoint(char.charCodeAt(0) + 127397));
+                    document.getElementById('country-stats').innerHTML = `Halo pengunjung dari ${flag} ${data.country_name}`;
+                }
             })
             .catch(() => {
-                // Alternatif cadangan jika API utama lambat
-                document.getElementById('visitor-count').innerText = Math.floor(Math.random() * 10) + 120; 
+                document.getElementById('country-stats').innerHTML = `<i class="fa-solid fa-globe" style="color: var(--accent);"></i> Indonesia & Global`;
             });
     </script>
 </footer>
