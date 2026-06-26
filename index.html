@@ -580,50 +580,26 @@
 
 <!-- ================= FOOTER ================= -->
 <footer>
-    <div class="wrap foot-inner">
-        <div>&copy; 2026 Bakafrawi Group. All Rights Reserved.</div>
-        
-        <!-- Script Pelacak Umami (Tetap Berjalan di Background) -->
-        <script defer src="https://cloud.umami.is/script.js" data-website-id="0afa9bbc-c2dc-4f47-aa42-f5f9b64cd5d6"></script>
-
-        <!-- Widget Pengunjung Per Negara (Live Teks) -->
-        <div style="font-size: 0.9rem; color: var(--muted); display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-            <span style="display: inline-flex; align-items: center; gap: 6px;">
-                <i class="fa-solid fa-users" style="color: var(--accent);"></i> 
-                <span id="visitor-count">122</span> Kunjungan
-            </span>
-            <span style="color: var(--border-strong);">|</span>
-            <span id="country-stats" style="display: inline-flex; align-items: center; gap: 6px;">
-                <i class="fa-solid fa-globe" style="color: var(--accent);"></i> Memuat lokasi...
-            </span>
-        </div>
-
-        <div>Dibuat dengan ketelitian di <a href="#beranda">bakafrawi.com</a></div>
+  <div class="wrap foot-inner">
+    <div>
+      &copy; 2026 Bakafrawi. All rights reserved.
     </div>
+    
+    <!-- === FLAG COUNTER (TEMA GELAP) === -->
+    <div style="opacity: 0.6; transition: opacity 0.3s ease; display: flex; align-items: center;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
+      <a href="http://s01.flagcounter.com/more/hK4" target="_blank" rel="noopener">
+        <img src="https://s01.flagcounter.com/count/hK4/bg_0C0E12/txt_6B727E/border_0C0E12/columns_3/maxflags_6/viewers_0/labels_0/pageviews_1/flags_0/percent_0/" 
+             alt="Flag Counter" 
+             style="border-radius: 4px; height: 35px; width: auto; display: block; border: none;">
+      </a>
+    </div>
+    <!-- ================================= -->
 
-    <!-- Script Counter & Deteksi Negara -->
-    <script>
-        // 1. Script Counter Utama
-        fetch('https://api.countapi.xyz/hit/bakafrawi.com/visits')
-            .then(res => res.json())
-            .then(data => {
-                if(data.value) document.getElementById('visitor-count').innerText = data.value;
-            })
-            .catch(() => {});
-
-        // 2. Script Deteksi Negara Pengunjung saat ini
-        fetch('https://ipapi.co/json/')
-            .then(res => res.json())
-            .then(data => {
-                if(data.country_code) {
-                    const flag = data.country_code.toUpperCase().replace(/./g, char => String.fromCodePoint(char.charCodeAt(0) + 127397));
-                    document.getElementById('country-stats').innerHTML = `Halo pengunjung dari ${flag} ${data.country_name}`;
-                }
-            })
-            .catch(() => {
-                document.getElementById('country-stats').innerHTML = `<i class="fa-solid fa-globe" style="color: var(--accent);"></i> Indonesia & Global`;
-            });
-    </script>
+    <div style="display: flex; gap: 16px;">
+      <a href="#layanan">Layanan</a>
+      <a href="#produk">Produk</a>
+    </div>
+  </div>
 </footer>
 
 <script>
