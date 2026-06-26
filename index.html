@@ -579,25 +579,25 @@
 </section>
 
 <!-- ================= FOOTER ================= -->
-<!-- ================= FOOTER ================= -->
 <footer>
-  <div class="wrap foot-inner">
-    <div>
-      &copy; 2026 Bakafrawi. All rights reserved.
-    </div>
-    
-    <!-- === FLAG COUNTER DI SEBELAH KANAN (FIX TERPOTONG) === -->
-    <div style="opacity: 0.6; transition: opacity 0.3s ease; display: flex; align-items: center; height: 32px; overflow: hidden;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
-      <a href="https://info.flagcounter.com/hK4" target="_blank" rel="noopener" style="display: flex; align-items: center;">
-        <!-- Ditata berjejer 6 kolom ke samping agar pas dan proporsional -->
-        <img src="https://s01.flagcounter.com/count/hK4/bg_0C0E12/txt_6B727E/border_0C0E12/columns_6/maxflags_6/viewers_0/labels_0/pageviews_1/flags_0/percent_0/" 
-             alt="Flag Counter" 
-             style="border-radius: 4px; height: 32px; width: auto; display: block; border: none;">
-      </a>
-    </div>
-  </div>
-</footer>
+    <div class="wrap foot-inner" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <!-- Bagian Kiri: Hak Cipta -->
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div>&copy; 2026 Bakafrawi. All rights reserved.</div>
+            <div>Dibuat dengan ketelitian di <a href="#beranda">bakafrawi.com</a></div>
+        </div>
+        
+        <!-- Script Pelacak Umami (Tetap Berjalan di Background) -->
+        <script defer src="https://cloud.umami.is/script.js" data-website-id="0afa9bbc-c2dc-4f47-aa42-f5f9b64cd5d6"></script>
 
+        <!-- Bagian Kanan Pojok: Flag Counter Versi Tema Gelap & Emas -->
+        <div style="display: inline-flex; align-items: center;">
+            <a href="https://info.flagcounter.com/Xb5m" target="_blank">
+                <img src="https://s11.flagcounter.com/count2/Xb5m/bg_13161C/txt_E9EAEE/border_C9A24B/columns_3/maxflags_6/viewers_0/labels_1/pageviews_1/flags_0/percent_0/" alt="Flag Counter" border="0" style="border-radius: 6px; max-height: 50px;">
+            </a>
+        </div>
+    </div>
+</footer>
 <script>
   // Navbar berubah saat scroll
   const nav = document.getElementById('nav');
