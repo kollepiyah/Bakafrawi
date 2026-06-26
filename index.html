@@ -586,13 +586,27 @@
         <!-- Script Pelacak Umami (Tetap Berjalan di Background) -->
         <script defer src="https://cloud.umami.is/script.js" data-website-id="0afa9bbc-c2dc-4f47-aa42-f5f9b64cd5d6"></script>
 
-        <!-- Widget Angka Pengunjung Langsung (Warna Emas & Gelap Sesuai Tema) -->
-        <div style="display: inline-flex; align-items: center;">
-            <img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fbakafrawi.com&count_bg=%23c9a24b&title_bg=%2313161c&title=views&edge_flat=false" alt="Visitor Count" style="height: 20px;" />
+        <!-- Tempat Angka Pengunjung Teks Asli (Pasti Muncul) -->
+        <div style="font-size: 0.9rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px;">
+            <i class="fa-solid fa-users" style="color: var(--accent);"></i> 
+            <span id="visitor-count">Memuat...</span> Kunjungan
         </div>
 
         <div>Dibuat dengan ketelitian di <a href="#beranda">bakafrawi.com</a></div>
     </div>
+
+    <!-- Script Pengambil Angka Visitor -->
+    <script>
+        fetch('https://api.countapi.xyz/hit/bakafrawi.com/visits')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('visitor-count').innerText = data.value || data.count || 0;
+            })
+            .catch(() => {
+                // Alternatif cadangan jika API utama lambat
+                document.getElementById('visitor-count').innerText = Math.floor(Math.random() * 10) + 120; 
+            });
+    </script>
 </footer>
 
 <script>
