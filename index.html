@@ -579,49 +579,61 @@
 </section>
 
 <!-- ================= FOOTER ================= -->
+<!-- ================= FOOTER ================= -->
 <footer>
-    <div class="wrap foot-inner">
-        <div>&copy; 2026 Bakafrawi Group. All Rights Reserved.</div>
+    <div class="wrap foot-inner" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <!-- Bagian Kiri: Hak Cipta & Tahun -->
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div>&copy; <span id="year">2026</span> Bakafrawi Group. All Rights Reserved.</div>
+            <div>Dibuat dengan ketelitian di <a href="#beranda">bakafrawi.com</a></div>
+        </div>
         
-        <!-- Script Pelacak Umami (Tetap Berjalan di Background) -->
+        <!-- Script Pelacak Umami Utama (Berjalan di Background) -->
         <script defer src="https://cloud.umami.is/script.js" data-website-id="0afa9bbc-c2dc-4f47-aa42-f5f9b64cd5d6"></script>
 
-        <!-- Widget Pengunjung Per Negara (Live Teks) -->
-        <div style="font-size: 0.9rem; color: var(--muted); display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-            <span style="display: inline-flex; align-items: center; gap: 6px;">
-                <i class="fa-solid fa-users" style="color: var(--accent);"></i> 
-                <span id="visitor-count">122</span> Kunjungan
-            </span>
-            <span style="color: var(--border-strong);">|</span>
-            <span id="country-stats" style="display: inline-flex; align-items: center; gap: 6px;">
-                <i class="fa-solid fa-globe" style="color: var(--accent);"></i> Memuat lokasi...
-            </span>
+        <!-- Bagian Kanan Pojok: Live Info Negara & Pengunjung Aktif -->
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px; font-size: 0.85rem; color: var(--muted);">
+            <!-- Total Kunjungan & Deteksi Lokasi Realtime -->
+            <div style="display: inline-flex; align-items: center; gap: 8px;">
+                <span style="display: inline-flex; align-items: center; gap: 4px;">
+                    <i class="fa-solid fa-users" style="color: var(--accent);"></i> 
+                    <span id="visitor-count" style="color: #fff; font-weight: bold;">...</span> Kunjungan
+                </span>
+                <span style="color: var(--border-strong);">|</span>
+                <span id="country-stats">Memuat lokasi...</span>
+            </div>
+            
+            <!-- Link Akses ke Dashboard Analitik Lengkap -->
+            <a href="https://cloud.umami.is/share/vV07bB2X9mOnL7Wb/bakafrawi.com" target="_blank" style="font-size: 0.75rem; color: var(--accent); text-decoration: underline; display: inline-flex; align-items: center; gap: 4px;">
+                <i class="fa-solid fa-chart-pie"></i> Lihat Grafik Semua Negara
+            </a>
         </div>
-
-        <div>Dibuat dengan ketelitian di <a href="#beranda">bakafrawi.com</a></div>
     </div>
 
-    <!-- Script Counter & Deteksi Negara -->
+    <!-- Script Otomatis Penarik Data Negara & Counter -->
     <script>
-        // 1. Script Counter Utama
+        // 1. Ambil Angka Total Kunjungan
         fetch('https://api.countapi.xyz/hit/bakafrawi.com/visits')
             .then(res => res.json())
             .then(data => {
                 if(data.value) document.getElementById('visitor-count').innerText = data.value;
             })
-            .catch(() => {});
+            .catch(() => {
+                document.getElementById('visitor-count').innerText = "125+";
+            });
 
-        // 2. Script Deteksi Negara Pengunjung saat ini
+        // 2. Deteksi Negara Pengunjung Detik Ini (Menggunakan Data IP Geolokasi)
         fetch('https://ipapi.co/json/')
             .then(res => res.json())
             .then(data => {
                 if(data.country_code) {
+                    // Membuat Emoji Bendera Berdasarkan Kode Negara (Contoh: ID -> 🇮🇩)
                     const flag = data.country_code.toUpperCase().replace(/./g, char => String.fromCodePoint(char.charCodeAt(0) + 127397));
-                    document.getElementById('country-stats').innerHTML = `Halo pengunjung dari ${flag} ${data.country_name}`;
+                    document.getElementById('country-stats').innerHTML = `Pengunjung Live: ${flag} <span style="color:#fff;">${data.country_code}</span>`;
                 }
             })
             .catch(() => {
-                document.getElementById('country-stats').innerHTML = `<i class="fa-solid fa-globe" style="color: var(--accent);"></i> Indonesia & Global`;
+                document.getElementById('country-stats').innerHTML = `<i class="fa-solid fa-globe" style="color: var(--accent);"></i> Global User`;
             });
     </script>
 </footer>
