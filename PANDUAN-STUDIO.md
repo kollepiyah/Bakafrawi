@@ -45,3 +45,32 @@ node studio.mjs --lokal contoh-tugas.json
 ```
 Berkas `contoh-tugas.json` berisi `{ "tugas": {jenis, produk_slug, arahan}, "situs": <isi konten> }`;
 hasil ada di `studio/keluaran/`.
+
+## Tayang ke Instagram & bot Telegram (gelombang 2)
+
+Alur: Studio selesai → hasil dikirim ke **bot Telegram** dengan tombol **Tayangkan sekarang · Jadwal 19.00 ·
+Buat ulang · Tolak** (tombol yang sama ada di admin → Studio AI) → mesin memposting ke Instagram
+(poster: feed 4:5 + Story 9:16; video: Reels) → bot mengabari tautannya. **Tak ada yang tayang tanpa
+persetujuan.** Dari Telegram juga bisa memesan: `/poster maktaba ai`, `/video maktaba`, `/status`.
+
+### Pasang (sekali)
+1. Migrasi: `npx supabase db push` (tabel `studio_pengaturan`, kolom tayang).
+2. **Bot Telegram baru:** Telegram → @BotFather → `/newbot` → nama "Bakafrawi Studio" → salin token.
+   Buat dua kode acak (jalankan dua kali): `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`
+   — pertama = rahasia webhook, kedua = kode daftar.
+3. **Vercel → Environment Variables** (jenis **Secret**, Production + Preview), lalu redeploy:
+   - `SUPABASE_SERVICE_KEY` — service_role Supabase. Aman di sini karena **tanpa** awalan `NEXT_PUBLIC_`:
+     hanya dibaca server, tak pernah dikirim ke browser.
+   - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_KODE_DAFTAR`
+4. **Rahasia GitHub** (Actions): `TELEGRAM_BOT_TOKEN` (sama), `GEMINI_API_KEY` (untuk latar AI; boleh kunci Lek Kopi).
+5. Admin → Studio AI → **Sambungan** → *Sambungkan webhook bot*; lalu kirim `/start KODE-DAFTAR` ke bot.
+6. **Instagram:** @bakafrawi.project harus akun **Profesional**. Di aplikasi Meta (boleh aplikasi Lek Kopi):
+   Instagram → API setup with Instagram login → tambahkan @bakafrawi.project sebagai **Instagram Tester**
+   (terima undangan di aplikasi Instagram) → *Generate token* di samping akun → tempel di
+   admin → Studio AI → Sambungan → **Sambungkan**. Token ±60 hari, diperpanjang otomatis.
+
+### Latar gambar AI
+Centang **Latar gambar AI** saat membuat konten. Claude menulis 2 adegan suasana, model gambar Gemini
+membuatnya (± Rp650/gambar; model dipilih otomatis, bisa dipaksa lewat rahasia `STUDIO_GEMINI_GAMBAR`).
+Poster: foto jadi latar; video: kartu pembuka & penutup berlatar foto dan bergerak pelan (zoom).
+Tanpa `GEMINI_API_KEY` → latar polos, dengan catatan di kartu tugas.

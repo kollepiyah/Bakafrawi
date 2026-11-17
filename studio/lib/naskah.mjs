@@ -11,6 +11,9 @@ export const SkemaNaskah = z.object({
   narasi: z.array(z.string()).describe('4-6 kalimat narasi video, total dibaca sekitar 20-28 detik, bahasa lisan santai'),
   caption: z.string().describe('Caption media sosial 2-4 kalimat, tanpa hashtag'),
   hashtag: z.array(z.string()).describe('5-8 hashtag tanpa tanda #'),
+  adegan: z
+    .array(z.string())
+    .describe('2 deskripsi foto suasana dalam bahasa Inggris untuk latar (generator gambar AI): orang Indonesia sasaran produk dalam situasi nyata terkait masalah/manfaatnya, tanpa layar HP yang terbaca dan tanpa tulisan'),
 });
 
 // Sama dengan Lek Kopi (MODEL_KONTEN): Sonnet 5.5 effort medium — naskah iklan pendek tak butuh
@@ -73,5 +76,8 @@ export function naskahTemplat(produk, situs) {
     ],
     caption: `${produk.judul}. ${produk.deskripsi}`,
     hashtag: ['bakafrawi', 'jasapembuatanaplikasi', 'aplikasiandroid', 'websitebisnis', 'umkm'],
+    adegan: pesanan
+      ? ['Staff of an Indonesian Islamic boarding school office working together at a wooden desk, warm afternoon light', 'Smiling Indonesian teacher holding a smartphone in a bright school courtyard']
+      : ['Owner of a small Indonesian coffee shop serving a customer at the counter, warm evening light', 'Indonesian shop owner smiling while checking a smartphone behind a tidy counter'],
   };
 }

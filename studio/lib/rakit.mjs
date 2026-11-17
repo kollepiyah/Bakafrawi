@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { LAYAR } from './templat.mjs';
 
 const jalankan = promisify(execFile);
-export const DURASI_PEMBUKA = 2.6;
+export const DURASI_PEMBUKA = 3.0;
 export const DURASI_PENUTUP = 3.2;
 
 export async function durasi(berkas) {
@@ -59,22 +59,24 @@ export async function rakitVideo({ folder, rekaman, mulaiRekaman, bingkai, pembu
 
   const { x, y, w, h } = LAYAR;
   const filter = [
-    `[0:v]scale=1080:1920,setsar=1,fps=30,format=yuv420p[a]`,
+    // Kartu pembuka & penutup "dihidupkan": zoom pelan (Ken Burns). Diperbesar dulu 2× supaya
+    // gerak zoompan tidak bergetar.
+    `[0:v]scale=2160:3840,zoompan=z='min(zoom+0.0009,1.1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30,setsar=1,format=yuv420p[a]`,
     // Rekaman dipotong dari detik layak tampil; bila lebih pendek dari narasi, bingkai terakhir ditahan.
     `[1:v]trim=start=${mulaiRekaman.toFixed(2)},setpts=PTS-STARTPTS,fps=30,scale=${w}:${h},setsar=1,tpad=stop_mode=clone:stop_duration=${Math.ceil(tengah)},trim=duration=${tengah.toFixed(2)}[rek]`,
     `color=c=0x0c0e12:s=1080x1920:r=30:d=${tengah.toFixed(2)}[dasar]`,
     `[dasar][rek]overlay=${x}:${y}[isi]`,
     `[isi][2:v]overlay=0:0,ass=teks.ass,setsar=1,format=yuv420p[b]`,
-    `[3:v]scale=1080:1920,setsar=1,fps=30,format=yuv420p[c]`,
+    `[3:v]scale=2160:3840,zoompan=z='min(zoom+0.0006,1.07)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=1080x1920:fps=30,setsar=1,format=yuv420p[c]`,
     `[a][b][c]concat=n=3:v=1:a=0[v]`,
     `[4:a]adelay=300|300,apad,atrim=duration=${total.toFixed(2)},afade=t=out:st=${(total - 0.6).toFixed(2)}:d=0.6[au]`,
   ].join(';');
   const args = [
     '-y', '-hide_banner', '-loglevel', 'error',
-    '-loop', '1', '-t', String(DURASI_PEMBUKA), '-i', pembuka,
+    '-framerate', '30', '-loop', '1', '-t', String(DURASI_PEMBUKA), '-i', pembuka,
     '-i', rekaman,
     '-loop', '1', '-t', tengah.toFixed(2), '-i', bingkai,
-    '-loop', '1', '-t', String(DURASI_PENUTUP), '-i', penutup,
+    '-framerate', '30', '-loop', '1', '-t', String(DURASI_PENUTUP), '-i', penutup,
     '-i', narasi,
     '-filter_complex', filter,
     '-map', '[v]', '-map', '[au]',

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Check, Copy, Download, ImageIcon, Loader2, Sparkles, Trash2, Video } from "lucide-react";
+import { CalendarClock, Check, Copy, Download, ImageIcon, Loader2, RefreshCw, Send, Sparkles, Trash2, Video, X } from "lucide-react";
+import { Sambungan } from "./studio-sambungan";
 import type { Situs } from "@/content/skema";
 import { jalurGudang, muatKonten, supabase } from "@/lib/gudang-admin";
 import { situsBawaan } from "@/content/situs";
@@ -18,8 +19,23 @@ type Tugas = {
   caption: string | null;
   hasil: Hasil[];
   galat: string | null;
-  naskah: { sumber?: string } | null;
+  naskah: { sumber?: string; catatan?: string[] } | null;
+  latar: "polos" | "ai";
+  status_tayang: "belum" | "antre" | "dijadwalkan" | "proses" | "tayang" | "gagal" | "ditolak";
+  jadwal_tayang: string | null;
+  tayang: { instagram?: { feed?: { permalink?: string }; reels?: { permalink?: string } } };
 };
+
+const LABEL_TAYANG: Partial<Record<Tugas["status_tayang"], { teks: string; kelas: string }>> = {
+  antre: { teks: "Menunggu tayang", kelas: "bg-amber-500/15 text-amber-300" },
+  dijadwalkan: { teks: "Terjadwal", kelas: "bg-sky-500/15 text-sky-300" },
+  proses: { teks: "Sedang tayang…", kelas: "bg-amber-500/15 text-amber-300" },
+  tayang: { teks: "Tayang di Instagram", kelas: "bg-green-500/15 text-green-300" },
+  gagal: { teks: "Gagal tayang", kelas: "bg-red-500/15 text-red-300" },
+  ditolak: { teks: "Ditolak", kelas: "bg-white/10 text-muted-foreground" },
+};
+
+type AksiTayang = "sekarang" | "jadwal" | "tolak" | "batal" | "ulang";
 
 const LABEL_STATUS: Record<Tugas["status"], { teks: string; kelas: string }> = {
   antre: { teks: "Menunggu mesin", kelas: "bg-white/10 text-muted-foreground" },
@@ -48,7 +64,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   }, [muat]);
 
   // Selama ada tugas yang belum selesai, perbarui daftar tiap 10 detik.
-  const masihJalan = daftar.some((t) => t.status === "antre" || t.status === "proses");
+  const masihJalan = daftar.some((t) => t.status === "antre" || t.status === "proses" || t.status_tayang === "antre" || t.status_tayang === "proses");
   useEffect(() => {
     if (!masihJalan) return;
     const t = setInterval(muat, 10000);
@@ -61,7 +77,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     const d = new FormData(form);
     setSibuk(true);
     setPesan("");
-    const { error } = await supabase().from("studio_tugas").insert({ jenis: d.get("jenis"), produk_slug: d.get("produk"), arahan: String(d.get("arahan") ?? "") });
+    const { error } = await supabase().from("studio_tugas").insert({ jenis: d.get("jenis"), produk_slug: d.get("produk"), arahan: String(d.get("arahan") ?? ""), latar: d.get("latar") ? "ai" : "polos" });
     if (error) {
       setSibuk(false);
       return setPesan(`Gagal membuat tugas: ${error.message}`);
@@ -71,6 +87,18 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     setPesan(j.dipicu ? "Tugas dibuat — mesin Studio dinyalakan. Gambar ±1–2 menit, video ±3–6 menit." : "Tugas dibuat. Mesin akan mengerjakannya pada putaran jadwal berikutnya (≤ 30 menit).");
     setSibuk(false);
     form.reset();
+    muat();
+  }
+
+  async function tayang(t: Tugas, aksi: AksiTayang) {
+    const res = await fetch("/api/studio/tayang", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ id: t.id, aksi }),
+    });
+    const j = await res.json().catch(() => ({}));
+    const ok: Record<AksiTayang, string> = { sekarang: "Segera ditayangkan ke Instagram.", jadwal: "Dijadwalkan pukul 19.00 WIB.", tolak: "Ditolak.", batal: "Tayang dibatalkan.", ulang: "Dibuat ulang." };
+    setPesan(j.ok ? ok[aksi] : (j.pesan ?? "Gagal."));
     muat();
   }
 
@@ -111,6 +139,12 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   </select>
                 </label>
               </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" name="latar" className="mt-0.5 size-4 accent-[#c9a24b]" />
+                <span>
+                  Latar gambar AI <span className="text-xs text-redup">(poster: foto suasana; video: pembuka & penutup bergerak — ± Rp650 per gambar)</span>
+                </span>
+              </label>
               <label className="grid gap-1.5">
                 <span className="text-xs font-medium text-muted-foreground">Arahan untuk AI (opsional)</span>
                 <textarea name="arahan" rows={2} placeholder="Mis. sasar pemilik warung kopi, tonjolkan fitur struk WhatsApp, nada santai" className="rounded-lg border border-input bg-transparent px-3 py-2 text-sm" />
@@ -123,11 +157,13 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
               </div>
             </form>
 
+            <Sambungan sesi={sesi} />
+
             <h2 className="mb-3 font-heading text-lg">Riwayat</h2>
             {daftar.length === 0 && <p className="text-sm text-muted-foreground">Belum ada konten.</p>}
             <div className="grid gap-4">
               {daftar.map((t) => (
-                <KartuTugas key={t.id} t={t} nama={namaProduk(t.produk_slug)} hapus={() => hapus(t)} />
+                <KartuTugas key={t.id} t={t} nama={namaProduk(t.produk_slug)} hapus={() => hapus(t)} tayang={(a) => tayang(t, a)} />
               ))}
             </div>
           </>
@@ -137,9 +173,12 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   );
 }
 
-function KartuTugas({ t, nama, hapus }: { t: Tugas; nama: string; hapus: () => void }) {
+function KartuTugas({ t, nama, hapus, tayang }: { t: Tugas; nama: string; hapus: () => void; tayang: (a: AksiTayang) => void }) {
   const [tersalin, setTersalin] = useState(false);
   const s = LABEL_STATUS[t.status];
+  const st = LABEL_TAYANG[t.status_tayang];
+  const tautanIg = t.tayang?.instagram?.reels?.permalink ?? t.tayang?.instagram?.feed?.permalink;
+  const bisaTayang = t.status === "selesai" && ["belum", "gagal", "ditolak"].includes(t.status_tayang);
   return (
     <article className="rounded-2xl border border-border bg-card p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -149,12 +188,22 @@ function KartuTugas({ t, nama, hapus }: { t: Tugas; nama: string; hapus: () => v
           <span className="text-redup">· {new Date(t.dibuat).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}</span>
         </div>
         <div className="flex items-center gap-2">
+          {t.latar === "ai" && <span className="rounded-full bg-emas/15 px-2.5 py-1 text-xs text-emas-muda">Latar AI</span>}
           <span className={`rounded-full px-2.5 py-1 text-xs ${s.kelas}`}>{t.status === "proses" && <Loader2 className="mr-1 inline size-3 animate-spin" />}{s.teks}</span>
+          {st && (
+            <span className={`rounded-full px-2.5 py-1 text-xs ${st.kelas}`}>
+              {st.teks}
+              {t.status_tayang === "dijadwalkan" && t.jadwal_tayang && ` · ${new Date(t.jadwal_tayang).toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}`}
+            </span>
+          )}
           <button onClick={hapus} aria-label="Hapus" className="rounded-md p-1.5 hover:bg-white/10"><Trash2 className="size-4 text-red-400" /></button>
         </div>
       </div>
       {t.arahan && <p className="mb-3 text-xs text-redup">Arahan: {t.arahan}</p>}
       {t.galat && <p className="mb-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-300">{t.galat}</p>}
+      {t.naskah?.catatan?.map((c) => (
+        <p key={c} className="mb-2 text-xs text-amber-300">{c}</p>
+      ))}
       {t.hasil.length > 0 && (
         <div className="mb-3 flex gap-3 overflow-x-auto pb-2">
           {t.hasil.map((h) => (
@@ -185,6 +234,35 @@ function KartuTugas({ t, nama, hapus }: { t: Tugas; nama: string; hapus: () => v
               {tersalin ? <Check className="size-3.5" /> : <Copy className="size-3.5" />} {tersalin ? "Tersalin" : "Salin caption"}
             </button>
           </div>
+        </div>
+      )}
+      {t.status === "selesai" && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          {bisaTayang && (
+            <>
+              <button onClick={() => tayang("sekarang")} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 font-semibold text-primary-foreground">
+                <Send className="size-4" /> Tayangkan sekarang
+              </button>
+              <button onClick={() => tayang("jadwal")} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-4 py-1.5 hover:border-emas hover:text-emas">
+                <CalendarClock className="size-4" /> Jadwal 19.00
+              </button>
+            </>
+          )}
+          {(t.status_tayang === "antre" || t.status_tayang === "dijadwalkan") && (
+            <button onClick={() => tayang("batal")} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-4 py-1.5">
+              <X className="size-4" /> Batalkan tayang
+            </button>
+          )}
+          {t.status_tayang !== "tayang" && t.status_tayang !== "proses" && (
+            <button onClick={() => tayang("ulang")} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground">
+              <RefreshCw className="size-4" /> Buat ulang
+            </button>
+          )}
+          {tautanIg && (
+            <a href={tautanIg} target="_blank" className="text-emas underline">
+              Lihat di Instagram
+            </a>
+          )}
         </div>
       )}
     </article>

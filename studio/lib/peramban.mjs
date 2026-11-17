@@ -24,11 +24,13 @@ export async function bukaPeramban() {
 export async function potret(peramban, { html, keluar, w, h, transparan = false }) {
   const hal = await peramban.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
   try {
-    const berkasHtml = keluar.replace(/\.png$/i, '.html');
+    const berkasHtml = keluar.replace(/\.(png|jpe?g)$/i, '.html');
     await writeFile(berkasHtml, html);
     await hal.goto(pathToFileURL(berkasHtml).href);
     await hal.waitForSelector('body[data-siap]', { timeout: 30000 });
-    await hal.screenshot({ path: keluar, type: 'png', omitBackground: transparan });
+    // Poster disimpan JPEG: Instagram hanya menerima JPEG untuk postingan gambar.
+    const jpeg = /\.jpe?g$/i.test(keluar);
+    await hal.screenshot({ path: keluar, type: jpeg ? 'jpeg' : 'png', ...(jpeg ? { quality: 92 } : { omitBackground: transparan }) });
   } finally {
     await hal.close();
   }

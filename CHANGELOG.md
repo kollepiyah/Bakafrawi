@@ -1,5 +1,20 @@
 # CHANGELOG — bakafrawi.com
 
+## Tahap 3, gelombang 2 — Instagram, bot Telegram, latar AI (18 Nov 2026, branch `studio-sosmed`, belum tayang)
+
+- **Persetujuan & tayang:** hasil Studio dikirim ke bot Telegram bertombol (Tayangkan sekarang · Jadwal
+  19.00 WIB · Buat ulang · Tolak); tombol sama di admin. Mesin memposting ke Instagram — poster: feed 4:5 +
+  Story, video: Reels — lalu mengabari tautannya. Postingan diambil atomik (`studio_ambil_tayang`) dan status
+  `proses/tayang` tak bisa diubah lagi → tak ada posting ganda.
+- **Bot Telegram** (`/api/telegram`, webhook dengan kode rahasia; hanya pemilik terdaftar `/start KODE`):
+  `/poster <produk> [ai]`, `/video <produk> [ai]`, `/status`. Aturan murni di `src/lib/bot-murni.ts` + tes.
+- **Sambungan** di admin → Studio AI: tempel token Instagram (3 jenis token seperti Lek Kopi; token tak pernah
+  dikirim balik ke browser), sambungkan webhook bot. Token IG diperpanjang otomatis.
+- **Latar gambar AI** (Gemini, model dipilih otomatis): poster berlatar foto suasana; video dengan kartu
+  pembuka/penutup berlatar foto. Kartu pembuka & penutup kini bergerak pelan (zoom) di semua video.
+- Poster kini JPEG (syarat Instagram). Naskah memakai `claude-sonnet-5-5` medium seperti Lek Kopi.
+- Migrasi `20261118150000_studio_tayang.sql`. Panduan: `PANDUAN-STUDIO.md`.
+
 ## Tahap 3 — Studio AI (tayang 18 Nov 2026)
 
 - **/admin → Studio AI**: buat poster (1:1, 4:5, 9:16) atau video Reels/TikTok per produk, dengan

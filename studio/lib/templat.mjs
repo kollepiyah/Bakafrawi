@@ -31,6 +31,13 @@ body{font-family:'Plus Jakarta Sans',sans-serif;color:#e9eaee;-webkit-font-smoot
 .cta{background:#c9a24b;color:#1a1408;border-radius:999px;font-weight:800;padding:20px 40px;display:inline-block}
 </style>`;
 
+/** Lapisan latar: foto AI (digelapkan agar teks terbaca) atau gradasi polos. */
+function latar(foto) {
+  if (!foto) return '<div class="latar"></div><div class="kisi"></div>';
+  return `<div style="position:absolute;inset:0;background:url('${esc(foto)}') center/cover;filter:brightness(.7) saturate(1.05)"></div>
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(12,14,18,.9) 0%,rgba(12,14,18,.68) 42%,rgba(12,14,18,.72) 62%,rgba(12,14,18,.95) 100%)"></div>`;
+}
+
 const tunggu = `<script>Promise.all([document.fonts.ready,...[...document.images].map(i=>i.complete?1:new Promise(r=>{i.onload=i.onerror=r}))]).then(()=>document.body.setAttribute('data-siap',''))</script>`;
 
 function merek(logo) {
@@ -38,7 +45,7 @@ function merek(logo) {
 }
 
 /** Poster promosi untuk satu rasio. */
-export function htmlPoster({ rasio, naskah, produk, gambar, gambarIkon = false, logo, kontak }) {
+export function htmlPoster({ rasio, naskah, produk, gambar, gambarIkon = false, logo, kontak, foto }) {
   const { w, h } = UKURAN[rasio];
   const tegak = h > w;
   const hpLebar = rasio === 'feed' ? 380 : rasio === 'potret' ? 430 : 560;
@@ -68,7 +75,7 @@ export function htmlPoster({ rasio, naskah, produk, gambar, gambarIkon = false, 
          <div style="flex:1;min-height:0;display:flex;justify-content:center;align-items:center">${hpTegak}</div>
          ${kaki}</div>`;
   return `<!doctype html><html><head><meta charset="utf-8">${DASAR}<style>body{width:${w}px;height:${h}px;position:relative;overflow:hidden}</style></head>
-  <body><div class="latar"></div><div class="kisi"></div>${isi}${tunggu}</body></html>`;
+  <body>${latar(foto)}${isi}${tunggu}</body></html>`;
 }
 
 // Tata letak video 1080×1920: layar HP (rekaman) di tengah, judul di atas, ajakan di bawah.
@@ -96,7 +103,7 @@ export function htmlBingkai({ naskah, produk, logo }) {
 }
 
 /** Kartu pembuka & penutup video (layar penuh 1080×1920). */
-export function htmlKartu({ jenis, naskah, produk, logo, kontak }) {
+export function htmlKartu({ jenis, naskah, produk, logo, kontak, foto }) {
   const isi = jenis === 'pembuka'
     ? `<div class="lencana" style="font-size:30px">${esc(produk.label || produk.nama)}</div>
        <h1 class="serif" style="font-size:112px;line-height:1.04;margin:40px 0 30px">${esc(naskah.judul)}</h1>
@@ -105,7 +112,7 @@ export function htmlKartu({ jenis, naskah, produk, logo, kontak }) {
        <div style="display:grid;gap:22px;font-size:44px;color:#c9ced8">
          <div>WhatsApp <b class="emas">${esc(kontak.whatsappTampil)}</b></div><div>bakafrawi.com</div></div>`;
   return `<!doctype html><html><head><meta charset="utf-8">${DASAR}<style>body{width:1080px;height:1920px;position:relative;overflow:hidden}</style></head>
-  <body><div class="latar"></div><div class="kisi"></div>
+  <body>${latar(foto)}
   <div style="position:absolute;inset:0;padding:110px 90px;display:flex;flex-direction:column;justify-content:center">
     <div style="margin-bottom:70px">${merek(logo)}</div>${isi}</div>${tunggu}</body></html>`;
 }

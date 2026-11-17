@@ -55,3 +55,28 @@ export async function unggah(jalur, isi, jenis) {
   );
   return `${URL_SB()}/storage/v1/object/public/studio/${jalur}`;
 }
+
+/** Ambil satu tugas yang waktunya tayang (atomik) → objek tugas atau null. */
+export async function ambilTayang() {
+  const res = await periksa(
+    await fetch(`${URL_SB()}/rest/v1/rpc/studio_ambil_tayang`, { method: 'POST', headers: kepala({ 'Content-Type': 'application/json' }), body: '{}' }),
+    'Ambil tayang',
+  );
+  return (await res.json())[0] ?? null;
+}
+
+export async function bacaPengaturan() {
+  const res = await periksa(await fetch(`${URL_SB()}/rest/v1/studio_pengaturan?id=eq.1&select=*`, { headers: kepala() }), 'Baca pengaturan');
+  return (await res.json())[0] ?? {};
+}
+
+export async function simpanPengaturan(isi) {
+  await periksa(
+    await fetch(`${URL_SB()}/rest/v1/studio_pengaturan?id=eq.1`, {
+      method: 'PATCH',
+      headers: kepala({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+      body: JSON.stringify({ ...isi, diubah: new Date().toISOString() }),
+    }),
+    'Simpan pengaturan',
+  );
+}
