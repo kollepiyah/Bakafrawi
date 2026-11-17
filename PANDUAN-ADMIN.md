@@ -14,7 +14,7 @@ bisa diubah dari sana tanpa coding. Setelah **Simpan**, situs langsung berubah.
 3. **Buat akun admin:** Supabase → Authentication → Users → *Add user* → email & kata sandi
    (centang *Auto Confirm User*). Lalu di **SQL Editor**:
    ```sql
-   insert into public.admin (user_id) select id from auth.users where email = 'halo@bakafrawi.com';
+   insert into public.admin (user_id) select id from auth.users where email = 'kollepiyah@gmail.com';
    ```
 4. **Matikan pendaftaran umum:** Authentication → Sign In / Providers → matikan *Allow new users to sign up*.
 5. **Sambungkan ke Vercel:** Vercel → proyek `bakafrawi` → Settings → Environment Variables:

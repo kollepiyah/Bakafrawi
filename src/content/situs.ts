@@ -186,7 +186,7 @@ export const situsBawaan: Situs = {
     ],
   },
   kontak: {
-    email: "halo@bakafrawi.com",
+    email: "kollepiyah@gmail.com",
     whatsappTampil: "0878-9266-3748",
     whatsappNomor: "6287892663748",
     lokasi: "Sidoarjo, Jawa Timur",
