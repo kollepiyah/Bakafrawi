@@ -1,6 +1,6 @@
 # CHANGELOG — bakafrawi.com
 
-## Tahap 3, gelombang 2 — Instagram, bot Telegram, latar AI (18 Nov 2026, branch `studio-sosmed`, belum tayang)
+## Tahap 3, gelombang 2 — Instagram, bot Telegram, latar AI (tayang 18 Nov 2026)
 
 - **Persetujuan & tayang:** hasil Studio dikirim ke bot Telegram bertombol (Tayangkan sekarang · Jadwal
   19.00 WIB · Buat ulang · Tolak); tombol sama di admin. Mesin memposting ke Instagram — poster: feed 4:5 +
