@@ -56,6 +56,15 @@ export async function unggah(jalur, isi, jenis) {
   return `${URL_SB()}/storage/v1/object/public/studio/${jalur}`;
 }
 
+/** Tugas/tayang yang ditinggal mesin (mati di tengah jalan) → "gagal"; memulangkan jumlahnya. */
+export async function pulihkan() {
+  const res = await periksa(
+    await fetch(`${URL_SB()}/rest/v1/rpc/studio_pulihkan`, { method: 'POST', headers: kepala({ 'Content-Type': 'application/json' }), body: '{}' }),
+    'Pulihkan tugas',
+  );
+  return res.json();
+}
+
 /** Ambil satu tugas yang waktunya tayang (atomik) → objek tugas atau null. */
 export async function ambilTayang() {
   const res = await periksa(

@@ -77,3 +77,18 @@ Centang **Latar gambar AI** saat membuat konten. Claude menulis 2 adegan suasana
 membuatnya (± Rp650/gambar; model dipilih otomatis, bisa dipaksa lewat rahasia `STUDIO_GEMINI_GAMBAR`).
 Poster: foto jadi latar; video: kartu pembuka & penutup berlatar foto dan bergerak pelan (zoom).
 Tanpa `GEMINI_API_KEY` → latar polos, dengan catatan di kartu tugas.
+
+## Pemicu dari Supabase (gelombang 3)
+
+Supabase memeriksa tiap 5 menit dan menyalakan mesin hanya bila ada kerja — jadwal 19.00 jadi tepat waktu.
+1. `npx supabase db push` (migrasi `20261118200000_studio_andal.sql`).
+2. Buat token GitHub *Fine-grained* (repo `Bakafrawi` saja, **Actions: Read and write**) — token yang sama
+   boleh dipakai untuk `GITHUB_STUDIO_TOKEN` di Vercel.
+3. Supabase → SQL Editor, jalankan sekali (ganti isinya dengan token):
+   ```sql
+   select vault.create_secret('github_pat_…', 'github_studio_token');
+   ```
+   Tanpa langkah ini semuanya tetap jalan lewat jadwal 30 menit GitHub, hanya lebih lambat.
+
+**Latar gambar AI butuh billing Google.** Model gambar Gemini tidak punya kuota gratis (galat 429).
+Buka aistudio.google.com → proyek pemilik `GEMINI_API_KEY` → *Set up billing*. Biaya ± Rp650/gambar.

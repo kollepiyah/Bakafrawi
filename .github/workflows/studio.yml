@@ -1,6 +1,7 @@
 # Mesin Studio AI bakafrawi.com di server GitHub — PC tidak perlu menyala.
-# Dinyalakan /api/studio/jalankan begitu admin membuat tugas, plus jadwal 30 menit sebagai
-# cadangan bila pemicu gagal. Satu putaran mengerjakan tugas antre lalu selesai.
+# Dinyalakan /api/studio/jalankan begitu admin membuat tugas dan oleh Supabase (pg_cron
+# studio_picu, tiap 5 menit bila ada kerja); jadwal 30 menit di sini hanya cadangan.
+# Satu putaran mengerjakan tugas antre lalu selesai; tanpa kerja, berhenti sebelum memasang apa pun.
 name: Studio AI
 
 on:
@@ -31,7 +32,21 @@ jobs:
       # Daftarkan satu per satu di sini (contoh: DEMO_WASEELA_SANDI dari rahasia bernama sama),
       # jangan mengirim seluruh rahasia sekaligus — GitHub menahan workflow dengan pola itu.
     steps:
+      - name: Cek ada kerja
+        id: cek
+        run: |
+          # Versi image runner (variabel mesin, tak terbaca lewat konteks env) → kunci cache ffmpeg.
+          echo "image=${ImageOS:-ubuntu}-${ImageVersion:-0}" >> "$GITHUB_OUTPUT"
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_KEY" ]; then
+            echo "Rahasia Supabase belum dipasang — putaran dilewati."; echo "kerja=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # Fungsi belum ada (migrasi belum dipasang) / galat → anggap ada kerja, jangan melewatkan tugas.
+          jawab=$(curl -sS --max-time 20 -X POST "$SUPABASE_URL/rest/v1/rpc/studio_ada_kerja"             -H "apikey: $SUPABASE_SERVICE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_KEY"             -H "Content-Type: application/json" -d '{}' || echo true)
+          echo "studio_ada_kerja → $jawab"
+          if [ "$jawab" = "false" ]; then echo "kerja=false" >> "$GITHUB_OUTPUT"; else echo "kerja=true" >> "$GITHUB_OUTPUT"; fi
+
       - uses: actions/checkout@v4
+        if: steps.cek.outputs.kerja == 'true'
         with:
           sparse-checkout: |
             studio
@@ -39,24 +54,46 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - uses: actions/setup-node@v4
+        if: steps.cek.outputs.kerja == 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: studio/package-lock.json
 
+      # Cermin apt Ubuntu kadang lambat (18 Nov: 8,5 menit). Paket .deb disimpan di cache per versi
+      # image runner, jadi umumnya dipasang dari cache dalam hitungan detik.
+      - name: Cache paket ffmpeg
+        if: steps.cek.outputs.kerja == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-ffmpeg
+          key: apt-ffmpeg-${{ steps.cek.outputs.image }}
+
       - name: Pasang ffmpeg & huruf
+        if: steps.cek.outputs.kerja == 'true'
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends ffmpeg fonts-dejavu-core > /dev/null
+          pasang_baru() {
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq --no-install-recommends --download-only ffmpeg fonts-dejavu-core > /dev/null
+            mkdir -p ~/apt-ffmpeg && cp /var/cache/apt/archives/*.deb ~/apt-ffmpeg/
+            sudo apt-get install -y -qq --no-install-recommends ffmpeg fonts-dejavu-core > /dev/null
+          }
+          if ls ~/apt-ffmpeg/*.deb > /dev/null 2>&1; then
+            sudo dpkg -i ~/apt-ffmpeg/*.deb > /dev/null 2>&1 || { echo "Cache ffmpeg tak cocok — pasang ulang"; rm -rf ~/apt-ffmpeg; pasang_baru; }
+          else
+            pasang_baru
+          fi
           ffmpeg -version | head -1
           google-chrome --version
 
       - name: Pasang paket Node
+        if: steps.cek.outputs.kerja == 'true'
         working-directory: studio
         run: |
           npm ci
           npx playwright-core install ffmpeg
 
       - name: Jalankan satu putaran Studio
+        if: steps.cek.outputs.kerja == 'true'
         working-directory: studio
         run: node studio.mjs

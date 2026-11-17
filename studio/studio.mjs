@@ -5,7 +5,7 @@
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ambilTayang, ambilTugas, bacaKonten, bacaPengaturan, perbaruiTugas, siapDb, simpanPengaturan, unggah } from './lib/db.mjs';
+import { ambilTayang, ambilTugas, bacaKonten, bacaPengaturan, perbaruiTugas, pulihkan, siapDb, simpanPengaturan, unggah } from './lib/db.mjs';
 import { adaGambarAi, buatGambarAi } from './lib/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { buatNaskah } from './lib/naskah.mjs';
@@ -33,15 +33,20 @@ function skenario(produk) {
 
 /** Foto suasana AI; gagal / tanpa kunci → null (latar polos) supaya tugas tetap jadi. */
 async function fotoAi(adegan, rasio, keluar, catatan) {
-  if (!adegan) return null;
+  if (!adegan || catatan.aiBerhenti) return null;
   if (!adaGambarAi()) {
     catatan.push('Latar AI dilewati: rahasia GEMINI_API_KEY belum diisi.');
+    catatan.aiBerhenti = true;
     return null;
   }
   try {
     return berkasUrl(await buatGambarAi(adegan, rasio, keluar));
   } catch (e) {
-    catatan.push(`Latar AI gagal: ${e.message.slice(0, 160)}`);
+    // 429 = kuota model gambar habis/0 (kunci gratis); mencoba gambar berikutnya hanya buang waktu.
+    if (/\(429\)/.test(e.message)) {
+      catatan.push('Latar AI gagal: kuota gambar Gemini habis (429). Model gambar butuh billing aktif di Google AI Studio.');
+      catatan.aiBerhenti = true;
+    } else catatan.push(`Latar AI gagal: ${e.message.slice(0, 160)}`);
     return null;
   }
 }
@@ -110,6 +115,9 @@ async function putaranTayang(pengaturan, kabar) {
       await simpanPengaturan(baru);
       k = { ...k, ...baru };
     }
+    // token_dicek: studio_ada_kerja() tak memicu mesin lagi untuk token ini sampai besok. Kolomnya
+    // dari migrasi 20261118200000 — gagal (migrasi belum dipasang) tak boleh menghentikan tayang.
+    await simpanPengaturan({ token_dicek: new Date().toISOString() }).catch((e) => console.error(e.message));
   }
   for (let i = 0; i < MAKS_TUGAS; i++) {
     const tugas = await ambilTayang();
@@ -146,6 +154,11 @@ async function modeAwan() {
     if (!chat || !adaTelegram()) return;
     await kirimTeks(chat, teks, tombol).catch((e) => console.error('Telegram:', e.message));
   };
+
+  const pulih = await pulihkan().catch((e) => (console.error(e.message), {}));
+  if (pulih.buat || pulih.tayang) {
+    await kabar(`⚠️ Putaran Studio sebelumnya terhenti di tengah jalan: ${[pulih.buat && `${pulih.buat} konten gagal dibuat (tekan Buat ulang)`, pulih.tayang && `${pulih.tayang} konten terputus saat tayang — cek Instagram dulu sebelum menayangkan lagi`].filter(Boolean).join('; ')}.`);
+  }
 
   const tugasPertama = await ambilTugas();
   if (tugasPertama) {

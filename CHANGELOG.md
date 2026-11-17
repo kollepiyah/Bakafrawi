@@ -1,5 +1,23 @@
 # CHANGELOG — bakafrawi.com
 
+## Tahap 3, gelombang 3 — Studio lebih andal (belum tayang)
+
+- **Tugas tak lagi tersangkut.** Bila mesin mati di tengah jalan (batas 30 menit / galat GitHub), konten
+  yang masih "sedang dibuat" lebih dari 35 menit ditandai gagal (bisa *Buat ulang*), dan yang terputus saat
+  tayang ditandai gagal tayang dengan pesan "cek Instagram dulu" — sengaja tidak diulang otomatis supaya
+  tak ada posting ganda. Bot mengabari bila ada yang dipulihkan (`studio_pulihkan`).
+- **Pemicu dari Supabase.** pg_cron tiap 5 menit (`studio_picu`) menyalakan mesin GitHub hanya bila ada
+  kerja: tugas antre, tayang yang jadwalnya tiba, tugas macet, atau token Instagram yang perlu diperpanjang.
+  Jadwal 19.00 kini tayang ±19.05–19.10, bukan menunggu cron GitHub yang sering telat dan dimatikan GitHub
+  bila repo 60 hari tanpa commit. Butuh token GitHub di Vault (`PANDUAN-STUDIO.md`); tanpa token, cadangan
+  jadwal 30 menit GitHub tetap jalan.
+- **Putaran cepat.** Workflow memeriksa `studio_ada_kerja()` dulu; tanpa kerja ia selesai dalam detik tanpa
+  memasang apa pun. Paket ffmpeg disimpan di cache per versi image runner (18 Nov pemasangan via apt sempat
+  8,5 menit).
+- **Latar AI berhenti mencoba saat kuota Gemini 0/habis (429)** dan menulis sebabnya di kartu tugas. Uji
+  18 Nov: poster berlatar AI gagal 429 karena model gambar Gemini butuh **billing aktif** di Google AI Studio.
+- Migrasi `20261118200000_studio_andal.sql` (pg_cron, pg_net).
+
 ## Tahap 3, gelombang 2 — Instagram, bot Telegram, latar AI (tayang 18 Nov 2026)
 
 - **Persetujuan & tayang:** hasil Studio dikirim ke bot Telegram bertombol (Tayangkan sekarang · Jadwal
