@@ -1,6 +1,6 @@
 # CHANGELOG — bakafrawi.com
 
-## Tahap 2 — Panel admin tanpa coding (18 Nov 2026, branch `situs-nextjs`, belum tayang)
+## Tahap 2 — Panel admin tanpa coding (tayang 18 Nov 2026)
 
 - **/admin**: login (Supabase Auth, email + kata sandi, lupa sandi), lalu editor bertab
   Umum · Layanan · Produk · Proses & Tentang · Kontak. Produk bisa ditambah, dihapus, diurutkan,
@@ -16,7 +16,7 @@
 - **Mode uji lokal** untuk mencoba panel tanpa database (hanya `next dev`).
 - Langkah pemasangan: `PANDUAN-ADMIN.md`.
 
-## Tahap 1 — Pindah ke Next.js (18 Nov 2026, branch `situs-nextjs`, belum tayang)
+## Tahap 1 — Pindah ke Next.js (tayang 18 Nov 2026)
 
 - Situs satu berkas `index.html` diganti **Next.js 16 + Tailwind 4 + shadcn/ui + Motion**.
   Tampilan gelap-emas dipertahankan. Deploy tetap Vercel; `vercel.json` memaksa preset

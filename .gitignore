@@ -46,3 +46,6 @@ next-env.d.ts
 # mode uji lokal panel admin
 /.data/
 /public/_media-lokal/
+
+# berkas sementara Supabase CLI (link proyek)
+/supabase/.temp/
