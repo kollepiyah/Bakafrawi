@@ -21,7 +21,8 @@ tidak perlu menyala. Repo publik → menit Actions gratis.
    - `SUPABASE_URL` — sama dengan di Vercel
    - `SUPABASE_SERVICE_KEY` — Supabase → Settings → API → **service_role** (rahasia; hanya di sini, jangan di Vercel)
    - `ANTHROPIC_API_KEY` — kunci baru `bakafrawi-studio` dari console.anthropic.com (akun yang sama boleh)
-   - Akun demo untuk rekaman, mis. `DEMO_WASEELA_SANDI` (dipakai di skenario sebagai `{{RAHASIA:WASEELA_SANDI}}`)
+   - Akun demo untuk rekaman, mis. `DEMO_WASEELA_SANDI` (dipakai di skenario sebagai `{{RAHASIA:WASEELA_SANDI}}`).
+     Setiap rahasia demo juga harus didaftarkan satu baris di `env:` workflow `studio.yml`.
 3. **Pemicu langsung (disarankan):** github.com → Settings → Developer settings → *Fine-grained tokens* →
    Repository access: hanya `Bakafrawi` → Permissions → **Actions: Read and write** → salin token →
    Vercel → Environment Variables → `GITHUB_STUDIO_TOKEN` (jenis **Secret**, Production + Preview) → redeploy.

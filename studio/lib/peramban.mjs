@@ -35,20 +35,10 @@ export async function potret(peramban, { html, keluar, w, h, transparan = false 
 }
 
 /** Ganti {{RAHASIA:NAMA}} dengan env DEMO_NAMA — kata sandi akun demo tak pernah tersimpan di konten publik. */
-// Di GitHub Actions semua rahasia repo masuk lewat DEMO_SECRETS (JSON) supaya akun demo baru
-// cukup ditambah sebagai rahasia DEMO_NAMA tanpa mengubah workflow.
-const rahasiaActions = (() => {
-  try {
-    return JSON.parse(process.env.DEMO_SECRETS ?? '{}');
-  } catch {
-    return {};
-  }
-})();
-
 function isiRahasia(teks = '') {
   return teks.replace(/\{\{RAHASIA:([A-Z0-9_]+)\}\}/g, (_, n) => {
-    const v = process.env[`DEMO_${n}`] ?? rahasiaActions[`DEMO_${n}`];
-    if (v === undefined) throw new Error(`Rahasia DEMO_${n} belum diisi di GitHub Actions.`);
+    const v = process.env[`DEMO_${n}`];
+    if (v === undefined) throw new Error(`Rahasia DEMO_${n} belum diisi di GitHub dan didaftarkan di .github/workflows/studio.yml.`);
     return v;
   });
 }
