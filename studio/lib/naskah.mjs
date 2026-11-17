@@ -13,7 +13,9 @@ export const SkemaNaskah = z.object({
   hashtag: z.array(z.string()).describe('5-8 hashtag tanpa tanda #'),
 });
 
-const MODEL = process.env.STUDIO_MODEL || 'claude-opus-5-5';
+// Sama dengan Lek Kopi (MODEL_KONTEN): Sonnet 5.5 effort medium — naskah iklan pendek tak butuh
+// Opus, dan biayanya kira-kira separuh.
+const MODEL = process.env.STUDIO_MODEL || 'claude-sonnet-5-5';
 
 function ringkasProduk(produk, situs) {
   const fitur = produk.fitur.map((f) => `- ${f.judul}: ${f.isi}`).join('\n');

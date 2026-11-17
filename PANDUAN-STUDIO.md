@@ -8,7 +8,7 @@ tidak perlu menyala. Repo publik → menit Actions gratis.
 - **Video:** robot membuka aplikasi di layar HP, menjalankan *Skenario rekaman* produk itu sambil
   merekam, lalu dirakit jadi video 9:16: kartu pembuka → rekaman dalam bingkai HP + subtitle →
   kartu penutup (WA & bakafrawi.com), dengan narasi suara AI (edge-tts, id-ID).
-- **Naskah & caption** ditulis Claude (`claude-opus-5-5`). Tanpa kunci API, Studio memakai naskah
+- **Naskah & caption** ditulis Claude (`claude-sonnet-5-5`, effort medium — sama dengan konten Lek Kopi). Tanpa kunci API, Studio memakai naskah
   templat dari data produk — tetap jadi, hanya kurang luwes.
 
 ## Pemasangan (sekali)
