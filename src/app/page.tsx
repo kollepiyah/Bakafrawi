@@ -1,5 +1,6 @@
 import { produkTampil, situs } from "@/content/situs";
 import { Bagian, KepalaBagian } from "@/components/situs/bagian";
+import { HargaMaktaba } from "@/components/situs/harga-maktaba";
 import { Hero } from "@/components/situs/hero";
 import { KartuProduk } from "@/components/situs/kartu-produk";
 import { Footer, Kontak } from "@/components/situs/kontak-footer";
@@ -24,7 +25,10 @@ export default function Beranda() {
             isi="Aplikasi buatan Bakafrawi yang bisa langsung Anda gunakan — tanpa menunggu proses pembuatan."
           />
           {produkSendiri.map((p) => (
-            <KartuProduk key={p.slug} produk={p} />
+            <div key={p.slug}>
+              <KartuProduk produk={p} />
+              {p.slug === "maktaba-pos" && <HargaMaktaba urlDaftar="https://maktabapos.web.app/register" />}
+            </div>
           ))}
         </Bagian>
 

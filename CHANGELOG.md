@@ -23,3 +23,10 @@
 - Formulir kontak: kirim via Web3Forms bila `NEXT_PUBLIC_WEB3FORMS_KEY` diisi di Vercel;
   bila kosong otomatis membuka WhatsApp berisi pesan pengunjung.
 - Bahan mentah (`assets/_raw`, logo asli, `index.html` lama) dipindah ke `_bahan/`.
+- **Revisi Kyai (gelombang 2):** WA jadi 0878-9266-3748; Fastabiqu disembunyikan sementara;
+  klien Waseela = Damu Foundation, Lombok; pengalaman 2+ tahun; Maktaba diberi label
+  "segera di Google Play" (masih uji tertutup).
+- **Harga paket Maktaba POS** tampil di bawah kartunya, dibaca langsung dari tabel `plans`
+  database Maktaba (kunci anon publik, cache per jam) — harga tak perlu disalin manual dan
+  otomatis ikut bila diubah di Maktaba. Bila database tak terjangkau, bagian harga
+  disembunyikan.

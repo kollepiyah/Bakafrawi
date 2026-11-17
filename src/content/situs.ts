@@ -67,7 +67,7 @@ export const situs: Situs = {
     isi: "Bakafrawi Project membantu bisnis dan lembaga membangun website, aplikasi, dan sistem manajemen sesuai pesanan — dan menyediakan aplikasi siap pakai yang bisa langsung Anda langgani.",
   },
   statistik: [
-    { angka: "5+", label: "Tahun pengalaman" },
+    { angka: "2+", label: "Tahun pengalaman" },
     { angka: "30+", label: "Proyek selesai" },
     { angka: "15+", label: "Klien puas" },
     { angka: "100%", label: "Komitmen kualitas" },
@@ -107,7 +107,7 @@ export const situs: Situs = {
       judul: "Kasir modern untuk toko, kedai & UMKM",
       deskripsi:
         "Maktaba POS adalah aplikasi kasir berlangganan: satu pemilik mengelola toko dengan banyak kasir, dari penjualan, stok, sampai keuangan dan gaji pegawai — cukup dengan HP Android atau browser.",
-      platform: ["Web", "Android"],
+      platform: ["Web", "Android · segera di Google Play"],
       fitur: [
         { judul: "Kasir cepat", isi: "barcode, diskon, pajak, nomor antrian, Tunai/QRIS/GoFood/ShopeeFood/Hutang." },
         { judul: "Printer & struk", isi: "printer thermal Bluetooth, laci kasir otomatis, struk digital ke WhatsApp." },
@@ -138,7 +138,8 @@ export const situs: Situs = {
       ],
       tautan: [{ label: "Buka Fastabiqu", url: "https://fastabiquu.web.app", utama: true }],
       logo: { src: "/produk/fastabiqu-logo.png", alt: "Logo Fastabiqu", lebar: 360, tinggi: 295 },
-      tampil: true,
+      // Disembunyikan sementara atas permintaan Kyai (18 Nov 2026).
+      tampil: false,
     },
     {
       slug: "ammu-online",
@@ -173,7 +174,7 @@ export const situs: Situs = {
       kategori: "pesanan",
       label: "Karya Pesanan · Portal Lembaga Pendidikan",
       judul: "Portal manajemen pesantren & sekolah",
-      klien: "Lembaga pendidikan mitra",
+      klien: "Damu Foundation, Lombok",
       deskripsi:
         "Waseela dipasang khusus untuk lembaga pemesannya — satu pemasangan untuk satu lembaga, dengan data terpisah penuh: santri, guru, absensi, rapor, keuangan, kegiatan, dan kanal informasi.",
       platform: ["Web", "Android", "Desktop"],
@@ -232,8 +233,8 @@ export const situs: Situs = {
   },
   kontak: {
     email: "halo@bakafrawi.com",
-    whatsappTampil: "0857-1047-7372",
-    whatsappNomor: "6285710477372",
+    whatsappTampil: "0878-9266-3748",
+    whatsappNomor: "6287892663748",
     lokasi: "Sidoarjo, Jawa Timur",
     sosial: [
       { jenis: "instagram", url: "https://www.instagram.com/bakafrawi.project" },
