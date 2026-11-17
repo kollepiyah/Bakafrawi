@@ -51,7 +51,10 @@ hasil ada di `studio/keluaran/`.
 Alur: Studio selesai → hasil dikirim ke **bot Telegram** dengan tombol **Tayangkan sekarang · Jadwal 19.00 ·
 Buat ulang · Tolak** (tombol yang sama ada di admin → Studio AI) → mesin memposting ke Instagram
 (poster: feed 4:5 + Story 9:16; video: Reels) → bot mengabari tautannya. **Tak ada yang tayang tanpa
-persetujuan.** Dari Telegram juga bisa memesan: `/poster maktaba ai`, `/video maktaba`, `/status`.
+persetujuan.** Dari Telegram juga bisa memesan: `/poster maktaba ai`, `/video maktaba`, `/status` — atau
+**chat biasa** ("buatkan poster Maktaba untuk pemilik warung pakai latar AI", "kasih 5 ide konten", "ganti
+caption yang terakhir jadi lebih santai"). Chat bebas memakai Claude Haiku 5.5 (± Rp10/pesan) dan butuh
+`ANTHROPIC_API_KEY` di Vercel.
 
 ### Pasang (sekali)
 1. Migrasi: `npx supabase db push` (tabel `studio_pengaturan`, kolom tayang).

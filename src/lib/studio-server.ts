@@ -94,3 +94,40 @@ export async function picuStudio(): Promise<boolean> {
   });
   return res.ok;
 }
+
+export type TugasBot = {
+  id: string;
+  dibuat: string;
+  jenis: string;
+  produk_slug: string;
+  latar: string;
+  status: string;
+  status_tayang: string;
+  jadwal_tayang: string | null;
+  caption: string | null;
+  galat: string | null;
+};
+
+/** Daftar konten untuk otak bot (lebih lengkap dari daftarTugas). */
+export async function daftarTugasBot(batas = 8): Promise<TugasBot[]> {
+  return rest(`studio_tugas?select=id,dibuat,jenis,produk_slug,latar,status,status_tayang,jadwal_tayang,caption,galat&order=dibuat.desc&limit=${Math.min(Math.max(batas, 1), 20)}`);
+}
+
+/** Ganti caption; tak boleh untuk yang sedang/sudah tayang (caption di Instagram tak ikut berubah). */
+export async function ubahCaption(id: string, caption: string) {
+  const hasil = (await rest(`studio_tugas?id=eq.${id}&status_tayang=not.in.(proses,tayang)`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ caption }),
+  })) as TugasBot[];
+  if (!hasil.length) throw new Error("Konten tidak ditemukan atau sudah/sedang tayang.");
+}
+
+export async function simpanRiwayatBot(riwayat: unknown[]) {
+  await simpanPengaturan({ bot_riwayat: riwayat });
+}
+
+export async function bacaRiwayatBot(): Promise<{ peran: "user" | "assistant"; teks: string }[]> {
+  const [p] = (await rest("studio_pengaturan?id=eq.1&select=bot_riwayat")) as { bot_riwayat: { peran: "user" | "assistant"; teks: string }[] }[];
+  return p?.bot_riwayat ?? [];
+}

@@ -43,3 +43,15 @@ export function samaAman(a: string, b: string) {
   for (let i = 0; i < a.length; i++) beda |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return beda === 0;
 }
+
+export type GiliranBot = { peran: "user" | "assistant"; teks: string };
+
+/**
+ * Ingatan pendek bot: ambil giliran terakhir saja, dimulai dari pesan user (syarat API Claude),
+ * tiap teks dipotong supaya biaya tiap pesan tetap kecil.
+ */
+export function rapikanRiwayat(riwayat: GiliranBot[], maks = 10, maksHuruf = 1500): GiliranBot[] {
+  const akhir = riwayat.slice(-maks).map((g) => ({ ...g, teks: g.teks.slice(0, maksHuruf) }));
+  const mulai = akhir.findIndex((g) => g.peran === "user");
+  return mulai < 0 ? [] : akhir.slice(mulai);
+}

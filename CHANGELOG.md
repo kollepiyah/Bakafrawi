@@ -8,6 +8,10 @@
   `proses/tayang` tak bisa diubah lagi → tak ada posting ganda.
 - **Bot Telegram** (`/api/telegram`, webhook dengan kode rahasia; hanya pemilik terdaftar `/start KODE`):
   `/poster <produk> [ai]`, `/video <produk> [ai]`, `/status`. Aturan murni di `src/lib/bot-murni.ts` + tes.
+- **Chat bebas di bot** (`src/lib/bot-ai.ts`): Claude Haiku 5.5 effort rendah seperti bot Lek Kopi; bisa
+  memesan konten, melihat daftar, mengganti caption, dan menayangkan/menjadwalkan lewat alat yang memakai
+  aturan yang sama dengan admin. Ingatan 10 giliran terakhir (`studio_pengaturan.bot_riwayat`, migrasi
+  `20261118180000`). Dijawab lewat `after()` supaya Telegram tak menunggu. Butuh `ANTHROPIC_API_KEY` di Vercel.
 - **Sambungan** di admin → Studio AI: tempel token Instagram (3 jenis token seperti Lek Kopi; token tak pernah
   dikirim balik ke browser), sambungkan webhook bot. Token IG diperpanjang otomatis.
 - **Latar gambar AI** (Gemini, model dipilih otomatis): poster berlatar foto suasana; video dengan kartu

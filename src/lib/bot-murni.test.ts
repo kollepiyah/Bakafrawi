@@ -33,3 +33,18 @@ test("samaAman", () => {
   assert.equal(samaAman("", ""), false);
   assert.equal(samaAman("abc", "abcd"), false);
 });
+
+test("rapikanRiwayat", async () => {
+  const { rapikanRiwayat } = await import("./bot-murni.ts");
+  const r = [
+    { peran: "assistant" as const, teks: "a" },
+    { peran: "user" as const, teks: "b" },
+    { peran: "assistant" as const, teks: "c".repeat(3000) },
+  ];
+  const hasil = rapikanRiwayat(r, 10, 100);
+  assert.equal(hasil[0].peran, "user");
+  assert.equal(hasil.length, 2);
+  assert.equal(hasil[1].teks.length, 100);
+  assert.deepEqual(rapikanRiwayat([{ peran: "assistant", teks: "x" }]), []);
+  assert.equal(rapikanRiwayat(Array.from({ length: 30 }, (_, i) => ({ peran: i % 2 ? "assistant" : "user", teks: String(i) }) as const), 10).length <= 10, true);
+});

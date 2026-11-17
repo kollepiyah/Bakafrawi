@@ -1,6 +1,8 @@
+import { after } from "next/server";
+import { jawabBebas } from "@/lib/bot-ai";
 import { cariProduk, samaAman, uraiPerintah, uraiTombol } from "@/lib/bot-murni";
 import { ambilKonten } from "@/lib/konten";
-import { aturTayang, bacaPengaturan, buatTugas, buatUlang, daftarTugas, simpanPengaturan } from "@/lib/studio-server";
+import { aturTayang, bacaPengaturan, bacaRiwayatBot, buatTugas, buatUlang, daftarTugas, simpanPengaturan, simpanRiwayatBot } from "@/lib/studio-server";
 import { kirim, tg } from "@/lib/telegram-server";
 
 // Webhook bot Telegram Bakafrawi. Hanya Telegram (yang tahu kode rahasia webhook) yang bisa
@@ -10,7 +12,8 @@ const BANTUAN = `Bot Studio Bakafrawi
 /poster <produk> — buat poster (tambah "ai" untuk latar gambar AI)
 /video <produk> — buat video Reels (tambah "ai" untuk pembuka gambar AI)
 /status — 5 konten terakhir
-Hasil dikirim ke sini dengan tombol: Tayangkan sekarang · Jadwal 19.00 · Buat ulang · Tolak.`;
+Hasil dikirim ke sini dengan tombol: Tayangkan sekarang · Jadwal 19.00 · Buat ulang · Tolak.
+Boleh juga chat biasa, mis. "buatkan poster Maktaba untuk pemilik warung, pakai latar AI" atau "kasih 5 ide konten minggu ini".`;
 
 type Update = {
   message?: { chat: { id: number }; text?: string };
@@ -92,6 +95,23 @@ export async function POST(req: Request) {
     if (p.jenis === "status") {
       const daftar = await daftarTugas(5);
       await kirim(chat, daftar.length ? daftar.map((t) => `• ${t.jenis} ${t.produk_slug} — ${LABEL_STATUS[t.status] ?? t.status} ${LABEL_TAYANG[t.status_tayang] ?? ""}`).join("\n") : "Belum ada konten.");
+      return Response.json({ ok: true });
+    }
+    if (p.jenis === "lain" && process.env.ANTHROPIC_API_KEY) {
+      // Dijawab sesudah respons dikirim: Telegram tak perlu menunggu Claude (dan tak mengulang pesan).
+      const teks = pesan.text;
+      after(async () => {
+        try {
+          await tg("sendChatAction", { chat_id: chat, action: "typing" }).catch(() => {});
+          const [situs, riwayat] = await Promise.all([ambilKonten(), bacaRiwayatBot()]);
+          const hasil = await jawabBebas(teks, riwayat, situs);
+          await simpanRiwayatBot(hasil.riwayat);
+          await kirim(chat, hasil.balasan.slice(0, 4000));
+        } catch (e) {
+          console.error("Chat bebas:", e);
+          await kirim(chat, `⚠️ Maaf Kyai, asisten sedang gagal menjawab (${e instanceof Error ? e.message.slice(0, 120) : "galat"}).`).catch(() => {});
+        }
+      });
       return Response.json({ ok: true });
     }
     await kirim(chat, BANTUAN);
