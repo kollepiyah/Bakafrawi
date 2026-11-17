@@ -13,7 +13,8 @@ async function bacaMentah(): Promise<unknown> {
   }
   if (!adaSupabase) return null;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/konten?id=eq.situs&select=data`, {
-    headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+    // Cukup header apikey: berlaku untuk kunci anon lama (eyJ…) maupun publishable baru (sb_publishable_…).
+    headers: { apikey: SUPABASE_ANON },
   });
   if (!res.ok) throw new Error(`Gagal membaca konten: ${res.status}`);
   const baris = (await res.json()) as { data: unknown }[];
