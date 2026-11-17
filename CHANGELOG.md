@@ -1,6 +1,6 @@
 # CHANGELOG — bakafrawi.com
 
-## Tahap 3 — Studio AI (18 Nov 2026, branch `studio-ai`, belum tayang)
+## Tahap 3 — Studio AI (tayang 18 Nov 2026)
 
 - **/admin → Studio AI**: buat poster (1:1, 4:5, 9:16) atau video Reels/TikTok per produk, dengan
   arahan opsional; riwayat bergambar, unduh, salin caption, hapus.
