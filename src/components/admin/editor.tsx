@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { ExternalLink, Loader2, RotateCcw, Save } from "lucide-react";
+import { Loader2, RotateCcw, Save } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { situsBawaan } from "@/content/situs";
 import { skemaSitus, type Situs } from "@/content/skema";
@@ -12,7 +12,7 @@ import { BagianProduk } from "./editor-produk";
 
 export type Ubah = (fn: (draf: Situs) => void) => void;
 
-export function Editor({ sesi, aksiKeluar }: { sesi: Session | null; aksiKeluar: ReactNode }) {
+export function Editor({ sesi, kepala }: { sesi: Session | null; kepala: ReactNode }) {
   const [asli, setAsli] = useState<Situs | null>(null);
   const [draf, setDraf] = useState<Situs | null>(null);
   const [dariBawaan, setDariBawaan] = useState(false);
@@ -84,17 +84,7 @@ export function Editor({ sesi, aksiKeluar }: { sesi: Session | null; aksiKeluar:
 
   return (
     <div className="pb-28">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4">
-          <div className="flex items-center gap-3">
-            <span className="font-heading text-lg">Admin</span>
-            <a href="/" target="_blank" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-emas">
-              Lihat situs <ExternalLink className="size-3" />
-            </a>
-          </div>
-          {aksiKeluar}
-        </div>
-      </header>
+      {kepala}
 
       <main className="mx-auto max-w-4xl px-4 pt-6">
         {dariBawaan && (

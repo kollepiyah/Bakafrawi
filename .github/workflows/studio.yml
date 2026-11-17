@@ -1,0 +1,58 @@
+# Mesin Studio AI bakafrawi.com di server GitHub — PC tidak perlu menyala.
+# Dinyalakan /api/studio/jalankan begitu admin membuat tugas, plus jadwal 30 menit sebagai
+# cadangan bila pemicu gagal. Satu putaran mengerjakan tugas antre lalu selesai.
+name: Studio AI
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "*/30 * * * *"
+
+# Satu putaran pada satu waktu; database juga mengunci tiap tugas (studio_ambil_tugas).
+concurrency:
+  group: studio-ai
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  studio:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Kata sandi akun demo untuk skenario rekaman ({{RAHASIA:NAMA}} → DEMO_NAMA).
+      DEMO_SECRETS: ${{ toJSON(secrets) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            studio
+            public/logo.png
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: studio/package-lock.json
+
+      - name: Pasang ffmpeg & huruf
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg fonts-dejavu-core > /dev/null
+          ffmpeg -version | head -1
+          google-chrome --version
+
+      - name: Pasang paket Node
+        working-directory: studio
+        run: |
+          npm ci
+          npx playwright-core install ffmpeg
+
+      - name: Jalankan satu putaran Studio
+        working-directory: studio
+        run: node studio.mjs

@@ -1,5 +1,18 @@
 # CHANGELOG — bakafrawi.com
 
+## Tahap 3 — Studio AI (18 Nov 2026, branch `studio-ai`, belum tayang)
+
+- **/admin → Studio AI**: buat poster (1:1, 4:5, 9:16) atau video Reels/TikTok per produk, dengan
+  arahan opsional; riwayat bergambar, unduh, salin caption, hapus.
+- Mesin di `studio/` dijalankan **GitHub Actions** (`.github/workflows/studio.yml`) — dipicu
+  `/api/studio/jalankan` (token GitHub opsional) + jadwal 30 menit. Tugas diambil atomik
+  (`studio_ambil_tugas`), hasil ke bucket publik `studio`.
+- Naskah oleh Claude (`claude-opus-5-5`, keluaran JSON tervalidasi zod); tanpa kunci → naskah templat.
+- Video: rekaman aplikasi di layar HP (Playwright) mengikuti **Skenario rekaman** per produk (baru di
+  editor produk; kata sandi demo lewat `{{RAHASIA:NAMA}}` → rahasia GitHub), narasi edge-tts,
+  subtitle, kartu pembuka/penutup, dirakit ffmpeg 1080×1920.
+- Migrasi `20261118120000_studio.sql`. Panduan: `PANDUAN-STUDIO.md`.
+
 ## Tahap 2 — Panel admin tanpa coding (tayang 18 Nov 2026)
 
 - **/admin**: login (Supabase Auth, email + kata sandi, lupa sandi), lalu editor bertab

@@ -2,17 +2,19 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Loader2, LogOut } from "lucide-react";
+import { ExternalLink, Loader2, LogOut } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { jalurGudang, supabase } from "@/lib/gudang-admin";
 import { Editor } from "./editor";
+import { Studio } from "./studio";
 
 type Status = "memuat" | "keluar" | "bukan-admin" | "admin";
 
 export function AplikasiAdmin() {
   const [status, setStatus] = useState<Status>(jalurGudang === "lokal" ? "admin" : "memuat");
   const [sesi, setSesi] = useState<Session | null>(null);
+  const [halaman, setHalaman] = useState<"konten" | "studio">("konten");
 
   useEffect(() => {
     if (jalurGudang !== "supabase") return;
@@ -53,19 +55,39 @@ export function AplikasiAdmin() {
       </Layar>
     );
   }
-  return (
-    <Editor
-      sesi={sesi}
-      aksiKeluar={
-        jalurGudang === "supabase" ? (
+  const kepala = (
+    <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4">
+        <nav className="flex items-center gap-1">
+          {(["konten", "studio"] as const).map((h) => (
+            <button
+              key={h}
+              onClick={() => setHalaman(h)}
+              className={`rounded-full px-3.5 py-1.5 text-sm ${halaman === h ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {h === "konten" ? "Konten" : "Studio AI"}
+            </button>
+          ))}
+          <a href="/" target="_blank" className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-emas">
+            Lihat situs <ExternalLink className="size-3" />
+          </a>
+        </nav>
+        {jalurGudang === "supabase" ? (
           <button onClick={() => supabase().auth.signOut()} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-            <LogOut className="size-4" /> Keluar
+            <LogOut className="size-4" /> <span className="hidden sm:inline">Keluar</span>
           </button>
         ) : (
-          <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs text-amber-300">Mode uji lokal — tidak menyentuh database</span>
-        )
-      }
-    />
+          <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs text-amber-300">Mode uji lokal</span>
+        )}
+      </div>
+    </header>
+  );
+  // Editor tetap terpasang saat pindah ke Studio supaya draf yang belum disimpan tidak hilang.
+  return (
+    <>
+      <div hidden={halaman !== "konten"}><Editor sesi={sesi} kepala={kepala} /></div>
+      {halaman === "studio" && <Studio sesi={sesi} kepala={kepala} />}
+    </>
   );
 }
 

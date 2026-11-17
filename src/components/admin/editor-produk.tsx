@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
-import { KATEGORI, NAMA_KATEGORI, type Gambar, type Produk, type Situs, type Tautan } from "@/content/skema";
+import { AKSI_REKAM, KATEGORI, NAMA_AKSI, NAMA_KATEGORI, type Gambar, type Produk, type Situs, type Tautan } from "@/content/skema";
 import { Kartu } from "./bagian-editor";
 import { DaftarObjek, Kolom, KolomDaftar, KolomGambar, Pilihan, Saklar } from "./kolom";
 import type { Ubah } from "./editor";
@@ -101,6 +101,7 @@ function RincianProduk({ p, set }: { p: Produk; set: (v: Produk) => void }) {
           </>
         )}
       />
+      <SkenarioRekam p={p} set={set} />
       <DaftarObjek
         judul="Tangkapan layar desktop (lebar)"
         items={gambarHp(p.layarDesktop)}
@@ -124,6 +125,64 @@ function RincianProduk({ p, set }: { p: Produk; set: (v: Produk) => void }) {
           <>
             <KolomGambar label="Gambar" value={g.src ? g : undefined} onChange={(v) => setG(v ?? { ...g, src: "" })} />
             <Kolom label="Keterangan" value={g.keterangan} onChange={(v) => setG({ ...g, keterangan: v || undefined })} />
+          </>
+        )}
+      />
+    </div>
+  );
+}
+
+type Langkah = NonNullable<Produk["demo"]>["langkah"][number];
+
+/** Langkah yang dijalankan robot Studio saat merekam layar aplikasi untuk video promosi. */
+function SkenarioRekam({ p, set }: { p: Produk; set: (v: Produk) => void }) {
+  const demo = p.demo ?? { url: "", langkah: [] };
+  const setDemo = (d: NonNullable<Produk["demo"]>) => set({ ...p, demo: d.url || d.langkah.length ? d : undefined });
+  return (
+    <div className="grid gap-3 rounded-xl border border-emas/20 bg-emas/[.04] p-4">
+      <div className="text-sm font-semibold">Skenario rekaman video (Studio AI)</div>
+      <p className="text-xs text-redup">
+        Robot membuka alamat ini di layar HP lalu menjalankan langkahnya sambil merekam. Pakai akun demo berisi data rekaan. Kata sandi jangan diketik di sini —
+        tulis <code>{"{{RAHASIA:NAMA}}"}</code> lalu isi rahasia <code>DEMO_NAMA</code> di GitHub. Kosong = buka tombol tautan utama lalu gulir pelan.
+      </p>
+      <Kolom label="Alamat awal (https://…)" value={demo.url} onChange={(v) => setDemo({ ...demo, url: v })} />
+      <DaftarObjek
+        judul="Langkah"
+        items={demo.langkah}
+        onChange={(v) => setDemo({ ...demo, langkah: v })}
+        buatBaru={(): Langkah => ({ aksi: "klik", target: "", detik: 2 })}
+        namaButir={(l, i) => `${i + 1}. ${NAMA_AKSI[l.aksi]} ${l.target ?? ""}`}
+        render={(l, setL) => (
+          <>
+            <div className="grid gap-3 sm:grid-cols-[160px_1fr_110px]">
+              <Pilihan label="Aksi" value={l.aksi} pilihan={AKSI_REKAM.map((a) => ({ nilai: a, label: NAMA_AKSI[a] }))} onChange={(v) => setL({ ...l, aksi: v })} />
+              <Kolom
+                label={l.aksi === "buka" ? "Alamat" : l.aksi === "ketik" ? "Kolom (selektor CSS)" : "Target"}
+                value={l.target}
+                onChange={(v) => setL({ ...l, target: v || undefined })}
+                petunjuk={l.aksi === "klik" ? "Tulisan yang terlihat di tombol/menu, atau selektor CSS (#id, .kelas)." : undefined}
+              />
+              <label className="grid gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground">Jeda (detik)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={15}
+                  step={0.5}
+                  value={l.detik ?? 2}
+                  onChange={(e) => setL({ ...l, detik: Number(e.target.value) })}
+                  className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+                />
+              </label>
+            </div>
+            {(l.aksi === "ketik" || l.aksi === "gulir") && (
+              <Kolom
+                label={l.aksi === "ketik" ? "Teks yang diketik" : "Jarak gulir (piksel)"}
+                value={l.teks}
+                onChange={(v) => setL({ ...l, teks: v || undefined })}
+                petunjuk={l.aksi === "ketik" ? "Untuk kata sandi: {{RAHASIA:WASEELA_SANDI}}" : "Mis. 600"}
+              />
+            )}
           </>
         )}
       />

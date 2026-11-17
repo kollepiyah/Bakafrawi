@@ -24,6 +24,15 @@ export const NAMA_KATEGORI: Record<(typeof KATEGORI)[number], string> = {
   pesanan: "Karya pesanan klien",
 };
 
+export const AKSI_REKAM = ["buka", "klik", "ketik", "gulir", "tunggu"] as const;
+export const NAMA_AKSI: Record<(typeof AKSI_REKAM)[number], string> = {
+  buka: "Buka alamat",
+  klik: "Klik",
+  ketik: "Ketik",
+  gulir: "Gulir ke bawah",
+  tunggu: "Tunggu",
+};
+
 export const skemaProduk = z.object({
   slug: wajib("Slug").regex(/^[a-z0-9-]+$/, "Slug hanya huruf kecil, angka, dan tanda -"),
   nama: wajib("Nama produk"),
@@ -38,6 +47,23 @@ export const skemaProduk = z.object({
   logo: skemaGambar.optional(),
   layarDesktop: z.array(skemaGambar).optional(),
   layarHp: z.array(skemaGambar).optional(),
+  /**
+   * Skenario rekaman layar untuk Studio AI (video). Konten ini publik — kata sandi akun demo ditulis
+   * sebagai {{RAHASIA:NAMA}} dan diisi dari rahasia GitHub DEMO_NAMA saat merekam.
+   */
+  demo: z
+    .object({
+      url: teks,
+      langkah: z.array(
+        z.object({
+          aksi: z.enum(AKSI_REKAM),
+          target: teks.optional(),
+          teks: teks.optional(),
+          detik: z.number().min(0).max(15).optional(),
+        }),
+      ),
+    })
+    .optional(),
   /** Khusus produk SaaS: tampilkan tabel harga yang dibaca dari database aplikasinya. */
   tampilHarga: z.boolean().optional(),
   tampil: z.boolean(),
