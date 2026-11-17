@@ -1,59 +1,12 @@
-// Seluruh isi situs di satu sumber. Bentuknya sengaja dibuat datar (tanpa JSX) supaya di
-// Tahap 2 bisa dipindah apa adanya ke tabel Supabase dan diedit dari panel admin.
+// Isi bawaan situs. Dipakai sebagai isi awal database (seed) dan cadangan bila database belum
+// tersambung / tak terjangkau. Setelah panel admin aktif, sumber utama ada di tabel `konten`.
+import type { Gambar, KategoriProduk, Situs } from "./skema";
 
-export type KategoriProduk = "saas" | "aplikasi" | "pesanan";
-
-export type Tautan = { label: string; url: string; utama?: boolean };
-
-export type Gambar = { src: string; alt: string; lebar: number; tinggi: number; keterangan?: string };
-
-export type Produk = {
-  slug: string;
-  nama: string;
-  kategori: KategoriProduk;
-  /** Label kecil di atas judul, mis. "SaaS Kasir UMKM". */
-  label: string;
-  judul: string;
-  deskripsi: string;
-  /** Untuk karya pesanan: lembaga/klien pemilik aplikasinya. */
-  klien?: string;
-  platform: string[];
-  fitur: { judul: string; isi: string }[];
-  tautan: Tautan[];
-  logo?: Gambar;
-  layarDesktop?: Gambar[];
-  layarHp?: Gambar[];
-  tampil: boolean;
-};
-
-export type Layanan = { ikon: "web" | "aplikasi" | "lembaga" | "saas"; judul: string; isi: string; tag: string[] };
-
-export type Situs = {
-  nama: string;
-  tagline: string;
-  deskripsi: string;
-  urlSitus: string;
-  statusProyek: string;
-  hero: { label: string; judul: string; sorot: string[]; isi: string };
-  statistik: { angka: string; label: string }[];
-  layanan: Layanan[];
-  produk: Produk[];
-  proses: { judul: string; isi: string }[];
-  tentang: { judul: string; paragraf: string[]; fakta: { label: string; isi: string }[] };
-  kontak: {
-    email: string;
-    whatsappTampil: string;
-    /** Format internasional tanpa tanda +, dipakai untuk tautan wa.me. */
-    whatsappNomor: string;
-    lokasi: string;
-    sosial: { jenis: "instagram" | "facebook" | "playstore" | "tiktok" | "youtube" | "github"; url: string }[];
-  };
-  analitik: { gaId: string; umamiId: string; umamiShareUrl: string };
-};
+export type { Gambar, KategoriProduk, Layanan, Produk, Situs, Tautan } from "./skema";
 
 const hp = (src: string, alt: string, keterangan: string): Gambar => ({ src, alt, lebar: 540, tinggi: 1140, keterangan });
 
-export const situs: Situs = {
+export const situsBawaan: Situs = {
   nama: "Bakafrawi",
   tagline: "Software Developer",
   deskripsi:
@@ -119,6 +72,7 @@ export const situs: Situs = {
       tautan: [
         { label: "Coba Maktaba POS", url: "https://maktabapos.web.app", utama: true },
       ],
+      tampilHarga: true,
       logo: { src: "/produk/maktaba-logo.png", alt: "Logo Maktaba POS", lebar: 1024, tinggi: 1024 },
       tampil: true,
     },
@@ -249,5 +203,5 @@ export const situs: Situs = {
   },
 };
 
-export const produkTampil = (kategori: KategoriProduk) =>
+export const produkTampil = (situs: Situs, kategori: KategoriProduk) =>
   situs.produk.filter((p) => p.tampil && p.kategori === kategori);

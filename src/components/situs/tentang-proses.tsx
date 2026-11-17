@@ -1,4 +1,4 @@
-import type { Situs } from "@/content/situs";
+import type { Situs } from "@/content/skema";
 import { Bagian, KepalaBagian, Label } from "./bagian";
 import { Muncul } from "./muncul";
 

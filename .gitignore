@@ -42,3 +42,7 @@ next-env.d.ts
 
 # lokal Claude / editor
 /.claude/
+
+# mode uji lokal panel admin
+/.data/
+/public/_media-lokal/

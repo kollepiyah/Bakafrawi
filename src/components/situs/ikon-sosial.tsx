@@ -1,4 +1,4 @@
-import type { Situs } from "@/content/situs";
+import type { Situs } from "@/content/skema";
 
 type Jenis = Situs["kontak"]["sosial"][number]["jenis"];
 

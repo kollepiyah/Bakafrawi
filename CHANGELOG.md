@@ -1,5 +1,21 @@
 # CHANGELOG — bakafrawi.com
 
+## Tahap 2 — Panel admin tanpa coding (18 Nov 2026, branch `situs-nextjs`, belum tayang)
+
+- **/admin**: login (Supabase Auth, email + kata sandi, lupa sandi), lalu editor bertab
+  Umum · Layanan · Produk · Proses & Tentang · Kontak. Produk bisa ditambah, dihapus, diurutkan,
+  disembunyikan, diberi logo & tangkapan layar (unggah gambar ke Supabase Storage).
+- Bentuk isi didefinisikan sekali di `src/content/skema.ts` (zod): tipe TypeScript diturunkan
+  darinya dan isi divalidasi sebelum disimpan — mis. nomor WA cukup diketik biasa, tautan wa.me
+  dibentuk otomatis.
+- Situs membaca isi dari tabel `konten` (cache + tag); setelah simpan, `/api/segarkan` (hanya
+  admin, diperiksa via `is_admin()` di database) membuang cache sehingga perubahan langsung tayang.
+  Database kosong/mati/isi rusak → kembali ke isi bawaan.
+- Migrasi `20261118090000_konten_admin.sql`: tabel `admin`, `konten`, `konten_riwayat` (arsip
+  otomatis tiap ubah), RLS, bucket `media`.
+- **Mode uji lokal** untuk mencoba panel tanpa database (hanya `next dev`).
+- Langkah pemasangan: `PANDUAN-ADMIN.md`.
+
 ## Tahap 1 — Pindah ke Next.js (18 Nov 2026, branch `situs-nextjs`, belum tayang)
 
 - Situs satu berkas `index.html` diganti **Next.js 16 + Tailwind 4 + shadcn/ui + Motion**.

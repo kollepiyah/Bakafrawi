@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react";
-import type { Situs } from "@/content/situs";
+import type { Situs } from "@/content/skema";
 import { Label, TombolTautan } from "./bagian";
 import { Muncul } from "./muncul";
 

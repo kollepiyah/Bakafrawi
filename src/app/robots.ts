@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
-import { situs } from "@/content/situs";
+import { ambilKonten } from "@/lib/konten";
 
-export default function robots(): MetadataRoute.Robots {
-  return { rules: { userAgent: "*", allow: "/" }, sitemap: `${situs.urlSitus}/sitemap.xml` };
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const situs = await ambilKonten();
+  return { rules: { userAgent: "*", allow: "/", disallow: "/admin" }, sitemap: `${situs.urlSitus}/sitemap.xml` };
 }

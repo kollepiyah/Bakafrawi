@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
-import { situs } from "@/content/situs";
+import { ambilKonten } from "@/lib/konten";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const situs = await ambilKonten();
   return [{ url: situs.urlSitus, changeFrequency: "monthly", priority: 1 }];
 }

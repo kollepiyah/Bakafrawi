@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
+  // Gambar yang diunggah dari panel admin disimpan di Supabase Storage (bucket publik `media`).
+  images: { remotePatterns: [new URL("https://*.supabase.co/storage/v1/object/public/media/**")] },
   partialPrefetching: true,
   turbopack: {
     // D:\Aplikasi Project punya package-lock.json sendiri; kunci akar ke repo ini.

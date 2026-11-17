@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { BarChart3, Mail, MessageCircle } from "lucide-react";
-import type { Situs } from "@/content/situs";
+import type { Situs } from "@/content/skema";
 import { Bagian, Label, TombolTautan } from "./bagian";
 import { FormKontak } from "./form-kontak";
 import { IkonSosial, namaSosial } from "./ikon-sosial";
