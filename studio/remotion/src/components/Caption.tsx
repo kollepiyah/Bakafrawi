@@ -8,11 +8,16 @@ import { SANS, W } from './dasar';
 
 const pokok = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 
-/** Frasa ≤ maks kata; tanda baca memotong; dibagi rata supaya tak ada kata yatim. Murni. */
+/**
+ * Frasa ≤ maks kata; tanda baca atau jeda bicara > 0,3 dtk memotong (batas kata edge-tts tak membawa
+ * tanda baca, jadi jeda adalah tanda akhir kalimat); dibagi rata supaya tak ada kata yatim. Murni.
+ */
 export function frasa(kata: Kata[], maks = 3): Kata[][] {
   const potong: Kata[][] = [];
   let f: Kata[] = [];
   for (const k of kata) {
+    const sebelum = f.at(-1);
+    if (sebelum && k.mulai - sebelum.selesai > 0.3) { potong.push(f); f = []; }
     f.push(k);
     if (/[.,!?]$/.test(k.teks)) { potong.push(f); f = []; }
   }

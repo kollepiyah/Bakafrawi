@@ -1,41 +1,66 @@
-// Adegan 1 — judul besar (kata tekanan serif miring warna utama) + diagram "manual → rapi".
+// Adegan 1 — pembuka gaya karosel IG yang ramai (#claudecode, Nov 2026): label pil hitam + nomor
+// halaman, judul kapital raksasa bertumpuk dengan satu frasa di kotak warna miring, sub kalimat,
+// coretan tangan berpanah, dua ikon bertegel putih "dari → ke".
 import React from 'react';
-import { interpolate, useCurrentFrame } from 'remotion';
-import { Ikon, Kartu, SANS, SERIF, usePegas } from '../components/dasar';
+import { Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { bayangan, Ikon, SANS, TANGAN, usePegas } from '../components/dasar';
 import type { Adegan, Naskah } from '../data/script';
 
-type P = { a: Extract<Adegan, { jenis: 'hook' }>; merek: Naskah['merek'] };
+type P = { a: Extract<Adegan, { jenis: 'hook' }>; merek: Naskah['merek']; jumlah: number };
 
-export const Hook: React.FC<P> = ({ a, merek }) => {
+/** Judul dipecah per kata; kata-kata yang termasuk `tekan` disatukan jadi satu kotak warna. Murni. */
+export function pecahJudul(judul: string, tekan: string) {
+  const i = tekan ? judul.toLowerCase().indexOf(tekan.toLowerCase()) : -1;
+  const kata = (s: string) => s.split(/\s+/).filter(Boolean).map((t) => ({ teks: t, tekan: false }));
+  if (i < 0) return kata(judul);
+  return [...kata(judul.slice(0, i)), { teks: judul.slice(i, i + tekan.length), tekan: true }, ...kata(judul.slice(i + tekan.length))];
+}
+
+export const Hook: React.FC<P> = ({ a, merek, jumlah }) => {
   const frame = useCurrentFrame();
-  const j1 = usePegas(2), j2 = usePegas(9), k1 = usePegas(22), k2 = usePegas(40);
-  const garis = interpolate(frame, [30, 46], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const stabilo = interpolate(frame, [16, 30], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const kartu = (p: number, ikon: 'buku' | 'toko', teks: string, warna: string, latar: string, coret: boolean) => (
-    <Kartu style={{ width: 330, padding: '34px 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, opacity: p, transform: `translateY(${(1 - p) * 60}px) scale(${0.9 + 0.1 * p})` }}>
-      <div style={{ width: 120, height: 120, borderRadius: 32, background: latar, display: 'grid', placeItems: 'center', position: 'relative' }}>
-        <Ikon nama={ikon} ukuran={70} warna={warna} tebal={1.8} />
-        {coret ? <div style={{ position: 'absolute', width: 130, height: 8, borderRadius: 4, background: '#EF4444', transform: 'rotate(-35deg)' }} /> : null}
-      </div>
-      <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 32, textAlign: 'center', color: '#27272A', lineHeight: 1.2 }}>{teks}</div>
-    </Kartu>
+  const { fps } = useVideoConfig();
+  const potong = pecahJudul(a.judul, a.tekan);
+  const label = usePegas(0), sub = usePegas(10 + potong.length * 2), tegel1 = usePegas(18), tegel2 = usePegas(26), coret = usePegas(34);
+  const panah = interpolate(frame, [22, 34], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const tegel = (p: number, isi: React.ReactNode, teks: string) => (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, opacity: p, transform: `translateY(${(1 - p) * 50}px) scale(${0.85 + 0.15 * p})` }}>
+      <div style={{ width: 150, height: 150, borderRadius: 40, background: '#fff', boxShadow: bayangan, border: '1.5px solid #EDEDED', display: 'grid', placeItems: 'center' }}>{isi}</div>
+      <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 26, color: '#52525B' }}>{teks}</div>
+    </div>
   );
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 70 }}>
-      <div style={{ textAlign: 'center', color: merek.tinta }}>
-        <div style={{ fontFamily: SANS, fontWeight: 800, fontSize: 124, letterSpacing: -4, lineHeight: 1, opacity: j1, transform: `translateY(${(1 - j1) * 50}px)` }}>{a.judul}</div>
-        <div style={{ position: 'relative', display: 'inline-block', maxWidth: 920, marginTop: 14, fontFamily: SERIF, fontStyle: 'italic', fontSize: 120, lineHeight: 1.02, color: merek.utama, opacity: j2, transform: `translateY(${(1 - j2) * 50}px)` }}>
-          <span style={{ position: 'absolute', left: -10, right: -10, bottom: 18, height: 34, background: merek.kedua, opacity: 0.6, borderRadius: 10, transform: `scaleX(${stabilo})`, transformOrigin: 'left', zIndex: -1 }} />
-          {a.tekan}
-        </div>
+    <div style={{ width: 900, display: 'flex', flexDirection: 'column', fontFamily: SANS, color: merek.tinta }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: label, transform: `translateY(${(1 - label) * -20}px)` }}>
+        <div style={{ background: merek.tinta, color: '#fff', borderRadius: 10, padding: '10px 20px', fontWeight: 800, fontSize: 24, letterSpacing: 2.5, textTransform: 'uppercase' }}>⚠ {a.label}</div>
+        <div style={{ border: '2.5px solid #A1A1AA', borderRadius: 999, padding: '6px 18px', fontWeight: 700, fontSize: 22, color: '#52525B', fontVariantNumeric: 'tabular-nums' }}>01 / {String(jumlah).padStart(2, '0')}</div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 26 }}>
-        {kartu(k1, 'buku', a.dari, '#B91C1C', '#FEE2E2', true)}
-        <svg width="130" height="60" viewBox="0 0 130 60">
-          <path d="M8 30 H112" stroke={merek.utama} strokeWidth="7" strokeLinecap="round" fill="none" strokeDasharray="104" strokeDashoffset={104 * (1 - garis)} />
-          <path d="M96 12 L118 30 L96 48" stroke={merek.utama} strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={garis > 0.9 ? 1 : 0} />
+      {/* Judul: tiap kata/kotak muncul bergiliran dengan pegas, baris dibungkus otomatis. */}
+      <div style={{ marginTop: 34, display: 'flex', flexWrap: 'wrap', gap: '0 26px', fontWeight: 800, fontSize: 112, lineHeight: 0.95, letterSpacing: -4, textTransform: 'uppercase' }}>
+        {potong.map((k, i) => {
+          const p = spring({ frame: frame - 4 - i * 2, fps, config: { damping: 14, stiffness: 180 } });
+          return k.tekan ? (
+            <span key={i} style={{ display: 'inline-block', background: merek.utama, color: '#fff', borderRadius: 22, padding: '6px 22px 12px', margin: '8px 0', boxShadow: `0 18px 40px -16px ${merek.utama}`, opacity: p, transform: `rotate(${-2.5 * p}deg) scale(${0.7 + 0.3 * p})` }}>{k.teks}</span>
+          ) : (
+            <span key={i} style={{ display: 'inline-block', opacity: p, transform: `translateY(${(1 - p) * 40}px)` }}>{k.teks}</span>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 30, fontWeight: 500, fontSize: 36, color: '#3F3F46', opacity: sub }}>{a.sub}</div>
+      <div style={{ position: 'relative', marginTop: 70, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 36 }}>
+        {tegel(tegel1, <Ikon nama="buku" ukuran={92} warna="#B91C1C" tebal={1.6} />, a.dari)}
+        <svg width="110" height="50" viewBox="0 0 110 50" style={{ marginBottom: 44 }}>
+          <path d="M6 25 H92" stroke={merek.utama} strokeWidth="8" strokeLinecap="round" fill="none" pathLength={1} strokeDasharray="1" strokeDashoffset={1 - panah} />
+          <path d="M78 8 L100 25 L78 42" stroke={merek.utama} strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={panah > 0.9 ? 1 : 0} />
         </svg>
-        {kartu(k2, 'toko', a.ke, '#047857', '#D1FAE5', false)}
+        {tegel(tegel2, merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 120, height: 120, borderRadius: 30 }} /> : <Ikon nama="toko" ukuran={92} warna="#047857" />, a.ke)}
+        {/* Coretan tangan berpanah ke ikon tujuan */}
+        <div style={{ position: 'absolute', right: -10, top: -70, fontFamily: TANGAN, fontWeight: 700, fontSize: 40, color: '#3F3F46', lineHeight: 1, textAlign: 'right', transform: `rotate(-6deg) scale(${coret})`, transformOrigin: 'right top' }}>
+          {a.coretan}
+          <svg width="80" height="70" viewBox="0 0 80 70" style={{ display: 'block', marginLeft: 'auto', marginRight: 40 }}>
+            <path d="M60 6 C 66 34, 50 52, 22 58" fill="none" stroke="#3F3F46" strokeWidth="4" strokeLinecap="round" />
+            <path d="M34 48 L20 59 L36 66" fill="none" stroke="#3F3F46" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
       </div>
     </div>
   );

@@ -5,7 +5,9 @@ export type Kata = { teks: string; mulai: number; selesai: number }; // detik da
 export type SuaraAdegan = { berkas: string; durasi: number; kata: Kata[] }; // berkas relatif public/
 
 export type Adegan =
-  | { jenis: 'hook'; narasi: string; kunci: string[]; durasi: number; judul: string; tekan: string; dari: string; ke: string }
+  // Pembuka gaya karosel IG: label pil hitam, judul kapital bertumpuk (bagian `tekan` dalam kotak
+  // warna), sub kalimat, coretan tangan berpanah, dua ikon bertegel "dari → ke".
+  | { jenis: 'hook'; narasi: string; kunci: string[]; durasi: number; label: string; judul: string; tekan: string; sub: string; coretan: string; dari: string; ke: string }
   | { jenis: 'kasir'; narasi: string; kunci: string[]; durasi: number; badge: string; produk: { nama: string; harga: string }[]; total: string }
   | { jenis: 'stok'; narasi: string; kunci: string[]; durasi: number; badge: string; simpul: string[]; notifikasi: string }
   | { jenis: 'laporan'; narasi: string; kunci: string[]; durasi: number; badge: string; omzet: string; daftar: string[] }
@@ -30,7 +32,10 @@ export const naskahContoh: Naskah = {
       jenis: 'hook', durasi: 5,
       narasi: 'Masih catat penjualan manual? Ini cara beresin operasional tokomu pakai Maktaba POS.',
       kunci: ['manual', 'Maktaba', 'POS'],
-      judul: 'Kelola toko', tekan: 'pakai Maktaba POS', dari: 'Buku catatan manual', ke: 'Toko rapi & untung',
+      label: 'Sebelum tutup toko hari ini',
+      judul: 'Jangan rekap manual lagi, pakai Maktaba POS', tekan: 'Maktaba POS',
+      sub: 'Kasir, stok, sampai laba — cukup dari HP.', coretan: 'beneran bisa dicoba gratis!',
+      dari: 'Buku catatan', ke: 'Maktaba POS',
     },
     {
       jenis: 'kasir', durasi: 10, badge: 'Kasir Kilat',

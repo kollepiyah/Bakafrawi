@@ -26,9 +26,9 @@ export function kataRata(narasi: string, detik: number): Kata[] {
   });
 }
 
-const Isi: React.FC<{ a: Adegan; merek: Naskah['merek']; durasi: number; atas: number }> = ({ a, merek, durasi, atas }) => {
+const Isi: React.FC<{ a: Adegan; merek: Naskah['merek']; durasi: number; atas: number; jumlah: number }> = ({ a, merek, durasi, atas, jumlah }) => {
   switch (a.jenis) {
-    case 'hook': return <Hook a={a} merek={merek} />;
+    case 'hook': return <Hook a={a} merek={merek} jumlah={jumlah} />;
     case 'kasir': return <Kasir a={a} merek={merek} durasi={durasi} />;
     case 'stok': return <Stok a={a} merek={merek} durasi={durasi} />;
     case 'laporan': return <Laporan a={a} merek={merek} durasi={durasi} />;
@@ -37,14 +37,14 @@ const Isi: React.FC<{ a: Adegan; merek: Naskah['merek']; durasi: number; atas: n
 };
 
 /** Area visual: isi adegan diletakkan di tengah area dan diskalakan agar muat, lalu memudar di akhir. */
-const Panggung: React.FC<{ a: Adegan; merek: Naskah['merek']; durasi: number; atas: number; bawah: number }> = ({ a, merek, durasi, atas, bawah }) => {
+const Panggung: React.FC<{ a: Adegan; merek: Naskah['merek']; durasi: number; atas: number; bawah: number; jumlah: number }> = ({ a, merek, durasi, atas, bawah, jumlah }) => {
   const keluar = useKeluar(durasi);
-  if (a.jenis === 'penutup') return <Isi a={a} merek={merek} durasi={durasi} atas={atas} />;
+  if (a.jenis === 'penutup') return <Isi a={a} merek={merek} durasi={durasi} atas={atas} jumlah={jumlah} />;
   // Tak pernah membesar di atas 1: konten dirancang ≤ 960 px supaya tak menyentuh bilah progres/tepi.
   const skala = Math.min(1, (bawah - atas) / 820);
   return (
     <div style={{ position: 'absolute', left: 0, right: 0, top: atas, height: bawah - atas, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: keluar, transform: `scale(${(0.96 + 0.04 * keluar) * skala})` }}>
-      <Isi a={a} merek={merek} durasi={durasi} atas={atas} />
+      <Isi a={a} merek={merek} durasi={durasi} atas={atas} jumlah={jumlah} />
     </div>
   );
 };
@@ -73,7 +73,7 @@ export const Iklan: React.FC<Naskah> = (naskah) => {
       <Latar merek={merek} />
       {adegan.map((a, i) => (
         <Sequence key={i} from={waktu[i].mulai} durationInFrames={waktu[i].durasi} name={`${i + 1}. ${a.jenis}`}>
-          <Panggung a={a} merek={merek} durasi={waktu[i].durasi} atas={letak.visualAtas} bawah={letak.visualBawah} />
+          <Panggung a={a} merek={merek} durasi={waktu[i].durasi} atas={letak.visualAtas} bawah={letak.visualBawah} jumlah={adegan.length} />
           {suara?.[i] ? (
             <Sequence from={Math.round(JEDA_AWAL * FPS)} layout="none">
               <Audio src={staticFile(suara[i].berkas)} />
@@ -102,7 +102,7 @@ export const Iklan: React.FC<Naskah> = (naskah) => {
           <Lencana nomor={nomor[i]} teks={a.badge} warna={merek.utama} mulai={0} />
         </Sequence>
       ) : null))}
-      <Merek merek={merek} terang={penutup} />
+      {adegan[kini]?.jenis !== 'hook' ? <Merek merek={merek} terang={penutup} /> : null}
       {musik ? <Audio src={staticFile(musik)} volume={(f) => volumeMusik(f, kataGlobal)} loop /> : null}
     </AbsoluteFill>
   );
