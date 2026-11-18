@@ -98,6 +98,10 @@ jobs:
           fi
           ffmpeg -version | head -1
           rclone version | head -1
+          # Token rclone harus JSON asli ({"access_token":…}), bukan salinan ber-escape dari layar ({\"access_token\":…}).
+          if [ -n "$RCLONE_CONFIG_GDRIVE_TOKEN" ] && ! printf '%s' "$RCLONE_CONFIG_GDRIVE_TOKEN" | jq -e '.refresh_token' > /dev/null 2>&1; then
+            echo "::warning::Rahasia RCLONE_DRIVE_TOKEN bukan JSON token rclone yang sah — set ulang (PANDUAN-STUDIO.md)."
+          fi
           # Video iPhone (HLG) di bank media butuh zscale untuk dipetakan ke SDR (bank/rakit.mjs KE_SDR).
           ffmpeg -hide_banner -filters | grep -q zscale || echo "⚠️ ffmpeg tanpa zscale — klip HDR akan gagal"
           google-chrome --version
