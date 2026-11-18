@@ -38,6 +38,12 @@ export function uraiTombol(data: string): { aksi: "sekarang" | "jadwal" | "tolak
   return { aksi, id: m[2] };
 }
 
+/** Tombol persetujuan naskah (merek bank media): ns = setujui → video dibuat, nx = tolak. */
+export function uraiTombolNaskah(data: string): { aksi: "setujui" | "tolak"; id: string } | null {
+  const m = /^(ns|nx):([0-9a-f-]{36})$/.exec(data);
+  return m ? { aksi: m[1] === "ns" ? "setujui" : "tolak", id: m[2] } : null;
+}
+
 /** Bandingkan rahasia tanpa bocor lewat lama waktu pembandingan. */
 export function samaAman(a: string, b: string) {
   if (!a || !b || a.length !== b.length) return false;

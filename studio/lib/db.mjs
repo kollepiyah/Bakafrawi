@@ -80,6 +80,61 @@ export async function bacaMerek(slug) {
   return (await res.json())[0] ?? null;
 }
 
+// ------------------------------------------------------------ bank media per merek
+
+const m = (slug) => encodeURIComponent(slug);
+
+/** Isi indeks bank satu merek → [{ path (relatif), tag, jenis, durasi, versi, kurasi }]. */
+export async function bacaBank(merek) {
+  const res = await periksa(await fetch(`${URL_SB()}/rest/v1/studio_bank?merek=eq.${m(merek)}&select=path,tag,jenis,durasi,lebar,tinggi,versi,kurasi`, { headers: kepala() }), 'Baca bank');
+  return res.json();
+}
+
+export async function simpanBank(baris) {
+  if (!baris.length) return;
+  await periksa(
+    await fetch(`${URL_SB()}/rest/v1/studio_bank?on_conflict=merek,path`, {
+      method: 'POST',
+      headers: kepala({ 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify(baris),
+    }),
+    'Simpan bank',
+  );
+}
+
+export async function hapusBank(merek, daftarPath) {
+  for (const p of daftarPath) {
+    await periksa(
+      await fetch(`${URL_SB()}/rest/v1/studio_bank?merek=eq.${m(merek)}&path=eq.${encodeURIComponent(p)}`, { method: 'DELETE', headers: kepala({ Prefer: 'return=minimal' }) }),
+      'Hapus bank',
+    );
+  }
+}
+
+/** Merek aktif berbahan bank yang indeksnya sudah lebih dari 6 jam (atau belum pernah). */
+export async function merekBankBasi() {
+  const batas = Date.now() - 6 * 3600_000;
+  const res = await periksa(await fetch(`${URL_SB()}/rest/v1/studio_merek?aktif=is.true&select=slug,nama,profil,bank_diindeks`, { headers: kepala() }), 'Baca merek bank');
+  // Disaring di sini (merek hanya segelintir): sama dengan syarat bank di studio_ada_kerja().
+  return (await res.json()).filter((r) => r.profil?.bahan?.includes?.('bank') && (!r.bank_diindeks || new Date(r.bank_diindeks).getTime() < batas));
+}
+
+export async function tandaiBankDiindeks(merek) {
+  await periksa(
+    await fetch(`${URL_SB()}/rest/v1/studio_merek?slug=eq.${m(merek)}`, {
+      method: 'PATCH',
+      headers: kepala({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+      body: JSON.stringify({ bank_diindeks: new Date().toISOString() }),
+    }),
+    'Tandai bank',
+  );
+}
+
+export async function bacaGaya(merek) {
+  const res = await periksa(await fetch(`${URL_SB()}/rest/v1/studio_gaya?merek=eq.${m(merek)}&select=profil`, { headers: kepala() }), 'Baca gaya');
+  return (await res.json())[0]?.profil ?? {};
+}
+
 /** Semua kredensial sosmed satu layanan → [{ merek, data, dicek }]. */
 export async function daftarKredensial(layanan) {
   const res = await periksa(await fetch(`${URL_SB()}/rest/v1/studio_kredensial?layanan=eq.${layanan}&select=merek,data,dicek`, { headers: kepala() }), 'Baca kredensial');

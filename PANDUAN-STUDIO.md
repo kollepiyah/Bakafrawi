@@ -1,5 +1,34 @@
 # Panduan Studio AI bakafrawi.com
 
+## Lek Kopi di Bakafrawi Studio (gelombang 2b)
+
+Alur: Konten → pilih merek **Lek Kopi** → tulis ide → naskah ditulis Claude dari **data kedai** (lewat
+pintu baca-saja `pintu-bakafrawi` di Supabase Lek Kopi) + isi bank media → dikirim ke bot dengan tombol
+**Setujui / Tolak** (revisi: chat "revisi naskah terakhir: …" atau tombol Revisi di layar) → mesin
+membuat video dari bank foto/video di Google Drive → video disetujui → tayang ke Instagram Lek Kopi.
+Dari bot cukup: "buatkan video Lek Kopi tentang suasana malam minggu".
+
+Pasang (sekali):
+1. **Pintu Lek Kopi** (folder Lek Kopi App) — buat kode acak dulu
+   (`node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`), lalu:
+   ```bash
+   cd "D:/Aplikasi Project/Lek Kopi App"
+   npx supabase secrets set PINTU_BAKAFRAWI_RAHASIA=KODE-ACAK
+   npx supabase functions deploy pintu-bakafrawi --no-verify-jwt
+   ```
+2. **Vercel (Bakafrawi)** → Environment Variables (Secret), lalu redeploy:
+   `LEKKOPI_PINTU_URL` = `https://<ref-proyek-lek-kopi>.supabase.co/functions/v1/pintu-bakafrawi`,
+   `LEKKOPI_PINTU_RAHASIA` = KODE-ACAK yang sama.
+3. **Rahasia GitHub repo Bakafrawi** (Actions): `RCLONE_DRIVE_TOKEN`, `RCLONE_DRIVE_CLIENT_ID`,
+   `RCLONE_DRIVE_CLIENT_SECRET` — isinya sama dengan rahasia bernama sama di repo Lek Kopi (nilainya tak
+   bisa dibaca dari GitHub: ambil dari `rclone config dump` di PC, bagian `gdrive`).
+4. `npx supabase db push` (migrasi `20261118220000_studio_merek.sql` dan `20261118230000_studio_bank.sql`).
+5. Bakafrawi Studio → Konten → **Sambungan**: tekan **aktifkan** di Lek Kopi, dan tempel token Instagram
+   @lekkopi.id. Dalam ≤ 5 menit mesin mengindeks folder `Lek Kopi Konten/bank` di Drive; sesudah itu ide
+   pertama bisa dikirim.
+
+Uji di laptop tanpa database: `node studio/uji-bank.mjs "D:/Lek Kopi Konten/bank"`.
+
 > **Multi-merek (sejak 18 Nov 2026).** Studio kini satu mesin untuk beberapa merek (`studio_merek`):
 > **Bakafrawi** aktif; **Lek Kopi** sudah terdaftar tetapi belum aktif (video dari bank foto/video
 > kafe menyusul). Identitas tampilan (nama, warna aksen, situs, WA, logo) dan gaya copywriter tiap

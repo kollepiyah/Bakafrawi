@@ -4,6 +4,7 @@ import type { Situs } from "@/content/skema";
 import { awalHariWIB, barisAcara, tanggalWIB } from "./agenda-murni";
 import { daftarAcara, hapusAcara, tambahAcara, ubahAcara } from "./agenda-server";
 import { rapikanRiwayat, type GiliranBot } from "./bot-murni";
+import { isiNaskah, naskahMenungguTerakhir, pesanNaskah } from "./studio-naskah";
 import { aturTayang, buatTugas, daftarTugasBot, ubahCaption, type AksiTayang } from "./studio-server";
 
 // Chat bebas bot Telegram: Claude Haiku 5.5 effort rendah — sama dengan bot Kantor AI Lek Kopi
@@ -49,6 +50,31 @@ const ALAT: Anthropic.Tool[] = [
       additionalProperties: false,
       required: ["id", "caption"],
       properties: { id: { type: "string" }, caption: { type: "string" } },
+    },
+  },
+  {
+    name: "pesan_video_merek",
+    description: "Pesan video dari bank foto/video sebuah merek (mis. Lek Kopi, slug 'lekkopi'). Naskah ditulis dulu dan dikirim ke chat ini untuk disetujui; video baru dibuat setelah naskah disetujui.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["merek", "permintaan"],
+      properties: {
+        merek: { type: "string", description: "slug merek, mis. lekkopi" },
+        permintaan: { type: "string", description: "ide/permintaan video dari Kyai, selengkap mungkin" },
+      },
+    },
+  },
+  {
+    name: "revisi_naskah",
+    description: "Revisi naskah video merek yang masih menunggu persetujuan. id kosong = naskah menunggu yang terbaru.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id", "catatan"],
+      properties: { id: { type: "string" }, catatan: { type: "string", description: "catatan revisi dari Kyai" } },
     },
   },
   {
@@ -140,6 +166,17 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
     case "ubah_caption":
       await ubahCaption(String(isi.id), String(isi.caption));
       return JSON.stringify({ ok: true });
+    case "pesan_video_merek": {
+      const { id, merek } = await pesanNaskah({ merek: String(isi.merek), permintaan: String(isi.permintaan) });
+      await isiNaskah(id); // naskah + tombol persetujuan langsung dikirim ke chat ini
+      return JSON.stringify({ ok: true, id, merek: merek.nama, catatan: "naskah sudah dikirim ke chat dengan tombol Setujui/Tolak" });
+    }
+    case "revisi_naskah": {
+      const id = String(isi.id ?? "").trim() || (await naskahMenungguTerakhir());
+      if (!id) return "Tidak ada naskah yang menunggu persetujuan.";
+      await isiNaskah(id, String(isi.catatan));
+      return JSON.stringify({ ok: true, id, catatan: "naskah revisi sudah dikirim ke chat" });
+    }
     case "lihat_agenda": {
       const dari = awalHariWIB(String(isi.dari));
       const sampai = new Date(awalHariWIB(String(isi.sampai)).getTime() + 86400000);
@@ -195,6 +232,7 @@ Aturan:
 - Untuk memesan, melihat, mengubah caption, atau menayangkan konten, PAKAI ALAT — jangan pernah mengaku sudah melakukan sesuatu tanpa hasil alat.
 - Menayangkan ke Instagram hanya bila Kyai memintanya jelas. Kalau ragu konten mana yang dimaksud, lihat daftar_konten dulu lalu tanyakan.
 - Agenda: hitung sendiri tanggal dari kata seperti "besok", "Jumat depan", "ba'da Isya" (≈19.30) dari tanggal sekarang; semua jam WIB. Bila jam tidak disebut dan acara bukan seharian, tanyakan dulu. Sebelum ubah/hapus, cari id lewat lihat_agenda. Setelah menyimpan, sebutkan hari, tanggal, dan jamnya supaya Kyai bisa mengecek.
+- Merek lain selain Bakafrawi (mis. Lek Kopi, slug lekkopi): videonya dari bank foto/video kafe — pakai pesan_video_merek, bukan buat_konten. Naskahnya dikirim dulu untuk disetujui lewat tombol; revisi lewat revisi_naskah.
 - Ide konten: beri daftar bernomor yang singkat; Kyai bisa membalas "nomor 2 jadikan poster".
 - Jangan menyebut harga paket atau angka yang tidak kamu ketahui. Jangan membagikan token/kunci apa pun.`;
 }

@@ -5,7 +5,8 @@
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ambilTayang, ambilTugas, bacaKonten, bacaMerek, bacaPengaturan, daftarKredensial, perbaruiKredensial, perbaruiTugas, pulihkan, siapDb, unggah } from './lib/db.mjs';
+import { ambilTayang, ambilTugas, bacaKonten, bacaMerek, bacaPengaturan, daftarKredensial, merekBankBasi, perbaruiKredensial, perbaruiTugas, pulihkan, siapDb, tandaiBankDiindeks, unggah } from './lib/db.mjs';
+import { indeksBankMerek, renderBankMerek, siapkanMerekBank } from './lib/merek-bank.mjs';
 import { adaGambarAi, buatGambarAi } from './lib/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { buatNaskah } from './lib/naskah.mjs';
@@ -49,6 +50,35 @@ async function fotoAi(adegan, rasio, keluar, catatan) {
     } else catatan.push(`Latar AI gagal: ${e.message.slice(0, 160)}`);
     return null;
   }
+}
+
+const pakaiBank = (merek) => Array.isArray(merek?.profil?.bahan) && merek.profil.bahan.includes('bank');
+
+// Folder kerja + Drive tiap merek bank, dibuat & diindeks sekali per putaran.
+const konteksBank = new Map();
+async function bankMerek(merek, kabar) {
+  if (!konteksBank.has(merek.slug)) {
+    const ctx = await siapkanMerekBank(merek);
+    const r = await indeksBankMerek(merek, ctx);
+    if (r.kosong) await kabar(`⚠️ Bank ${merek.nama} terbaca kosong di Drive (${merek.profil.drive}) — indeks lama dipertahankan. Cek folder/izin rclone.`);
+    else console.log(`🗂 Bank ${merek.slug}: ${r.total} berkas (${r.baru} baru, ${r.hilang} hilang)`);
+    await tandaiBankDiindeks(merek.slug);
+    konteksBank.set(merek.slug, ctx);
+  }
+  return konteksBank.get(merek.slug);
+}
+
+/** Video bahan bank media dari naskah yang sudah disetujui Kyai (merek seperti Lek Kopi). */
+async function kerjakanBank(tugas, merek, simpan, kabar) {
+  const ctx = await bankMerek(merek, kabar);
+  const r = await renderBankMerek(tugas, merek, ctx);
+  const url = await simpan(r.berkas, 'video/mp4');
+  return {
+    naskah: { ...tugas.naskah, catatan: r.catatan },
+    caption: tugas.caption ?? '',
+    hasil: [{ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url }],
+    namaProduk: merek.nama,
+  };
 }
 
 /** merek: baris studio_merek tugas ini (identitas tampilan, gaya naskah, WA bila beda dari situs). */
@@ -170,6 +200,11 @@ async function modeAwan() {
     await kabar(`⚠️ Putaran Studio sebelumnya terhenti di tengah jalan: ${[pulih.buat && `${pulih.buat} konten gagal dibuat (tekan Buat ulang)`, pulih.tayang && `${pulih.tayang} konten terputus saat tayang — cek Instagram dulu sebelum menayangkan lagi`].filter(Boolean).join('; ')}.`);
   }
 
+  // Bank media merek yang indeksnya basi (> 6 jam): naskah butuh daftar isi bank terbaru.
+  for (const merek of await merekBankBasi().catch((e) => (console.error(e.message), []))) {
+    await bankMerek(merek, kabar).catch((e) => kabar(`⚠️ Gagal membaca bank ${merek.nama}: ${e.message.slice(0, 300)}`));
+  }
+
   const tugasPertama = await ambilTugas();
   if (tugasPertama) {
     const situs = await bacaKonten();
@@ -187,7 +222,10 @@ async function modeAwan() {
           const slug = tugas.merek ?? 'bakafrawi';
           if (!merekCache.has(slug)) merekCache.set(slug, await bacaMerek(slug));
           const simpan = async (b, jenis) => unggah(`${tugas.id}/${path.basename(b)}`, await readFile(b), jenis);
-          const { naskah, caption, hasil, namaProduk } = await kerjakan(tugas, situs, peramban, folder, simpan, merekCache.get(slug));
+          const merek = merekCache.get(slug);
+          const { naskah, caption, hasil, namaProduk } = pakaiBank(merek)
+            ? await kerjakanBank(tugas, merek, simpan, kabar)
+            : await kerjakan(tugas, situs, peramban, folder, simpan, merek);
           await perbaruiTugas(tugas.id, { status: 'selesai', selesai: new Date().toISOString(), naskah, caption, hasil, galat: null });
           console.log(`✔ Selesai: ${hasil.length} berkas`);
           if (chat && adaTelegram()) {

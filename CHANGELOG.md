@@ -1,5 +1,23 @@
 # CHANGELOG — bakafrawi.com
 
+## Bakafrawi Studio tahap 3, gelombang 2 — Lek Kopi masuk Studio (belum tayang)
+
+- **2a — mesin video bank media**: modul Studio Lek Kopi (potong di ketukan musik, transisi, 26 huruf,
+  gambar AI, suara Gemini, mata Claude, poster bank, draf TikTok) dipindah utuh ke `studio/lib/bank/`.
+- **2b — alur Lek Kopi**: ide → **naskah** ditulis Claude Sonnet 5.5 dari data kedai (pintu baca-saja
+  `pintu-bakafrawi` di repo Lek Kopi: menu, terlaris/turun, jam sepi, promo, info toko, ingatan Lek AI)
+  + isi bank → tombol Setujui/Tolak di bot dan layar Konten (revisi lewat chat atau tombol) → mesin
+  membuat video → persetujuan & tayang seperti biasa. Status tugas baru `naskah`.
+- Aturan naskah Lek Kopi disalin dari `konten_murni.ts` ke `src/lib/lekkopi/konten-murni.ts`
+  (salinan Lek Kopi dipensiunkan setelah merek aktif di sini).
+- Bank media diindeks dari Google Drive (rclone) ke `studio_bank` per merek — hanya berkas baru/berubah
+  yang diunduh; mesin dinyalakan juga untuk mengindeks ulang tiap 6 jam (`studio_ada_kerja`).
+  `studio_gaya` menyiapkan profil gaya per merek. Merek bisa diaktifkan dari Konten → Sambungan.
+- Uji: render video Lek Kopi dari bank di PC (`uji-bank.mjs`), alur mesin ujung-ke-ujung dengan
+  Supabase tiruan (indeks 66 berkas → render → unggah → status selesai), migrasi di PGlite.
+  **Belum diuji sungguhan**: pintu Lek Kopi, naskah Claude, rclone di GitHub Actions, tayang IG Lek Kopi.
+- Migrasi `20261118230000_studio_bank.sql`. Panduan: bagian atas `PANDUAN-STUDIO.md`.
+
 ## Bakafrawi Studio tahap 3, gelombang 1 — Studio multi-merek (belum tayang)
 
 Awal penyatuan Studio Bakafrawi + Studio Lek Kopi menjadi satu mesin di repo ini.

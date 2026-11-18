@@ -2,7 +2,8 @@ import { after } from "next/server";
 import { pesanRingkasanPagi, rentangHariWIB, tanggalWIB } from "@/lib/agenda-murni";
 import { daftarAcara } from "@/lib/agenda-server";
 import { jawabBebas } from "@/lib/bot-ai";
-import { cariProduk, samaAman, uraiPerintah, uraiTombol } from "@/lib/bot-murni";
+import { cariProduk, samaAman, uraiPerintah, uraiTombol, uraiTombolNaskah } from "@/lib/bot-murni";
+import { putuskanNaskah } from "@/lib/studio-naskah";
 import { ambilKonten } from "@/lib/konten";
 import { aturTayang, bacaPengaturan, bacaRiwayatBot, buatTugas, buatUlang, daftarTugas, simpanPengaturan, simpanRiwayatBot } from "@/lib/studio-server";
 import { kirim, tg } from "@/lib/telegram-server";
@@ -24,7 +25,9 @@ type Update = {
   callback_query?: { id: string; data?: string; message?: { chat: { id: number }; message_id: number } };
 };
 
-const LABEL_STATUS: Record<string, string> = { antre: "⏳ antre", proses: "⚙️ dibuat", selesai: "✅ jadi", gagal: "❌ gagal" };
+export const maxDuration = 120; // chat bebas bisa menulis naskah (Claude ±30–60 dtk) di after()
+
+const LABEL_STATUS: Record<string, string> = { naskah: "📝 menunggu persetujuan naskah", antre: "⏳ antre", proses: "⚙️ dibuat", selesai: "✅ jadi", gagal: "❌ gagal" };
 const LABEL_TAYANG: Record<string, string> = { belum: "", antre: "· ⏳ menunggu tayang", dijadwalkan: "· 🕖 terjadwal", proses: "· 📤 sedang tayang", tayang: "· 📣 tayang", gagal: "· ⚠️ gagal tayang", ditolak: "· ditolak" };
 
 export async function POST(req: Request) {
@@ -41,6 +44,20 @@ export async function POST(req: Request) {
       const chat = cq.message?.chat.id;
       if (!chat || chat !== pemilik) {
         await tg("answerCallbackQuery", { callback_query_id: cq.id, text: "Bukan pemilik." });
+        return Response.json({ ok: true });
+      }
+      const tn = uraiTombolNaskah(cq.data ?? "");
+      if (tn) {
+        let balasan: string;
+        try {
+          const { dipicu } = await putuskanNaskah(tn.id, tn.aksi);
+          balasan = tn.aksi === "tolak" ? "❌ Naskah ditolak." : `🎬 Naskah disetujui — video dibuat${dipicu ? " sekarang (±5–10 menit)." : " pada putaran mesin berikutnya."}`;
+          if (cq.message) await tg("editMessageReplyMarkup", { chat_id: chat, message_id: cq.message.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+        } catch (e) {
+          balasan = `⚠️ ${e instanceof Error ? e.message : "Gagal."}`;
+        }
+        await tg("answerCallbackQuery", { callback_query_id: cq.id });
+        await kirim(chat, balasan);
         return Response.json({ ok: true });
       }
       const t = uraiTombol(cq.data ?? "");

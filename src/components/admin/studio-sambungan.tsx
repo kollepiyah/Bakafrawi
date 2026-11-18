@@ -70,7 +70,14 @@ export function Sambungan({ sesi }: { sesi: Session | null }) {
               {daftarIg.map((m) => (
                 <li key={m.merek}>
                   <b className="text-foreground">{m.nama}</b>
-                  {!m.aktif && <span className="text-redup"> (merek belum aktif)</span>}:{" "}
+                  {m.merek !== "bakafrawi" && (
+                    <button
+                      onClick={() => confirm(`${m.aktif ? "Nonaktifkan" : "Aktifkan"} merek ${m.nama} di Studio?`) && kirim({ merek: m.merek, aktif: !m.aktif })}
+                      className="ml-1.5 rounded-full border border-white/15 px-2 py-0.5 text-xs hover:border-emas hover:text-emas"
+                    >
+                      {m.aktif ? "aktif · nonaktifkan" : "belum aktif · aktifkan"}
+                    </button>
+                  )}:{" "}
                   {m.akun ? (
                     <>
                       ✅ {m.akun.akun}

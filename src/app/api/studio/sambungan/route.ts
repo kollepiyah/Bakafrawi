@@ -1,6 +1,6 @@
 import { permintaanDariAdmin } from "@/lib/admin-server";
 import { kenaliTokenInstagram } from "@/lib/instagram-server";
-import { adaKunciServer, bacaKredensial, bacaPengaturan, daftarMerek, hapusKredensial, simpanKredensial } from "@/lib/studio-server";
+import { adaKunciServer, aturAktifMerek, bacaKredensial, bacaPengaturan, daftarMerek, hapusKredensial, simpanKredensial } from "@/lib/studio-server";
 import { adaBot, infoWebhook, pasangWebhook } from "@/lib/telegram-server";
 
 // Status & pengaturan sambungan Studio (Instagram per merek, Telegram) untuk panel admin. Token tak
@@ -21,8 +21,12 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
-  const isi = (await req.json()) as { merek?: string; igToken?: string; igId?: string; putusIg?: boolean; pasangWebhook?: boolean };
+  const isi = (await req.json()) as { merek?: string; aktif?: boolean; igToken?: string; igId?: string; putusIg?: boolean; pasangWebhook?: boolean };
   try {
+    if (typeof isi.aktif === "boolean" && isi.merek && isi.merek !== "bakafrawi") {
+      await aturAktifMerek(isi.merek, isi.aktif);
+      return Response.json({ ok: true, pesan: `Merek ${isi.merek} ${isi.aktif ? "diaktifkan" : "dinonaktifkan"}.` });
+    }
     if (isi.igToken || isi.putusIg) {
       const merek = (await daftarMerek()).find((m) => m.slug === (isi.merek ?? "bakafrawi"));
       if (!merek) throw new Error("Merek tidak dikenal.");

@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cariProduk, samaAman, uraiPerintah, uraiTombol } from "./bot-murni.ts";
+import { cariProduk, samaAman, uraiPerintah, uraiTombol, uraiTombolNaskah } from "./bot-murni.ts";
+
+test("uraiTombolNaskah", () => {
+  const id = "0b9c6a2e-1f2d-4c3b-9a8e-7d6c5b4a3f21";
+  assert.deepEqual(uraiTombolNaskah(`ns:${id}`), { aksi: "setujui", id });
+  assert.deepEqual(uraiTombolNaskah(`nx:${id}`), { aksi: "tolak", id });
+  assert.equal(uraiTombolNaskah(`t:${id}`), null);
+  assert.equal(uraiTombol(`ns:${id}`), null);
+});
 
 test("uraiPerintah", () => {
   assert.deepEqual(uraiPerintah("/poster maktaba ai"), { jenis: "buat", konten: "gambar", kata: "maktaba", ai: true });

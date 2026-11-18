@@ -31,6 +31,13 @@ jobs:
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      # Bank media merek (Lek Kopi) di Google Drive lewat rclone, remote "gdrive" dari variabel lingkungan.
+      # Token dibuat sekali di PC Kyai (rclone config); client_id/secret WAJIB sama dengan pembuat token.
+      RCLONE_CONFIG_GDRIVE_TYPE: drive
+      RCLONE_CONFIG_GDRIVE_SCOPE: drive
+      RCLONE_CONFIG_GDRIVE_CLIENT_ID: ${{ secrets.RCLONE_DRIVE_CLIENT_ID }}
+      RCLONE_CONFIG_GDRIVE_CLIENT_SECRET: ${{ secrets.RCLONE_DRIVE_CLIENT_SECRET }}
+      RCLONE_CONFIG_GDRIVE_TOKEN: ${{ secrets.RCLONE_DRIVE_TOKEN }}
       # Kata sandi akun demo untuk skenario rekaman: {{RAHASIA:NAMA}} → env DEMO_NAMA.
       # Daftarkan satu per satu di sini (contoh: DEMO_WASEELA_SANDI dari rahasia bernama sama),
       # jangan mengirim seluruh rahasia sekaligus — GitHub menahan workflow dengan pola itu.
@@ -70,16 +77,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/apt-ffmpeg
-          key: apt-ffmpeg-${{ steps.cek.outputs.image }}
+          key: apt-ffmpeg-rclone-${{ steps.cek.outputs.image }}
 
       - name: Pasang ffmpeg & huruf
         if: steps.cek.outputs.kerja == 'true'
         run: |
           pasang_baru() {
             sudo apt-get update -qq
-            sudo apt-get install -y -qq --no-install-recommends --download-only ffmpeg fonts-dejavu-core > /dev/null
+            sudo apt-get install -y -qq --no-install-recommends --download-only ffmpeg fonts-dejavu-core rclone > /dev/null
             mkdir -p ~/apt-ffmpeg && cp /var/cache/apt/archives/*.deb ~/apt-ffmpeg/
-            sudo apt-get install -y -qq --no-install-recommends ffmpeg fonts-dejavu-core > /dev/null
+            sudo apt-get install -y -qq --no-install-recommends ffmpeg fonts-dejavu-core rclone > /dev/null
           }
           if ls ~/apt-ffmpeg/*.deb > /dev/null 2>&1; then
             sudo dpkg -i ~/apt-ffmpeg/*.deb > /dev/null 2>&1 || { echo "Cache ffmpeg tak cocok — pasang ulang"; rm -rf ~/apt-ffmpeg; pasang_baru; }
@@ -87,6 +94,9 @@ jobs:
             pasang_baru
           fi
           ffmpeg -version | head -1
+          rclone version | head -1
+          # Video iPhone (HLG) di bank media butuh zscale untuk dipetakan ke SDR (bank/rakit.mjs KE_SDR).
+          ffmpeg -hide_banner -filters | grep -q zscale || echo "⚠️ ffmpeg tanpa zscale — klip HDR akan gagal"
           google-chrome --version
 
       - name: Pasang paket Node

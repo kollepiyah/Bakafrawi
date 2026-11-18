@@ -65,6 +65,14 @@ export async function daftarMerek(): Promise<Merek[]> {
   return rest("studio_merek?select=slug,nama,aktif,urutan,profil&order=urutan.asc");
 }
 
+export async function aturAktifMerek(slug: string, aktif: boolean) {
+  await rest(`studio_merek?slug=eq.${encodeURIComponent(slug)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ aktif, diubah: new Date().toISOString() }),
+  });
+}
+
 /** Kredensial satu merek; isinya rahasia — jangan pernah dikirim utuh ke browser. */
 export async function bacaKredensial(merek: string, layanan: Layanan): Promise<Record<string, string> | null> {
   const [k] = (await rest(`studio_kredensial?merek=eq.${encodeURIComponent(merek)}&layanan=eq.${layanan}&select=data`)) as { data: Record<string, string> }[];
