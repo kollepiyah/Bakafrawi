@@ -1,0 +1,9 @@
+Huruf di folder ini diunduh 16 Nov 2026 dari https://github.com/google/fonts (Google Fonts).
+
+SIL Open Font License 1.1 (teks lengkap: OFL.txt) — boleh dipakai, dibundel, dan disebarkan bebas:
+  Abril Fatface, Alfa Slab One, Anton, Archivo Black, Bebas Neue, Bowlby One, Courgette,
+  DM Serif Display, Great Vibes, Kalam, Lilita One, Pacifico, Paytone One, Prata, Rozha One,
+  Sacramento, Titan One, Yeseva One
+
+Apache License 2.0 (teks lengkap: APACHE-LICENSE.txt):
+  Luckiest Guy, Permanent Marker, Satisfy, Yellowtail
