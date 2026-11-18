@@ -4,6 +4,7 @@ import type { Situs } from "@/content/skema";
 import { awalHariWIB, barisAcara, tanggalWIB } from "./agenda-murni";
 import { daftarAcara, hapusAcara, tambahAcara, ubahAcara } from "./agenda-server";
 import { rapikanRiwayat, type GiliranBot } from "./bot-murni";
+import { ringkasanAplikasi } from "./aplikasi-server";
 import { usulkanIde } from "./naskah-bank";
 import { isiNaskah, naskahMenungguTerakhir, pesanNaskah } from "./studio-naskah";
 import { aturTayang, buatTugas, daftarMerek, daftarTugasBot, ubahCaption, type AksiTayang } from "./studio-server";
@@ -66,6 +67,12 @@ const ALAT: Anthropic.Tool[] = [
         permintaan: { type: "string", description: "ide/permintaan video dari Kyai, selengkap mungkin" },
       },
     },
+  },
+  {
+    name: "ringkasan_aplikasi",
+    description: "Ringkasan terbaru semua aplikasi Kyai: Maktaba POS (toko, langganan, pendapatan, pembayaran menunggu), Lek Kopi (omzet & transaksi hari ini vs kemarin, terlaris, kas, bon/hutang, stok menipis), Ammu Online & Waseela (angka teknis saja), plus hal yang perlu perhatian.",
+    strict: true,
+    input_schema: { type: "object", additionalProperties: false, required: [], properties: {} },
   },
   {
     name: "usul_ide_merek",
@@ -188,6 +195,8 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
       await isiNaskah(id); // naskah + tombol persetujuan langsung dikirim ke chat ini
       return JSON.stringify({ ok: true, id, merek: merek.nama, catatan: "naskah sudah dikirim ke chat dengan tombol Setujui/Tolak" });
     }
+    case "ringkasan_aplikasi":
+      return JSON.stringify((await ringkasanAplikasi()).map((a) => (a.ok ? { nama: a.nama, data: a.data, perhatian: a.penilaian?.catatan } : { nama: a.nama, tidak_tersedia: a.galat })));
     case "usul_ide_merek": {
       const merek = (await daftarMerek()).find((m) => m.slug === String(isi.merek) && m.aktif);
       if (!merek) return `Merek "${isi.merek}" tidak ada atau belum aktif.`;
@@ -256,6 +265,7 @@ Aturan:
 - Menayangkan ke Instagram hanya bila Kyai memintanya jelas. Kalau ragu konten mana yang dimaksud, lihat daftar_konten dulu lalu tanyakan.
 - Agenda: hitung sendiri tanggal dari kata seperti "besok", "Jumat depan", "ba'da Isya" (≈19.30) dari tanggal sekarang; semua jam WIB. Bila jam tidak disebut dan acara bukan seharian, tanyakan dulu. Sebelum ubah/hapus, cari id lewat lihat_agenda. Setelah menyimpan, sebutkan hari, tanggal, dan jamnya supaya Kyai bisa mengecek.
 - Merek lain selain Bakafrawi (mis. Lek Kopi, slug lekkopi): videonya dari bank foto/video kafe — pakai pesan_video_merek, bukan buat_konten.
+- Pertanyaan keadaan aplikasi/bisnis (toko & langganan Maktaba, omzet/stok/kas Lek Kopi hari ini, pengguna Ammu/Waseela) → ringkasan_aplikasi; sebut angkanya persis dari alat. Untuk Ammu & Waseela hanya ada angka teknis (data lembaga klien) — jangan menebak hal lain.
 - AWAS nama ganda: "Lek Kopi" = kedai/kafe (merek lekkopi: minuman, suasana, promo kafe → pesan_video_merek), sedangkan produk "lek-kopi" = aplikasi kasir Lek Kopi POS buatan Bakafrawi (buat_konten, rekaman aplikasi). Kalau Kyai bilang "video Lek Kopi" tanpa menyebut aplikasi/kasir, maksudnya kafe. Ragu → tanyakan. Naskahnya dikirim dulu untuk disetujui lewat tombol; revisi lewat revisi_naskah.
 - Ide konten: beri daftar bernomor yang singkat; Kyai bisa membalas "nomor 2 jadikan poster".
 - Jangan menyebut harga paket atau angka yang tidak kamu ketahui. Jangan membagikan token/kunci apa pun.`;

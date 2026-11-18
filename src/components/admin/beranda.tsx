@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { AlertTriangle, CalendarDays, Clock, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, CalendarDays, Clock, LayoutGrid, Loader2, Sparkles } from "lucide-react";
+import { TandaAplikasi, useRingkasanAplikasi } from "./aplikasi";
 import { jamWIB, namaTanggal, tanggalWIB, type Acara } from "@/lib/agenda-murni";
 import { apiAdmin } from "./agenda";
 
@@ -14,8 +15,9 @@ type Ringkasan = {
   google: { siap: boolean; tersambung: boolean; galat: string | null };
 };
 
-export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: ReactNode; buka: (h: "agenda" | "studio") => void }) {
+export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: ReactNode; buka: (h: "agenda" | "studio" | "aplikasi") => void }) {
   const [r, setR] = useState<Ringkasan | null>(null);
+  const aplikasi = useRingkasanAplikasi(sesi).daftar;
   const [pesan, setPesan] = useState("");
   const [jam, setJam] = useState<number | null>(null); // jam WIB saat dimuat (render harus murni)
 
@@ -79,6 +81,24 @@ export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: 
                     </li>
                   ))}
                   {r.acaraPekan.length > 6 && <li className="text-xs text-muted-foreground">+{r.acaraPekan.length - 6} acara lagi</li>}
+                </ul>
+              )}
+            </Kartu>
+
+            <Kartu judul="Aplikasi" ikon={<LayoutGrid className="size-5 text-emas" />} aksi={() => buka("aplikasi")}>
+              {!aplikasi ? (
+                <Loader2 className="size-4 animate-spin text-emas" />
+              ) : (
+                <ul className="space-y-2">
+                  {aplikasi.map((a) => (
+                    <li key={a.slug} className="flex items-start gap-2 text-sm">
+                      <TandaAplikasi a={a} />
+                      <span>
+                        {a.nama}
+                        <span className="text-muted-foreground"> · {a.ok ? (a.penilaian?.catatan[0] ?? "baik") : "belum tersambung"}</span>
+                      </span>
+                    </li>
+                  ))}
                 </ul>
               )}
             </Kartu>

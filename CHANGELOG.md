@@ -1,5 +1,18 @@
 # CHANGELOG — bakafrawi.com
 
+## Bakafrawi Studio tahap 2 — Dasbor semua aplikasi (belum tayang)
+
+- **Menu Aplikasi** + kartu di Beranda: satu kartu per aplikasi dengan angka utama dan hal yang perlu
+  perhatian (pembayaran menunggu, langganan habis ≤7 hari, bahan menipis, tak ada pengguna aktif,
+  database ≥ 400 MB). Bot: alat `ringkasan_aplikasi`.
+- Data dari **pintu baca-saja** `pintu-bakafrawi` di tiap proyek Supabase (transaksi read only, header
+  rahasia), disimpan ±5 menit di cache data Next. Maktaba: angka SaaS; Lek Kopi: ringkasan hari ini
+  (`?jenis=dasbor`, fungsi agent yang sama dengan Lek AI); **Ammu & Waseela: teknis saja** (data
+  lembaga klien — keputusan Kyai 18 Nov); Fastabiqu ditunda (Firebase).
+- Aturan penilaian & tampilan angka di `src/lib/aplikasi-murni.ts` + tes. Panduan: `PANDUAN-DASBOR.md`.
+- Diuji: tes murni, tipe, lint, build, layar dengan data rekaan. **Belum**: pintu sungguhan
+  (belum di-deploy), APK belum menampilkan kartu aplikasi.
+
 ## Bakafrawi Studio tahap 3, gelombang 2 — Lek Kopi masuk Studio (belum tayang)
 
 - **2a — mesin video bank media**: modul Studio Lek Kopi (potong di ketukan musik, transisi, 26 huruf,

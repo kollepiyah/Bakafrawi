@@ -7,14 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { jalurGudang, supabase } from "@/lib/gudang-admin";
 import { Agenda } from "./agenda";
+import { HalamanAplikasi } from "./aplikasi";
 import { Beranda } from "./beranda";
 import { Editor } from "./editor";
 import { Studio } from "./studio";
 
 type Status = "memuat" | "keluar" | "bukan-admin" | "admin";
-type Halaman = "beranda" | "agenda" | "studio" | "situs";
+type Halaman = "beranda" | "aplikasi" | "agenda" | "studio" | "situs";
 const MENU: { id: Halaman; label: string }[] = [
   { id: "beranda", label: "Beranda" },
+  { id: "aplikasi", label: "Aplikasi" },
   { id: "agenda", label: "Agenda" },
   { id: "studio", label: "Konten" },
   { id: "situs", label: "Situs" },
@@ -113,6 +115,7 @@ export function AplikasiAdmin() {
     <>
       <div hidden={halaman !== "situs"}><Editor sesi={sesi} kepala={kepala} /></div>
       {halaman === "beranda" && <Beranda sesi={sesi} kepala={kepala} buka={setHalaman} />}
+      {halaman === "aplikasi" && <HalamanAplikasi sesi={sesi} kepala={kepala} />}
       {halaman === "agenda" && <Agenda sesi={sesi} kepala={kepala} pesanAwal={pesanGoogle} />}
       {halaman === "studio" && <Studio sesi={sesi} kepala={kepala} />}
     </>
