@@ -2,8 +2,10 @@
 // untuk disetujui, lalu tayangkan ke Instagram yang sudah disetujui/jadwalnya tiba.
 //   node studio.mjs                → mode awan (GitHub Actions), baca/tulis Supabase
 //   node studio.mjs --lokal f.json → uji di laptop tanpa database; hasil di studio/keluaran/
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
+import { drafTiktok, segarkanTiktok } from './lib/bank/sosmed.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ambilTayang, ambilTugas, bacaKonten, bacaMerek, bacaPengaturan, daftarKredensial, merekBankBasi, perbaruiKredensial, perbaruiTugas, pulihkan, siapDb, tandaiBankDiindeks, unggah } from './lib/db.mjs';
 import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } from './lib/merek-bank.mjs';
@@ -151,6 +153,34 @@ async function tayangkan(tugas, k) {
   return { instagram: { feed, story, waktu: new Date().toISOString() } };
 }
 
+/**
+ * Draf TikTok untuk video yang baru tayang di IG (bila merek menyambungkan TikTok): masuk kotak
+ * masuk TikTok, Kyai menekan Posting di aplikasi. Refresh token TikTok berganti tiap dipakai →
+ * selalu disimpan ulang. null = merek tak punya TikTok / bukan video.
+ */
+async function drafTiktokTugas(tugas) {
+  if (tugas.jenis !== 'video') return null;
+  const kred = (await daftarKredensial('tiktok')).find((k) => k.merek === (tugas.merek ?? 'bakafrawi'));
+  if (!kred) return null;
+  let k = { data: kred.data };
+  const baru = await segarkanTiktok(k);
+  if (baru) {
+    k = { data: { ...baru.data, kedaluwarsa: baru.kedaluwarsa } };
+    await perbaruiKredensial(kred.merek, 'tiktok', { data: k.data });
+  }
+  const url = tugas.hasil.find((h) => h.jenis === 'video')?.url;
+  if (!url) throw new Error('video tidak ditemukan');
+  const berkas = path.join(os.tmpdir(), `tiktok-${tugas.id}.mp4`);
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`unduh video ${r.status}`);
+  await writeFile(berkas, Buffer.from(await r.arrayBuffer()));
+  try {
+    return { publish_id: await drafTiktok(k, berkas), akun: k.data.akun };
+  } finally {
+    await rm(berkas, { force: true });
+  }
+}
+
 /** Token Instagram tiap merek (diperpanjang bila hampir habis) → Map slug → kredensial. */
 async function akunInstagram(kabar) {
   const peta = new Map();
@@ -179,9 +209,13 @@ async function putaranTayang(kabar) {
     console.log(`📤 Tayang ${tugas.id}`);
     try {
       const tayang = await tayangkan(tugas, k);
+      // TikTok pelengkap: gagal di sini tak membatalkan Instagram yang sudah tayang.
+      const tt = await drafTiktokTugas(tugas).catch((e) => ({ galat: String(e.message ?? e).slice(0, 300) }));
+      if (tt) tayang.tiktok = tt;
       await perbaruiTugas(tugas.id, { status_tayang: 'tayang', tayang, galat: null });
       const tautan = tayang.instagram.reels?.permalink ?? tayang.instagram.feed?.permalink ?? '';
-      await kabar(`✅ Sudah tayang di Instagram ${k.ig_akun ?? ''}${tautan ? `\n${tautan}` : ''}${tayang.instagram.story?.galat ? `\n(Story gagal: ${tayang.instagram.story.galat})` : ''}`);
+      const teksTt = !tt ? '' : tt.galat ? `\nTikTok: gagal (${tt.galat})` : `\nTikTok ${tt.akun ?? ''}: draf masuk — buka TikTok → Kotak masuk → ketuk Posting, lalu tempel caption.`;
+      await kabar(`✅ Sudah tayang di Instagram ${k.ig_akun ?? ''}${tautan ? `\n${tautan}` : ''}${tayang.instagram.story?.galat ? `\n(Story gagal: ${tayang.instagram.story.galat})` : ''}${teksTt}`);
     } catch (e) {
       console.error('✖ Tayang gagal:', e);
       await perbaruiTugas(tugas.id, { status_tayang: 'gagal', galat: `Tayang gagal: ${String(e.message ?? e).slice(0, 800)}` });

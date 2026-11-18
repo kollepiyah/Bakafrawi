@@ -2,6 +2,7 @@ import { permintaanDariAdmin } from "@/lib/admin-server";
 import { kenaliTokenInstagram } from "@/lib/instagram-server";
 import { adaKunciServer, aturAktifMerek, bacaKredensial, bacaPengaturan, daftarMerek, hapusKredensial, simpanKredensial } from "@/lib/studio-server";
 import { adaBot, infoWebhook, pasangWebhook } from "@/lib/telegram-server";
+import { adaTiktok, urlIzinTiktok } from "@/lib/tiktok-server";
 
 // Status & pengaturan sambungan Studio (Instagram per merek, Telegram) untuk panel admin. Token tak
 // pernah dikirim balik ke browser — hanya nama akun & tanggal kedaluwarsa.
@@ -12,17 +13,31 @@ export async function GET(req: Request) {
   const webhook = await infoWebhook().catch((e) => ({ url: "", galat: e.message }));
   const instagram = await Promise.all(
     merek.map(async (m) => {
-      const k = await bacaKredensial(m.slug, "instagram");
-      return { merek: m.slug, nama: m.nama, aktif: m.aktif, akun: k ? { akun: k.ig_akun, kedaluwarsa: k.ig_kedaluwarsa ?? null, host: k.ig_host } : null };
+      const [k, t] = await Promise.all([bacaKredensial(m.slug, "instagram"), bacaKredensial(m.slug, "tiktok")]);
+      return {
+        merek: m.slug, nama: m.nama, aktif: m.aktif,
+        akun: k ? { akun: k.ig_akun, kedaluwarsa: k.ig_kedaluwarsa ?? null, host: k.ig_host } : null,
+        tiktok: t ? { akun: t.akun, kedaluwarsa: t.kedaluwarsa ?? null } : null,
+      };
     }),
   );
-  return Response.json({ ok: true, siap: true, instagram, telegram: { bot: adaBot(), terdaftar: Boolean(p.telegram_chat_id), webhook } });
+  return Response.json({ ok: true, siap: true, instagram, tiktokSiap: adaTiktok(), telegram: { bot: adaBot(), terdaftar: Boolean(p.telegram_chat_id), webhook } });
 }
 
 export async function POST(req: Request) {
   if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
-  const isi = (await req.json()) as { merek?: string; aktif?: boolean; igToken?: string; igId?: string; putusIg?: boolean; pasangWebhook?: boolean };
+  const isi = (await req.json()) as { merek?: string; aktif?: boolean; igToken?: string; igId?: string; putusIg?: boolean; mulaiTiktok?: boolean; putusTiktok?: boolean; pasangWebhook?: boolean };
   try {
+    if (isi.mulaiTiktok || isi.putusTiktok) {
+      const m = (await daftarMerek()).find((x) => x.slug === isi.merek);
+      if (!m) throw new Error("Merek tidak dikenal.");
+      if (isi.putusTiktok) {
+        await hapusKredensial(m.slug, "tiktok");
+        return Response.json({ ok: true, pesan: `TikTok ${m.nama} diputus.` });
+      }
+      if (!adaTiktok()) throw new Error("TIKTOK_CLIENT_KEY / TIKTOK_CLIENT_SECRET belum diisi di Vercel.");
+      return Response.json({ ok: true, url: urlIzinTiktok(new URL(req.url).origin, m.slug) });
+    }
     if (typeof isi.aktif === "boolean" && isi.merek && isi.merek !== "bakafrawi") {
       await aturAktifMerek(isi.merek, isi.aktif);
       return Response.json({ ok: true, pesan: `Merek ${isi.merek} ${isi.aktif ? "diaktifkan" : "dinonaktifkan"}.` });

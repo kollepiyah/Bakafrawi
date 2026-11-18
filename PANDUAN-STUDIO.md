@@ -29,6 +29,20 @@ Pasang (sekali):
 
 Uji di laptop tanpa database: `node studio/uji-bank.mjs "D:/Lek Kopi Konten/bank"`.
 
+**Ide otomatis:** chat ke bot "kasih 4 ide video Lek Kopi minggu ini" → ide dari data penjualan minggu
+lalu → balas "nomor 2 jadikan video".
+
+**Mata Claude:** tiap putaran mesin menilai ≤25 foto/video bank baru (deskripsi & kualitas — dipakai
+naskah memilih tag) dan mempelajari Reels IG merek + video di folder `referensi` Drive menjadi profil
+gaya; gaya baru dikabarkan ke bot.
+
+**TikTok (draf):** saat video tayang di IG, video yang sama masuk kotak masuk TikTok merek; Kyai
+tinggal menekan Posting di aplikasi TikTok. Pasang sekali:
+1. Portal developer TikTok (aplikasi yang sama dengan Studio Lek Kopi) → Login Kit → Redirect URI:
+   tambahkan `https://bakafrawi.com/api/studio/tiktok/kembali`.
+2. `TIKTOK_CLIENT_KEY` & `TIKTOK_CLIENT_SECRET` di **Vercel** dan di **rahasia GitHub** repo Bakafrawi.
+3. Konten → Sambungan → TikTok **Sambungkan** di baris merek → izinkan.
+
 > **Multi-merek (sejak 18 Nov 2026).** Studio kini satu mesin untuk beberapa merek (`studio_merek`):
 > **Bakafrawi** aktif; **Lek Kopi** sudah terdaftar tetapi belum aktif (video dari bank foto/video
 > kafe menyusul). Identitas tampilan (nama, warna aksen, situs, WA, logo) dan gaya copywriter tiap

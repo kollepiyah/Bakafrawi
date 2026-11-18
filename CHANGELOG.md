@@ -17,6 +17,14 @@
   Supabase tiruan (indeks 66 berkas → render → unggah → status selesai), migrasi di PGlite.
   **Belum diuji sungguhan**: pintu Lek Kopi, naskah Claude, rclone di GitHub Actions, tayang IG Lek Kopi.
 - Migrasi `20261118230000_studio_bank.sql`. Panduan: bagian atas `PANDUAN-STUDIO.md`.
+- **2c — pelengkap**: modul gambar AI ganda dilebur (satu modul untuk semua merek); bot bisa
+  **mengusulkan ide** dari data kedai (`usul_ide_merek`); **mata Claude** per merek (kurasi bank →
+  `studio_bank.kurasi`, belajar gaya dari Reels IG + folder referensi → `studio_referensi`,
+  `studio_gaya`); **draf TikTok** per merek sesudah tayang IG (OAuth di Konten → Sambungan,
+  `/api/studio/tiktok/kembali`, refresh token disimpan ulang tiap dipakai). Diuji dengan layanan
+  tiruan: kurasi/referensi/gaya tersimpan, Reels + draf TikTok tercatat (`tayang.tiktok.publish_id`).
+- **Belum**: memensiunkan Studio lama di repo Lek Kopi (workflow `studio.yml`, `kantor-studio/`,
+  perintah konten Lek AI) — sengaja ditunda sampai alur baru terbukti jalan sungguhan.
 
 ## Bakafrawi Studio tahap 3, gelombang 1 — Studio multi-merek (belum tayang)
 

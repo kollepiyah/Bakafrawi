@@ -5,11 +5,18 @@ import type { Session } from "@supabase/supabase-js";
 import { Loader2, Send } from "lucide-react";
 import { IkonSosial } from "@/components/situs/ikon-sosial";
 
-type AkunMerek = { merek: string; nama: string; aktif: boolean; akun: { akun: string; kedaluwarsa: string | null; host: string } | null };
+type AkunMerek = {
+  merek: string;
+  nama: string;
+  aktif: boolean;
+  akun: { akun: string; kedaluwarsa: string | null; host: string } | null;
+  tiktok: { akun: string; kedaluwarsa: string | null } | null;
+};
 type Status = {
   siap: boolean;
   pesan?: string;
   instagram: AkunMerek[];
+  tiktokSiap: boolean;
   telegram: { bot: boolean; terdaftar: boolean; webhook: { url: string; galat?: string } | null };
 };
 
@@ -38,6 +45,7 @@ export function Sambungan({ sesi }: { sesi: Session | null }) {
     setPesan("");
     const res = await fetch("/api/studio/sambungan", { method: "POST", headers: kepala, body: JSON.stringify(isi) });
     const j = await res.json().catch(() => ({}));
+    if (j.ok && j.url) return void window.location.assign(j.url); // izin TikTok: pindah ke halaman TikTok
     setPesan(j.pesan ?? (j.ok ? "Tersimpan." : "Gagal."));
     if (j.ok) setToken("");
     setSibuk(false);
@@ -65,7 +73,7 @@ export function Sambungan({ sesi }: { sesi: Session | null }) {
       ) : (
         <div className="mt-5 grid gap-6">
           <section className="grid gap-3">
-            <h3 className="flex items-center gap-2 font-semibold"><IkonSosial jenis="instagram" className="size-4 text-emas" /> Instagram per merek</h3>
+            <h3 className="flex items-center gap-2 font-semibold"><IkonSosial jenis="instagram" className="size-4 text-emas" /> Instagram & TikTok per merek</h3>
             <ul className="grid gap-1.5 text-sm text-muted-foreground">
               {daftarIg.map((m) => (
                 <li key={m.merek}>
@@ -85,7 +93,20 @@ export function Sambungan({ sesi }: { sesi: Session | null }) {
                       <button onClick={() => confirm(`Putus Instagram ${m.nama}?`) && kirim({ merek: m.merek, putusIg: true })} className="text-red-400 underline">Putus</button>
                     </>
                   ) : (
-                    "belum tersambung"
+                    "IG belum tersambung"
+                  )}
+                  {status.tiktokSiap && (
+                    <span className="ml-2">
+                      · TikTok:{" "}
+                      {m.tiktok ? (
+                        <>
+                          ✅ {m.tiktok.akun}{" "}
+                          <button onClick={() => confirm(`Putus TikTok ${m.nama}?`) && kirim({ merek: m.merek, putusTiktok: true })} className="text-red-400 underline">Putus</button>
+                        </>
+                      ) : (
+                        <button onClick={() => kirim({ merek: m.merek, mulaiTiktok: true })} className="text-emas underline">Sambungkan</button>
+                      )}
+                    </span>
                   )}
                 </li>
               ))}

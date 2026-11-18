@@ -38,6 +38,9 @@ jobs:
       RCLONE_CONFIG_GDRIVE_CLIENT_ID: ${{ secrets.RCLONE_DRIVE_CLIENT_ID }}
       RCLONE_CONFIG_GDRIVE_CLIENT_SECRET: ${{ secrets.RCLONE_DRIVE_CLIENT_SECRET }}
       RCLONE_CONFIG_GDRIVE_TOKEN: ${{ secrets.RCLONE_DRIVE_TOKEN }}
+      # Draf TikTok per merek: memperpanjang token butuh kunci aplikasi TikTok (sama dengan di Vercel).
+      TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+      TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
       # Kata sandi akun demo untuk skenario rekaman: {{RAHASIA:NAMA}} → env DEMO_NAMA.
       # Daftarkan satu per satu di sini (contoh: DEMO_WASEELA_SANDI dari rahasia bernama sama),
       # jangan mengirim seluruh rahasia sekaligus — GitHub menahan workflow dengan pola itu.
