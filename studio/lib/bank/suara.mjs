@@ -12,7 +12,7 @@
 import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { tidur } from './alat.mjs'
+import { tidur, ulangi } from './alat.mjs'
 import { ssml } from './rakit.mjs'
 
 const SUARA = () => process.env.STUDIO_SUARA || 'id-ID-GadisNeural'
@@ -49,7 +49,10 @@ async function azure(teks, keluar) {
   await writeFile(keluar, Buffer.from(await r.arrayBuffer()))
 }
 
-async function edge(teks, keluar) {
+// edge-tts sering memutus sesaat — dicoba sampai 4 kali (ulangi) sebelum menyerah.
+const edge = (teks, keluar) => ulangi(() => edgeSekali(teks, keluar))
+
+async function edgeSekali(teks, keluar) {
   const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts')
   const tts = new MsEdgeTTS()
   const dir = await mkdtemp(path.join(os.tmpdir(), 'lekkopi-suara-'))

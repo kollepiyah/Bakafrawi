@@ -32,3 +32,18 @@ export async function probe(berkas) {
 }
 
 export const tidur = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Jalankan ulang `kerja` bila gagal, dengan jeda bertambah. Untuk layanan yang sering putus sesaat
+ * (edge-tts: "Stream closed before the synthesis completed" / ECONNRESET, 18–19 Nov 2026).
+ */
+export async function ulangi(kerja, jeda = [2000, 5000, 12000]) {
+  for (let i = 0; ; i++) {
+    try {
+      return await kerja(i)
+    } catch (e) {
+      if (i >= jeda.length) throw e
+      await tidur(jeda[i])
+    }
+  }
+}
