@@ -14,13 +14,14 @@ export type Aplikasi = {
   kueri?: string;
 };
 
-// Ammu & Waseela = data lembaga klien → pintu TEKNIS saja (keputusan Kyai 18 Nov 2026).
+// Ammu & Waseela = data lembaga klien, Fastabiqu = data pribadi Kyai & istri → pintu TEKNIS saja
+// (keputusan Kyai 18 Nov 2026).
 export const APLIKASI: Aplikasi[] = [
   { slug: "maktaba", nama: "Maktaba POS", ref: "zxwjirxgijdrvysdaipb", jenis: "saas" },
   { slug: "lekkopi", nama: "Lek Kopi", ref: "vwepjebxsszoahjmiwxo", jenis: "kedai", kueri: "?jenis=dasbor" },
   { slug: "ammu", nama: "Ammu Online", ref: "rzwefjilxzsqlokkwiyt", jenis: "teknis" },
   { slug: "waseela", nama: "Waseela", ref: "vfbmaywcjurykxfetbia", jenis: "teknis" },
-  { slug: "fastabiqu", nama: "Fastabiqu", ref: null, jenis: null, tunda: "Masih Firebase — pintu dibuat setelah pindah ke Supabase." },
+  { slug: "fastabiqu", nama: "Fastabiqu", ref: "sizdaztucpuxhyzrpsqe", jenis: "teknis" },
 ];
 
 export const urlPintu = (a: Aplikasi) => (a.ref ? `https://${a.ref}.supabase.co/functions/v1/pintu-bakafrawi${a.kueri ?? ""}` : null);

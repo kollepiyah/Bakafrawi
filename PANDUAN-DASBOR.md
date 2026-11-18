@@ -10,7 +10,7 @@ tiap kali dibuka.
 | Maktaba POS | toko per status, toko baru, langganan habis ≤7 hari, pembayaran menunggu konfirmasi, pendapatan bulan ini, MRR, transaksi 24 jam | `Maktaba POS` |
 | Lek Kopi | omzet/transaksi/cup hari ini vs kemarin, terlaris, kas, bon & hutang, bahan menipis | `Lek Kopi App` (`?jenis=dasbor`) |
 | Ammu Online, Waseela | **teknis saja** (data lembaga klien): akun, aktif 24 jam/7 hari, aktivitas, ukuran database | `Ammu`, `Waseela` |
-| Fastabiqu | ditunda — masih Firebase | — |
+| Fastabiqu | **teknis saja** (data pribadi Kyai & istri): akun, aktif, catatan rutinitas 24 jam, ukuran database | `Fastabiqu/app` |
 
 Semua kartu juga memperingatkan bila database ≥ 400 MB (batas paket gratis Supabase 500 MB).
 
@@ -25,7 +25,7 @@ cd "D:/Aplikasi Project/Maktaba POS"
 npx supabase secrets set PINTU_BAKAFRAWI_RAHASIA=KODE
 npx supabase functions deploy pintu-bakafrawi --no-verify-jwt
 ```
-Ulangi untuk `Ammu` dan `Waseela`. Untuk `Lek Kopi App` cukup deploy ulang (rahasianya sudah ada):
+Ulangi untuk `Ammu`, `Waseela`, dan `Fastabiqu/app` (folder `app`, bukan akar Fastabiqu). Untuk `Lek Kopi App` cukup deploy ulang (rahasianya sudah ada):
 ```bash
 cd "D:/Aplikasi Project/Lek Kopi App"
 npx supabase functions deploy pintu-bakafrawi --no-verify-jwt

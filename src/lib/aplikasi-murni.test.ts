@@ -6,9 +6,9 @@ const kini = new Date("2026-11-18T13:00:00Z");
 
 test("daftar & url pintu", () => {
   assert.equal(urlPintu(APLIKASI.find((a) => a.slug === "lekkopi")!), "https://vwepjebxsszoahjmiwxo.supabase.co/functions/v1/pintu-bakafrawi?jenis=dasbor");
-  assert.equal(urlPintu(APLIKASI.find((a) => a.slug === "fastabiqu")!), null);
-  // Data lembaga klien hanya teknis.
-  assert.deepEqual(APLIKASI.filter((a) => a.jenis === "teknis").map((a) => a.slug), ["ammu", "waseela"]);
+  assert.equal(urlPintu({ slug: "x", nama: "X", ref: null, jenis: null }), null);
+  // Data lembaga klien & data pribadi keluarga hanya teknis.
+  assert.deepEqual(APLIKASI.filter((a) => a.jenis === "teknis").map((a) => a.slug), ["ammu", "waseela", "fastabiqu"]);
 });
 
 test("format", () => {

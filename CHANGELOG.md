@@ -8,7 +8,7 @@
 - Data dari **pintu baca-saja** `pintu-bakafrawi` di tiap proyek Supabase (transaksi read only, header
   rahasia), disimpan ±5 menit di cache data Next. Maktaba: angka SaaS; Lek Kopi: ringkasan hari ini
   (`?jenis=dasbor`, fungsi agent yang sama dengan Lek AI); **Ammu & Waseela: teknis saja** (data
-  lembaga klien — keputusan Kyai 18 Nov); Fastabiqu ditunda (Firebase).
+  lembaga klien — keputusan Kyai 18 Nov); **Fastabiqu: teknis saja** (data pribadi Kyai & istri).
 - Aturan penilaian & tampilan angka di `src/lib/aplikasi-murni.ts` + tes. Panduan: `PANDUAN-DASBOR.md`.
 - Diuji: tes murni, tipe, lint, build, layar dengan data rekaan. **Belum**: pintu sungguhan
   (belum di-deploy), APK belum menampilkan kartu aplikasi.
