@@ -1,5 +1,30 @@
 # CHANGELOG — bakafrawi.com
 
+## Video iklan Studio gaya Reels + Remotion; footer HP; Umami dilepas; ikon APK (19 Nov, belum tayang)
+
+- **Keluhan Kyai**: video Studio monoton, subtitle tak sinkron, "bukan seperti video iklan pada
+  umumnya". Akar subtitle: `rakit.mjs` lama membagi waktu kalimat menurut jumlah huruf.
+- **Mesin Studio (produk, non-bank)** kini memakai `studio/lib/iklan.mjs`: narasi per adegan dari
+  edge-tts **dengan waktu tiap kata**, layar terbagi ala Reels teknologi (kartu judul besar / potongan
+  layar aplikasi / kolase HP di atas, subtitle 1–2 kata di tengah dengan kata sorot serif miring, foto
+  orang AI di bawah), transisi + whoosh, musik yang mengecil saat narasi. Layar aplikasi dipotret
+  tajam (`potretLayar`, dpr 3) dan **dilihat Claude** saat menulis naskah (`buatNaskahVideo`,
+  `SkemaVideo`). `rakit.mjs`, `suara.mjs`, rekaman webm dan kartu video lama dihapus.
+- **Prototipe Remotion** `studio/remotion/` (dari prompt Kyai): latar kisi putih, bilah progres kiri,
+  lencana langkah, UI kasir/stok/laporan beranimasi pegas, caption kata-per-kata sinkron suara dengan
+  stabilo, penutup warna merek, slot `<MascotOverlay />`. Semua teks/waktu/warna di
+  `src/data/script.ts`; `npm run siapkan` membuat narasi + waktu kata, `npm run studio` / `render`.
+  **Belum** tersambung ke mesin Studio — menunggu penilaian Kyai antara gaya ini dan gaya layar terbagi.
+- **Situs**: footer di HP ditumpuk rapi di tengah, celah kosong di bawah tombol "Kirim Pesan"
+  dirapatkan. **Umami dilepas** (statistiknya tak bisa tampil langsung): skrip, tautan footer, isian
+  admin, kalimat privasi; skema `analitik` tinggal `gaId`.
+- **APK Bakafrawi Studio**: ikon aplikasi = logo kaligrafi Bakafrawi (ikon adaptif + monokrom);
+  sebelumnya ikon sementara kalender. Ikon notifikasi pengingat tetap kalender.
+- Diuji: tes `iklan.test.mjs` 7/7, tipe situs & Remotion, render video contoh di PC (data pratinjau
+  rekaan, foto pengganti dari Unsplash karena kunci gambar AI tak ada di laptop), footer di layar 375 px,
+  kompilasi sumber daya Android. **Belum**: mesin Studio di GitHub Actions dengan naskah Claude & foto AI
+  sungguhan, APK baru belum dibangun ulang.
+
 ## Bakafrawi Studio tahap 2 — Dasbor semua aplikasi (belum tayang)
 
 - **Menu Aplikasi** + kartu di Beranda: satu kartu per aplikasi dengan angka utama dan hal yang perlu

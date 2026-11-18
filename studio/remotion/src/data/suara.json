@@ -1,0 +1,505 @@
+{
+  "suara": [
+    {
+      "berkas": "narasi/adegan-1.mp3",
+      "durasi": 6,
+      "kata": [
+        {
+          "teks": "Masih",
+          "mulai": 0.1,
+          "selesai": 0.482
+        },
+        {
+          "teks": "catat",
+          "mulai": 0.482,
+          "selesai": 0.76
+        },
+        {
+          "teks": "penjualan",
+          "mulai": 0.76,
+          "selesai": 1.142
+        },
+        {
+          "teks": "manual",
+          "mulai": 1.142,
+          "selesai": 1.674
+        },
+        {
+          "teks": "Ini",
+          "mulai": 2.444,
+          "selesai": 2.699
+        },
+        {
+          "teks": "cara",
+          "mulai": 2.699,
+          "selesai": 2.895
+        },
+        {
+          "teks": "beresin",
+          "mulai": 2.895,
+          "selesai": 3.196
+        },
+        {
+          "teks": "operasional",
+          "mulai": 3.196,
+          "selesai": 3.694
+        },
+        {
+          "teks": "tokomu",
+          "mulai": 3.694,
+          "selesai": 4.099
+        },
+        {
+          "teks": "pakai",
+          "mulai": 4.099,
+          "selesai": 4.388
+        },
+        {
+          "teks": "Maktaba",
+          "mulai": 4.388,
+          "selesai": 4.782
+        },
+        {
+          "teks": "POS",
+          "mulai": 4.782,
+          "selesai": 5.222
+        }
+      ]
+    },
+    {
+      "berkas": "narasi/adegan-2.mp3",
+      "durasi": 8.832,
+      "kata": [
+        {
+          "teks": "Pertama",
+          "mulai": 0.098,
+          "selesai": 0.735
+        },
+        {
+          "teks": "transaksi",
+          "mulai": 1.001,
+          "selesai": 1.464
+        },
+        {
+          "teks": "di",
+          "mulai": 1.464,
+          "selesai": 1.533
+        },
+        {
+          "teks": "kasir",
+          "mulai": 1.533,
+          "selesai": 1.811
+        },
+        {
+          "teks": "jauh",
+          "mulai": 1.811,
+          "selesai": 2.112
+        },
+        {
+          "teks": "lebih",
+          "mulai": 2.112,
+          "selesai": 2.309
+        },
+        {
+          "teks": "cepat",
+          "mulai": 2.309,
+          "selesai": 2.702
+        },
+        {
+          "teks": "Tinggal",
+          "mulai": 3.474,
+          "selesai": 3.775
+        },
+        {
+          "teks": "scan",
+          "mulai": 3.775,
+          "selesai": 3.972
+        },
+        {
+          "teks": "produk",
+          "mulai": 3.972,
+          "selesai": 4.446
+        },
+        {
+          "teks": "pilih",
+          "mulai": 4.643,
+          "selesai": 4.875
+        },
+        {
+          "teks": "metode",
+          "mulai": 4.875,
+          "selesai": 5.164
+        },
+        {
+          "teks": "bayar",
+          "mulai": 5.164,
+          "selesai": 5.65
+        },
+        {
+          "teks": "struk",
+          "mulai": 5.905,
+          "selesai": 6.171
+        },
+        {
+          "teks": "langsung",
+          "mulai": 6.171,
+          "selesai": 6.449
+        },
+        {
+          "teks": "beres",
+          "mulai": 6.449,
+          "selesai": 6.726
+        },
+        {
+          "teks": "tanpa",
+          "mulai": 6.726,
+          "selesai": 6.969
+        },
+        {
+          "teks": "bikin",
+          "mulai": 6.969,
+          "selesai": 7.201
+        },
+        {
+          "teks": "antrean",
+          "mulai": 7.201,
+          "selesai": 7.513
+        },
+        {
+          "teks": "panjang",
+          "mulai": 7.513,
+          "selesai": 8.046
+        }
+      ]
+    },
+    {
+      "berkas": "narasi/adegan-3.mp3",
+      "durasi": 8.88,
+      "kata": [
+        {
+          "teks": "Kedua",
+          "mulai": 0.098,
+          "selesai": 0.654
+        },
+        {
+          "teks": "stok",
+          "mulai": 0.897,
+          "selesai": 1.14
+        },
+        {
+          "teks": "barang",
+          "mulai": 1.14,
+          "selesai": 1.325
+        },
+        {
+          "teks": "otomatis",
+          "mulai": 1.325,
+          "selesai": 1.718
+        },
+        {
+          "teks": "terpotong",
+          "mulai": 1.718,
+          "selesai": 2.158
+        },
+        {
+          "teks": "setiap",
+          "mulai": 2.158,
+          "selesai": 2.494
+        },
+        {
+          "teks": "ada",
+          "mulai": 2.494,
+          "selesai": 2.714
+        },
+        {
+          "teks": "penjualan",
+          "mulai": 2.714,
+          "selesai": 3.374
+        },
+        {
+          "teks": "Kalau",
+          "mulai": 4.155,
+          "selesai": 4.352
+        },
+        {
+          "teks": "ada",
+          "mulai": 4.352,
+          "selesai": 4.502
+        },
+        {
+          "teks": "barang",
+          "mulai": 4.502,
+          "selesai": 4.722
+        },
+        {
+          "teks": "yang",
+          "mulai": 4.722,
+          "selesai": 4.826
+        },
+        {
+          "teks": "mau",
+          "mulai": 4.826,
+          "selesai": 4.954
+        },
+        {
+          "teks": "habis",
+          "mulai": 4.954,
+          "selesai": 5.44
+        },
+        {
+          "teks": "sistem",
+          "mulai": 5.66,
+          "selesai": 5.995
+        },
+        {
+          "teks": "langsung",
+          "mulai": 5.995,
+          "selesai": 6.296
+        },
+        {
+          "teks": "kasih",
+          "mulai": 6.296,
+          "selesai": 6.493
+        },
+        {
+          "teks": "pengingat",
+          "mulai": 6.493,
+          "selesai": 6.829
+        },
+        {
+          "teks": "sebelum",
+          "mulai": 6.829,
+          "selesai": 7.118
+        },
+        {
+          "teks": "kamu",
+          "mulai": 7.118,
+          "selesai": 7.315
+        },
+        {
+          "teks": "kehabisan",
+          "mulai": 7.315,
+          "selesai": 7.743
+        },
+        {
+          "teks": "stok",
+          "mulai": 7.743,
+          "selesai": 8.102
+        }
+      ]
+    },
+    {
+      "berkas": "narasi/adegan-4.mp3",
+      "durasi": 8.4,
+      "kata": [
+        {
+          "teks": "Tutup",
+          "mulai": 0.098,
+          "selesai": 0.387
+        },
+        {
+          "teks": "toko",
+          "mulai": 0.388,
+          "selesai": 0.619
+        },
+        {
+          "teks": "nggak",
+          "mulai": 0.619,
+          "selesai": 0.758
+        },
+        {
+          "teks": "perlu",
+          "mulai": 0.758,
+          "selesai": 0.966
+        },
+        {
+          "teks": "pusing",
+          "mulai": 0.966,
+          "selesai": 1.221
+        },
+        {
+          "teks": "rekap",
+          "mulai": 1.221,
+          "selesai": 1.429
+        },
+        {
+          "teks": "nota",
+          "mulai": 1.429,
+          "selesai": 1.603
+        },
+        {
+          "teks": "lagi",
+          "mulai": 1.603,
+          "selesai": 2.054
+        },
+        {
+          "teks": "Semua",
+          "mulai": 2.836,
+          "selesai": 3.113
+        },
+        {
+          "teks": "omzet",
+          "mulai": 3.113,
+          "selesai": 3.461
+        },
+        {
+          "teks": "dan",
+          "mulai": 3.461,
+          "selesai": 3.611
+        },
+        {
+          "teks": "keuntungan",
+          "mulai": 3.611,
+          "selesai": 3.97
+        },
+        {
+          "teks": "bersih",
+          "mulai": 3.97,
+          "selesai": 4.248
+        },
+        {
+          "teks": "langsung",
+          "mulai": 4.248,
+          "selesai": 4.572
+        },
+        {
+          "teks": "terhitung",
+          "mulai": 4.572,
+          "selesai": 4.884
+        },
+        {
+          "teks": "otomatis",
+          "mulai": 4.884,
+          "selesai": 5.532
+        },
+        {
+          "teks": "bisa",
+          "mulai": 5.787,
+          "selesai": 6.03
+        },
+        {
+          "teks": "kamu",
+          "mulai": 6.03,
+          "selesai": 6.192
+        },
+        {
+          "teks": "pantau",
+          "mulai": 6.192,
+          "selesai": 6.516
+        },
+        {
+          "teks": "dari",
+          "mulai": 6.516,
+          "selesai": 6.69
+        },
+        {
+          "teks": "HP",
+          "mulai": 6.69,
+          "selesai": 6.933
+        },
+        {
+          "teks": "kapan",
+          "mulai": 6.933,
+          "selesai": 7.153
+        },
+        {
+          "teks": "aja",
+          "mulai": 7.153,
+          "selesai": 7.616
+        }
+      ]
+    },
+    {
+      "berkas": "narasi/adegan-5.mp3",
+      "durasi": 7.176,
+      "kata": [
+        {
+          "teks": "Saatnya",
+          "mulai": 0.099,
+          "selesai": 0.55
+        },
+        {
+          "teks": "bikin",
+          "mulai": 0.55,
+          "selesai": 0.805
+        },
+        {
+          "teks": "tokomu",
+          "mulai": 0.805,
+          "selesai": 1.094
+        },
+        {
+          "teks": "naik",
+          "mulai": 1.094,
+          "selesai": 1.28
+        },
+        {
+          "teks": "kelas",
+          "mulai": 1.28,
+          "selesai": 1.754
+        },
+        {
+          "teks": "Coba",
+          "mulai": 2.525,
+          "selesai": 2.78
+        },
+        {
+          "teks": "Maktaba",
+          "mulai": 2.78,
+          "selesai": 3.127
+        },
+        {
+          "teks": "POS",
+          "mulai": 3.127,
+          "selesai": 3.289
+        },
+        {
+          "teks": "sekarang",
+          "mulai": 3.289,
+          "selesai": 3.706
+        },
+        {
+          "teks": "dan",
+          "mulai": 3.706,
+          "selesai": 3.833
+        },
+        {
+          "teks": "rasakan",
+          "mulai": 3.833,
+          "selesai": 4.215
+        },
+        {
+          "teks": "gampangnya",
+          "mulai": 4.215,
+          "selesai": 4.631
+        },
+        {
+          "teks": "kelola",
+          "mulai": 4.631,
+          "selesai": 4.851
+        },
+        {
+          "teks": "usaha",
+          "mulai": 4.851,
+          "selesai": 5.233
+        },
+        {
+          "teks": "dalam",
+          "mulai": 5.233,
+          "selesai": 5.453
+        },
+        {
+          "teks": "satu",
+          "mulai": 5.453,
+          "selesai": 5.708
+        },
+        {
+          "teks": "aplikasi",
+          "mulai": 5.708,
+          "selesai": 6.391
+        }
+      ]
+    }
+  ],
+  "musik": "musik.mp3"
+}

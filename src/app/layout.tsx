@@ -24,12 +24,12 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = { themeColor: "#0c0e12" };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const { gaId, umamiId } = (await ambilKonten()).analitik;
+  const { gaId } = (await ambilKonten()).analitik;
   return (
     <html lang="id" className={`${jakarta.variable} ${fraunces.variable}`}>
       <body className="min-h-dvh overflow-x-hidden">
         {children}
-        {/* Analitik dipasang sekali di sini — situs lama memuat Umami dua kali sehingga kunjungan bisa tercatat ganda. */}
+        {/* Analitik dipasang sekali di sini. Umami dilepas 19 Nov 2026: statistiknya tak bisa tampil langsung di situs. */}
         {gaId && (
           <>
             <Script src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`} strategy="afterInteractive" />
@@ -38,7 +38,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
             </Script>
           </>
         )}
-        {umamiId && <Script src="https://cloud.umami.is/script.js" data-website-id={umamiId} strategy="afterInteractive" />}
       </body>
     </html>
   );

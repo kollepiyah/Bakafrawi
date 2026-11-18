@@ -12,12 +12,12 @@ import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } fr
 // Satu modul gambar AI untuk semua merek (versi pindahan Lek Kopi: penyedia berurutan + catatan biaya).
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
-import { buatNaskah } from './lib/naskah.mjs';
-import { bukaPeramban, potret, rekamAplikasi } from './lib/peramban.mjs';
-import { rakitVideo } from './lib/rakit.mjs';
-import { bacakan } from './lib/suara.mjs';
+import { ffmpeg, probe } from './lib/bank/alat.mjs';
+import { rencanaAdegan, susunIklan } from './lib/iklan.mjs';
+import { buatNaskah, buatNaskahVideo } from './lib/naskah.mjs';
+import { bukaPeramban, potret, potretLayar } from './lib/peramban.mjs';
 import { adaTelegram, kirimHasil, kirimTeks } from './lib/telegram.mjs';
-import { htmlBingkai, htmlKartu, htmlPoster, temaMerek, UKURAN } from './lib/templat.mjs';
+import { htmlPoster, temaMerek, UKURAN } from './lib/templat.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const LOGO = pathToFileURL(path.join(DIR, '..', 'public', 'logo.png')).href;
@@ -27,12 +27,12 @@ const RASIO_AI = { feed: '1:1', potret: '4:5', story: '9:16' };
 const mutlak = (src, situs) => (/^https?:\/\//.test(src) ? src : `${situs.urlSitus.replace(/\/$/, '')}${src}`);
 const berkasUrl = (b) => pathToFileURL(b).href;
 
-/** Skenario rekaman: dari produk.demo bila ada; bila tidak, buka tautan utama lalu gulir pelan. */
+/** Skenario layar: dari produk.demo bila ada; bila tidak, buka tautan utama lalu gulir. */
 function skenario(produk) {
   if (produk.demo?.url) return { url: produk.demo.url, langkah: produk.demo.langkah ?? [] };
   const url = produk.tautan.find((t) => t.utama)?.url ?? produk.tautan[0]?.url;
   if (!url) return null;
-  return { url, langkah: [{ aksi: 'tunggu', detik: 2 }, ...Array.from({ length: 6 }, () => ({ aksi: 'gulir', teks: '520', detik: 2.2 }))] };
+  return { url, langkah: [{ aksi: 'tunggu', detik: 2 }, ...Array.from({ length: 4 }, () => ({ aksi: 'gulir', teks: '700', detik: 1.5 }))] };
 }
 
 /** Foto suasana AI; gagal / tanpa kunci → null (latar polos) supaya tugas tetap jadi. */
@@ -53,6 +53,42 @@ async function fotoAi(adegan, rasio, keluar, catatan) {
     } else catatan.push(`Latar AI gagal: ${e.message.slice(0, 160)}`);
     return null;
   }
+}
+
+/**
+ * Layar aplikasi untuk video: tangkapan tajam dari skenario demo/tautan, ditambah gambar layar HP di
+ * konten situs (cadangan bila demo perlu masuk akun atau gagal dibuka). Maks 8.
+ */
+async function kumpulkanLayar(produk, situs, peramban, folder, catatan) {
+  const layar = [];
+  const sk = skenario(produk);
+  if (sk) {
+    try {
+      layar.push(...(await potretLayar(peramban, { ...sk, folder })));
+    } catch (e) {
+      catatan.push(`Layar demo gagal dipotret: ${e.message.slice(0, 160)}`);
+    }
+  }
+  for (const [i, g] of (produk.layarHp ?? []).entries()) {
+    try {
+      const r = await fetch(mutlak(g.src, situs));
+      if (!r.ok) throw new Error(`unduh ${r.status}`);
+      const berkas = path.join(folder, `hp-${i}${path.extname(g.src) || '.jpg'}`);
+      await writeFile(berkas, Buffer.from(await r.arrayBuffer()));
+      const { lebar, tinggi } = await probe(berkas);
+      layar.push({ berkas, lebar, tinggi, keterangan: g.keterangan ?? g.alt });
+    } catch (e) {
+      catatan.push(`Gambar layar ${g.src} gagal diambil: ${e.message.slice(0, 120)}`);
+    }
+  }
+  return layar.slice(0, 8);
+}
+
+/** Tangkapan layar → JPEG lebar 540 dalam base64, untuk dilihat Claude (hemat token). */
+async function kecilkan(berkas) {
+  const keluar = `${berkas}.kecil.jpg`;
+  await ffmpeg(['-y', '-i', berkas, '-vf', 'scale=540:-2', '-q:v', '5', keluar]);
+  return (await readFile(keluar)).toString('base64');
 }
 
 const pakaiBank = (merek) => Array.isArray(merek?.profil?.bahan) && merek.profil.bahan.includes('bank');
@@ -98,7 +134,13 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   if (!produk) throw new Error(`Produk "${tugas.produk_slug}" tidak ada di konten.`);
   const tema = temaMerek(merek);
   const kontak = { ...situs.kontak, ...(merek?.profil?.whatsapp ? { whatsappTampil: merek.profil.whatsapp } : {}) };
-  const naskah = await buatNaskah(produk, situs, tugas.arahan, tugas.jenis, merek);
+  const catatan = [];
+  // Video: layar aplikasi dipotret dulu supaya Claude bisa melihatnya saat memilih bagian yang disorot.
+  const layarApp = tugas.jenis === 'video' ? await kumpulkanLayar(produk, situs, peramban, folder, catatan) : [];
+  if (tugas.jenis === 'video' && !layarApp.length) throw new Error('Produk ini belum punya layar aplikasi (tautan/skenario demo atau gambar layar HP) untuk video.');
+  const naskah = tugas.jenis === 'video'
+    ? await buatNaskahVideo(produk, situs, tugas.arahan, merek, layarApp, kecilkan)
+    : await buatNaskah(produk, situs, tugas.arahan, tugas.jenis, merek);
   const tujuan = [`WA ${kontak.whatsappTampil}`, tema.situs].filter(Boolean).join(' · ');
   const caption = `${naskah.caption}\n\n${naskah.ajakan} → ${tujuan}\n\n${naskah.hashtag.map((h) => `#${h.replace(/^#/, '')}`).join(' ')}`;
   const layar = produk.layarHp?.[0]?.src ?? produk.layarDesktop?.[0]?.src;
@@ -106,7 +148,6 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   const logo = merek?.profil?.logo ?? (merek?.slug === 'bakafrawi' || !merek ? LOGO : '');
   const umum = { naskah, produk, logo, kontak, tema };
   const pakaiAi = tugas.latar === 'ai';
-  const catatan = [];
   const hasil = [];
   const berkas = (n) => path.join(folder, n);
 
@@ -118,23 +159,21 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       hasil.push({ jenis: 'gambar', rasio, url: await simpan(keluar, 'image/jpeg') });
     }
   } else {
-    const sk = skenario(produk);
-    if (!sk) throw new Error('Produk ini belum punya tautan/skenario demo untuk direkam.');
-    const rekaman = await rekamAplikasi(peramban, { ...sk, folder });
-    const fotoBuka = pakaiAi ? await fotoAi(naskah.adegan?.[0], '9:16', berkas('latar-buka.png'), catatan) : null;
-    const fotoTutup = pakaiAi ? await fotoAi(naskah.adegan?.[1] ?? naskah.adegan?.[0], '9:16', berkas('latar-tutup.png'), catatan) : null;
-    await potret(peramban, { w: 1080, h: 1920, keluar: berkas('bingkai.png'), transparan: true, html: htmlBingkai(umum) });
-    await potret(peramban, { w: 1080, h: 1920, keluar: berkas('pembuka.jpg'), html: htmlKartu({ ...umum, jenis: 'pembuka', foto: fotoBuka }) });
-    await potret(peramban, { w: 1080, h: 1920, keluar: berkas('penutup.jpg'), html: htmlKartu({ ...umum, jenis: 'penutup', foto: fotoTutup }) });
-    await bacakan(naskah.narasi.join(' '), berkas('narasi.mp3'));
-    const keluar = berkas('video.mp4');
-    const { total } = await rakitVideo({
-      folder, rekaman: rekaman.berkas, mulaiRekaman: rekaman.mulai,
-      bingkai: berkas('bingkai.png'), pembuka: berkas('pembuka.jpg'), penutup: berkas('penutup.jpg'),
-      narasi: berkas('narasi.mp3'), kalimat: naskah.narasi, keluar,
+    // Foto orang AI di separuh bawah (pengganti wajah pembicara, maks 2); gagal → separuh bawah polos.
+    const foto = [];
+    for (const [i, a] of naskah.adegan.entries()) {
+      if (!a.foto?.trim() || foto.filter(Boolean).length >= 2) continue;
+      const u = await fotoAi(a.foto, '9:16', berkas(`foto-${i}.png`), catatan);
+      foto[i] = u ? fileURLToPath(u) : null;
+    }
+    const rencana = rencanaAdegan(naskah.adegan, { layar: layarApp, foto, hook: naskah.hook });
+    const logoKartu = produk.logo?.src ? mutlak(produk.logo.src, situs) : logo;
+    const r = await susunIklan({
+      folder, rencana, peramban, keluar: berkas('video.mp4'), musik: process.env.STUDIO_MUSIK || null,
+      kartu: { tema, produk, logo: logoKartu, ajakan: naskah.ajakan, kontak },
     });
-    hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(total), url: await simpan(keluar, 'video/mp4') });
-    hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(berkas('pembuka.jpg'), 'image/jpeg') });
+    hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.total), url: await simpan(r.berkas, 'video/mp4') });
+    hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   }
   if (catatan.length) naskah.catatan = catatan;
   return { naskah, caption, hasil, namaProduk: produk.nama };

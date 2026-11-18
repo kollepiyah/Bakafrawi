@@ -198,8 +198,6 @@ export const situsBawaan: Situs = {
   },
   analitik: {
     gaId: "G-RX55M0WHS4",
-    umamiId: "0afa9bbc-c2dc-4f47-aa42-f5f9b64cd5d6",
-    umamiShareUrl: "https://cloud.umami.is/share/vV07bB2X9mOnL7Wb/bakafrawi.com",
   },
 };
 

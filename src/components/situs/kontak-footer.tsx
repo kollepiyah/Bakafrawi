@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { BarChart3, Mail, MessageCircle } from "lucide-react";
+import { Mail, MessageCircle } from "lucide-react";
 import type { Situs } from "@/content/skema";
 import { Bagian, Label, TombolTautan } from "./bagian";
 import { FormKontak } from "./form-kontak";
@@ -18,7 +18,8 @@ export function Kontak({ situs }: { situs: Situs }) {
           Ceritakan kebutuhan Anda — website, aplikasi, sistem lembaga, atau ingin memakai Maktaba POS. Kami balas dengan rekomendasi &amp; estimasi secepatnya.
         </p>
         <FormKontak whatsappNomor={kontak.whatsappNomor} />
-        <div className="relative mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+        {/* Baris status form di atas sudah memberi jarak; mt-8 dulu membuat celah kosong besar di HP. */}
+        <div className="relative mt-4 flex flex-col justify-center gap-3 sm:flex-row">
           <TombolTautan href={`https://wa.me/${kontak.whatsappNomor}?text=${encodeURIComponent("Halo Bakafrawi, saya ingin konsultasi.")}`} baru varian="garis">
             <MessageCircle className="size-4" /> WhatsApp {kontak.whatsappTampil}
           </TombolTautan>
@@ -54,21 +55,18 @@ async function tahunIni() {
 export async function Footer({ situs }: { situs: Situs }) {
   const tahun = await tahunIni();
   return (
-    <footer className="border-t border-border py-9 text-sm text-redup">
-      <div className="wadah flex flex-col items-center justify-between gap-4 text-center sm:flex-row sm:text-left">
-        <div className="flex items-center gap-3">
-          <Image src="/logo.png" alt="" width={28} height={28} />
-          <div>
-            <div>© {tahun} Bakafrawi Project. All rights reserved.</div>
+    // Di HP logo, teks, dan tautan ditumpuk di tengah; dulu logo di samping teks dua baris sehingga
+    // teks terdorong miring dan tautan berderet berantakan (keluhan Kyai, 19 Nov 2026).
+    <footer className="border-t border-border pt-9 pb-[calc(2.25rem+env(safe-area-inset-bottom))] text-sm text-redup">
+      <div className="wadah flex flex-col items-center gap-5 text-center sm:flex-row sm:justify-between sm:text-left">
+        <div className="flex flex-col items-center gap-3 sm:flex-row">
+          <Image src="/logo.png" alt="" width={32} height={32} />
+          <div className="leading-relaxed">
+            <div>© {tahun} Bakafrawi Project<span className="hidden sm:inline">. All rights reserved.</span></div>
             <div>{situs.kontak.lokasi}</div>
           </div>
         </div>
-        <div className="flex items-center gap-5">
-          <a href="/privasi" className="text-muted-foreground hover:text-emas">Kebijakan privasi</a>
-          <a href={situs.analitik.umamiShareUrl} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-emas">
-            <BarChart3 className="size-4" /> Statistik pengunjung
-          </a>
-        </div>
+        <a href="/privasi" className="text-muted-foreground hover:text-emas">Kebijakan privasi</a>
       </div>
     </footer>
   );

@@ -92,7 +92,8 @@ export const skemaSitus = z.object({
     lokasi: teks,
     sosial: z.array(z.object({ jenis: z.enum(JENIS_SOSIAL), url })),
   }),
-  analitik: z.object({ gaId: teks, umamiId: teks, umamiShareUrl: teks }),
+  // Umami dilepas 19 Nov 2026; kunci lama di konten database dibuang otomatis oleh z.object.
+  analitik: z.object({ gaId: teks }),
 });
 
 export type Gambar = z.infer<typeof skemaGambar>;

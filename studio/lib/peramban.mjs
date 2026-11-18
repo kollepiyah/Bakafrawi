@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
-import { readdir, rename, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -21,8 +22,8 @@ export async function bukaPeramban() {
 }
 
 /** Potret HTML → PNG. `transparan` untuk lapisan bingkai video. */
-export async function potret(peramban, { html, keluar, w, h, transparan = false }) {
-  const hal = await peramban.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+export async function potret(peramban, { html, keluar, w, h, transparan = false, skala = 1 }) {
+  const hal = await peramban.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: skala });
   try {
     const berkasHtml = keluar.replace(/\.(png|jpe?g)$/i, '.html');
     await writeFile(berkasHtml, html);
@@ -48,46 +49,42 @@ function isiRahasia(teks = '') {
 const tidur = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Rekam aplikasi di layar HP mengikuti skenario. Mengembalikan { berkas, mulai } — `mulai` = detik
- * pertama yang layak tampil (sebelum itu layar masih putih memuat).
+ * Tangkapan layar aplikasi ukuran HP beresolusi tinggi (390×844, dpr 3 → 1170×2532) di tiap langkah
+ * skenario yang mengubah layar. Gambar tajam ini yang dizoom di video iklan (rekaman video 540 px
+ * dulu terlalu buram untuk dizoom). Layar kembar berurutan dibuang. → [{ berkas, lebar, tinggi }]
  */
-export async function rekamAplikasi(peramban, { url, langkah, folder, maksDetik = 40 }) {
-  // Perekam Playwright merekam piksel CSS apa adanya (deviceScaleFactor tidak ikut dibesarkan),
-  // jadi layar dibuat selebar 540 — masih tata letak HP — dan direkam pada ukuran yang sama.
-  const ukuran = { width: 540, height: 1168 };
-  const konteks = await peramban.newContext({
-    viewport: ukuran,
-    deviceScaleFactor: 1,
-    isMobile: true,
-    hasTouch: true,
-    locale: 'id-ID',
-    recordVideo: { dir: folder, size: ukuran },
-  });
-  const awal = Date.now();
-  let mulai = 0;
+export async function potretLayar(peramban, { url, langkah, folder, maks = 6, tunggu = Number(process.env.STUDIO_TUNGGU_LAYAR) || 6000 }) {
+  const konteks = await peramban.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: 'id-ID' });
+  const hasil = [];
+  let terakhir = null;
+  const jepret = async (hal) => {
+    const buf = await hal.screenshot({ type: 'png' });
+    const sidik = createHash('sha1').update(buf).digest('hex');
+    if (sidik === terakhir) return;
+    terakhir = sidik;
+    const berkas = path.join(folder, `layar-${hasil.length}.png`);
+    await writeFile(berkas, buf);
+    hasil.push({ berkas, lebar: 1170, tinggi: 2532 });
+  };
   const hal = await konteks.newPage();
   try {
     await hal.goto(url, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => {});
-    await tidur(800);
-    mulai = (Date.now() - awal) / 1000;
+    // Banyak aplikasi menampilkan logo pembuka beberapa detik (Maktaba ±5 dtk).
+    await tidur(tunggu);
+    await jepret(hal);
     for (const l of langkah) {
-      if ((Date.now() - awal) / 1000 - mulai > maksDetik) break;
+      if (hasil.length >= maks) break;
       try {
         await jalankan(hal, l);
+        if (['buka', 'klik', 'gulir'].includes(l.aksi)) await jepret(hal);
       } catch (e) {
         console.error(`Langkah ${l.aksi} "${l.target ?? ''}" gagal: ${e.message.split('\n')[0]}`);
       }
     }
-    await tidur(1200);
   } finally {
-    await hal.close();
     await konteks.close();
   }
-  const webm = (await readdir(folder)).find((f) => f.endsWith('.webm'));
-  if (!webm) throw new Error('Rekaman tidak terbentuk.');
-  const berkas = path.join(folder, 'rekaman.webm');
-  await rename(path.join(folder, webm), berkas);
-  return { berkas, mulai };
+  return hasil;
 }
 
 async function jalankan(hal, l) {

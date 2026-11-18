@@ -158,11 +158,7 @@ export function BagianKontak({ draf, ubah }: Props) {
         />
       </Kartu>
       <Kartu judul="Analitik">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Kolom label="Google Analytics ID" value={draf.analitik.gaId} onChange={(v) => ubah((d) => void (d.analitik.gaId = v))} petunjuk="Mis. G-XXXXXXX; kosongkan untuk mematikan." />
-          <Kolom label="Umami website ID" value={draf.analitik.umamiId} onChange={(v) => ubah((d) => void (d.analitik.umamiId = v))} />
-        </div>
-        <Kolom label="Tautan statistik publik Umami (di footer)" value={draf.analitik.umamiShareUrl} onChange={(v) => ubah((d) => void (d.analitik.umamiShareUrl = v))} />
+        <Kolom label="Google Analytics ID" value={draf.analitik.gaId} onChange={(v) => ubah((d) => void (d.analitik.gaId = v))} petunjuk="Mis. G-XXXXXXX; kosongkan untuk mematikan." />
       </Kartu>
     </>
   );

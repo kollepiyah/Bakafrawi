@@ -18,7 +18,7 @@ export default function Privasi() {
       <h2>Pengunjung situs</h2>
       <ul>
         <li>Situs ini tidak meminta akun dan tidak memasang cookie iklan.</li>
-        <li>Statistik pengunjung memakai Umami: hanya jumlah kunjungan, halaman, dan perangkat secara umum, tanpa cookie dan tanpa identitas pribadi.</li>
+        <li>Statistik pengunjung memakai Google Analytics: hanya jumlah kunjungan, halaman, dan perangkat secara umum, tanpa identitas pribadi.</li>
         <li>Formulir kontak (nama, email, nomor WhatsApp, pesan) diteruskan ke email kami lewat layanan Web3Forms, atau membuka WhatsApp Anda bila layanan itu tidak aktif. Isinya tidak disimpan di basis data situs dan hanya dipakai untuk membalas pertanyaan Anda.</li>
       </ul>
 

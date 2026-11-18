@@ -3,13 +3,16 @@
 //   • satu adegan per kalimat (1,5–3 dtk), tiap adegan bergerak: zoom halus ke bagian penting,
 //     HP melayang miring, kartu ajakan — dirangkai transisi pendek + bunyi whoosh;
 //   • subtitle 2–3 kata, kata yang sedang diucapkan disorot, waktunya dari batas kata edge-tts
-//     (bukan dibagi rata per huruf seperti rakit.mjs lama);
+//     (bukan dibagi rata per huruf seperti perakit lama);
 //   • musik latar yang mengecil otomatis saat narasi bicara (sidechain).
-import { copyFile, cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { ffmpeg, probe, ulangi } from './bank/alat.mjs';
 import { FOLDER_HURUF } from './bank/huruf.mjs';
+import { potret } from './peramban.mjs';
+import { htmlIklan, TENGAH_SUBTITLE } from './templat.mjs';
 
 export const W = 1080;
 export const H = 1920;
@@ -65,64 +68,78 @@ export function jadwal(durasiSuara, { jeda = 0.35, minimal = 1.6, awalSuara = 0.
   return { adegan, total: t + TRANSISI };
 }
 
-/** Kelompokkan kata jadi potongan subtitle ≤ maks kata; titik/koma/tanya mengakhiri potongan. */
+/**
+ * Kelompokkan kata jadi potongan subtitle ≤ maks kata; titik/koma/tanya mengakhiri potongan. Tiap
+ * frasa dibagi rata (4 kata → 2+2, bukan 3+1) supaya tak ada satu kata yatim seperti "BIO!".
+ */
 export function kelompokKata(kata, maks = 3) {
-  const hasil = [];
-  let k = [];
+  const frasa = [];
+  let f = [];
   for (const w of kata) {
-    k.push(w);
-    if (k.length >= maks || /[.,!?]$/.test(w.teks)) {
-      hasil.push(k);
-      k = [];
+    f.push(w);
+    if (/[.,!?]$/.test(w.teks)) {
+      frasa.push(f);
+      f = [];
     }
   }
-  if (k.length) hasil.push(k);
-  return hasil;
+  if (f.length) frasa.push(f);
+  return frasa.flatMap((fr) => {
+    const n = Math.ceil(fr.length / maks);
+    const hasil = [];
+    let i = 0;
+    for (let k = 0; k < n; k++) {
+      const ukuran = Math.floor(fr.length / n) + (k < fr.length % n ? 1 : 0);
+      hasil.push(fr.slice(i, i + ukuran));
+      i += ukuran;
+    }
+    return hasil;
+  });
 }
 
 const waktuAss = (d) => {
   const j = Math.floor(d / 3600), m = Math.floor((d % 3600) / 60), s = d % 60;
   return `${j}:${String(m).padStart(2, '0')}:${s.toFixed(2).padStart(5, '0')}`;
 };
-const escAss = (s) => String(s).replace(/[{}\\]/g, '').toUpperCase();
+const bersih = (t) => String(t).replace(/[{}\\]/g, '').replace(/[.,!;:]+$/, '');
+const pokok = (t) => bersih(t).toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+
+/** Kata disorot (serif miring): yang ditandai Claude, mengandung angka, atau bagian nama produk. */
+export function kataSorot(teks, sorot = [], nama = '') {
+  const daftar = new Set([...sorot.flatMap((x) => String(x).split(/\s+/)), ...String(nama).split(/\s+/)].map(pokok).filter(Boolean));
+  return /\d/.test(teks) || daftar.has(pokok(teks));
+}
 
 /**
- * ASS subtitle kata-per-kata. adegan: [{ kata, suaraMulai, gaya: 'hook'|'biasa' }].
- * Tiap kata punya baris sendiri: potongannya tampil utuh, kata yang sedang diucapkan diwarnai aksen
- * dan sedikit membesar. Warna aksen dalam #RRGGBB.
+ * ASS subtitle gaya Reels teknologi: 1–2 kata sekali tampil di pita tengah layar, muncul dengan pop.
+ * Kata sorot memakai serif miring, kata lain huruf tebal kecil. adegan: [{ kata, suaraMulai,
+ * tone: 'terang'|'gelap', sorot }]. Tiap potongan tampil sampai potongan berikutnya mulai.
  */
-export function assKata(adegan, { aksen = '#F5C542', huruf = 'Archivo Black' } = {}) {
-  const bgr = (hex) => `&H00${hex.slice(5, 7)}${hex.slice(3, 5)}${hex.slice(1, 3)}&`.toUpperCase();
+export function assKata(adegan, { tengah = 1065, tebal = 'Archivo Black', serif = 'DM Serif Display', nama = '' } = {}) {
   const baris = [];
   for (const a of adegan) {
-    const gaya = a.gaya === 'hook' ? 'Hook' : 'Kata';
-    for (const potong of kelompokKata(a.kata, a.gaya === 'hook' ? 4 : 3)) {
-      potong.forEach((w, i) => {
-        const mulai = a.suaraMulai + w.mulai;
-        const akhir = a.suaraMulai + (i < potong.length - 1 ? potong[i + 1].mulai : w.selesai + 0.25);
-        const teks = potong.map((x, j) => (j === i
-          ? `{\\c${bgr(aksen)}\\fscx112\\fscy112}${escAss(x.teks)}{\\c&H00FFFFFF&\\fscx100\\fscy100}`
-          : escAss(x.teks))).join(' ');
-        // Kata pertama potongan "muncul" kecil → besar (pop) supaya terasa hidup.
-        const pop = i === 0 ? '{\\fscx80\\fscy80\\t(0,90,\\fscx100\\fscy100)}' : '';
-        baris.push({ mulai, akhir, gaya, teks: `${pop}${teks}` });
-      });
+    const warna = a.tone === 'gelap' ? '&H00FFFFFF&' : '&H00151515&';
+    for (const potong of kelompokKata(a.kata, 2)) {
+      const teks = potong.map((w) => (kataSorot(w.teks, a.sorot, nama)
+        ? `{\\fn${serif}\\i1\\fs118}${bersih(w.teks)}`
+        : `{\\fn${tebal}\\i0\\fs96}${bersih(w.teks).toLowerCase()}`)).join(' ');
+      const mulai = a.suaraMulai + potong[0].mulai;
+      const akhir = a.suaraMulai + potong.at(-1).selesai + 0.3;
+      baris.push({ mulai, akhir, teks: `{\\an5\\pos(${W / 2},${tengah})\\c${warna}\\fscx86\\fscy86\\t(0,90,\\fscx100\\fscy100)}${teks}` });
     }
   }
   // Tak boleh ada dua baris tampil bersamaan (ASS menumpuknya): tiap baris berhenti saat baris berikutnya mulai.
   baris.sort((p, q) => p.mulai - q.mulai);
   baris.forEach((b, i) => { if (baris[i + 1]) b.akhir = Math.min(b.akhir, baris[i + 1].mulai); });
-  const dialog = baris.filter((b) => b.akhir > b.mulai).map((b) => `Dialogue: 0,${waktuAss(b.mulai)},${waktuAss(b.akhir)},${b.gaya},,0,0,0,,${b.teks}`);
+  const dialog = baris.filter((b) => b.akhir > b.mulai).map((b) => `Dialogue: 0,${waktuAss(b.mulai)},${waktuAss(b.akhir)},Kata,,0,0,0,,${b.teks}`);
   return `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${W}
 PlayResY: ${H}
-WrapStyle: 0
+WrapStyle: 2
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Kata,${huruf},82,&H00FFFFFF,&H00FFFFFF,&H40121620,&H40121620,0,0,0,0,100,100,1,0,3,18,0,2,70,70,470,1
-Style: Hook,${huruf},108,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,0,0,0,0,100,100,1,0,1,8,4,5,80,80,0,1
+Style: Kata,${tebal},96,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,5,40,40,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -137,9 +154,10 @@ const kurva = (a, b) => `(${a}+(${b}-${a})*(on/N)*(on/N)*(3-2*(on/N)))`; // smoo
 /**
  * Gambar tegak resolusi tinggi → klip 1080×1920 yang bergerak: zoom z0→z1 sambil menggeser fokus
  * (fx,fy relatif 0–1 terhadap pita 9:16 yang dipilih). pita = posisi atas pita 9:16 (0–1) di gambar
- * yang lebih tinggi dari 9:16.
+ * yang lebih tinggi dari 9:16. posisi = letak titik fokus di layar (0,42 = agak ke atas, supaya
+ * angka yang disorot tidak tertutup kotak subtitle di sepertiga bawah).
  */
-export async function klipGerak(gambar, keluar, durasi, { z0 = 1, z1 = 1.25, f0 = [0.5, 0.5], f1 = [0.5, 0.5], pita = 0 } = {}) {
+export async function klipGerak(gambar, keluar, durasi, { z0 = 1, z1 = 1.25, f0 = [0.5, 0.5], f1 = [0.5, 0.5], pita = 0, posisi = 0.5 } = {}) {
   const info = await probe(gambar);
   const lebar = info.lebar, tinggi = info.tinggi;
   const tPita = Math.min(tinggi, Math.round((lebar * 16) / 9));
@@ -149,11 +167,49 @@ export async function klipGerak(gambar, keluar, durasi, { z0 = 1, z1 = 1.25, f0 
   const filter = [
     `crop=${lebar}:${tPita}:0:${y}`,
     `scale=${W * 2}:${H * 2}:flags=lanczos`,
-    `zoompan=z='${z}':x='max(0,min(iw-iw/zoom,${fx}*iw-iw/zoom/2))':y='max(0,min(ih-ih/zoom,${fy}*ih-ih/zoom/2))':d=${N}:s=${W}x${H}:fps=${FPS}`,
+    `zoompan=z='${z}':x='max(0,min(iw-iw/zoom,${fx}*iw-iw/zoom/2))':y='max(0,min(ih-ih/zoom,${fy}*ih-${posisi}*ih/zoom))':d=${N}:s=${W}x${H}:fps=${FPS}`,
     'setsar=1,format=yuv420p',
   ].join(',');
   await ffmpeg(['-y', '-loop', '1', '-i', gambar, '-vf', filter, '-frames:v', String(N), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', keluar]);
   return keluar;
+}
+
+// ------------------------------------------------------------ rencana adegan (murni)
+
+const jepit = (v, a, b) => Math.min(b, Math.max(a, Number.isFinite(v) ? v : (a + b) / 2));
+
+/**
+ * Naskah adegan Claude → rencana render. layar: [{ berkas, lebar, tinggi }]; foto: berkas foto AI per
+ * nomor adegan (null bila gagal/tanpa kunci). Tiap adegan → { teks, sorot, tone, atas, bawah, gerak }:
+ * atas = isi kartu separuh atas, bawah = foto terakhir yang sudah muncul (pengganti wajah pembicara).
+ */
+export function rencanaAdegan(adegan, { layar = [], foto = [], hook = {} } = {}) {
+  const ambilLayar = (i) => (layar.length ? layar[((Math.trunc(i) || 0) % layar.length + layar.length) % layar.length] : null);
+  let bawah = null;
+  return adegan.map((a, i) => {
+    if (foto[i]) bawah = foto[i];
+    const dasarBawah = { variasi: i };
+    const l = ambilLayar(a.layar);
+    let jenis = i === 0 ? 'judul' : a.atas;
+    if ((jenis === 'layar' || jenis === 'hp') && !l) jenis = 'logo';
+    const dasar = { ...dasarBawah, teks: String(a.teks).trim(), sorot: a.sorot ?? [], gerak: { z0: 1, z1: 1.06, f0: [0.5, 0.45], f1: [0.5, 0.42] } };
+    if (jenis === 'cta') return { ...dasar, tone: 'terang', atas: { jenis: 'cta' }, bawah: null };
+    if (jenis === 'judul') return { ...dasar, tone: 'terang', atas: { jenis: 'judul', judul: hook.judul || a.teks, sorot: hook.sorot ?? '', coretan: hook.coretan ?? '' }, bawah };
+    if (jenis === 'hp') {
+      const lain = layar.filter((x) => x !== l).slice(0, 2).map((x) => x.berkas);
+      return { ...dasar, tone: 'terang', atas: { jenis: 'hp', layar: [l.berkas, ...lain] }, bawah };
+    }
+    if (jenis === 'layar') {
+      return {
+        ...dasar, tone: 'gelap', bawah,
+        atas: { jenis: 'layar', berkas: l.berkas, lebar: l.lebar, tinggi: l.tinggi, fx: jepit(a.fokus_x, 0, 1), fy: jepit(a.fokus_y, 0, 1), zoom: jepit(a.zoom, 1, 1.15) },
+        // Zoom mendatar dibatasi 1,15: UI HP berupa kartu selebar layar, potongan yang lebih sempit
+        // memotong teks di tepi dan terlihat asal. Kesan "zoom" datang dari pita setinggi kartu + dorongan pelan.
+        gerak: { z0: 1, z1: 1.1, f0: [0.5, 0.45], f1: [0.5, 0.3] },
+      };
+    }
+    return { ...dasar, tone: 'terang', atas: { jenis: 'logo' }, bawah };
+  });
 }
 
 // ------------------------------------------------------------ musik & bunyi (buatan sendiri, bebas hak cipta)
@@ -225,6 +281,36 @@ export async function rakitIklan({ folder, klip, jadwalAdegan, total, suara, ass
   // 3. Satukan.
   await ffmpeg(['-y', '-i', 'gambar.mp4', '-i', 'suara.wav', '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', keluar], { cwd: folder });
   return total;
+}
+
+/**
+ * Seluruh alur satu video iklan dari rencana adegan → { berkas, total, sampul }.
+ * kartu: data kartu HTML bersama ({ tema, produk, logo, ajakan, kontak }).
+ */
+export async function susunIklan({ folder, rencana, peramban, kartu, musik = null, keluar, log = console.log }) {
+  const suara = [];
+  for (const [i, a] of rencana.entries()) {
+    suara.push(await suaraKata(a.teks, path.join(folder, `suara-${i}.mp3`)));
+    log(`🎙 ${i + 1}: ${suara[i].durasi.toFixed(2)} dtk, ${suara[i].kata.length} kata`);
+  }
+  const { adegan: jadwalAdegan, total } = jadwal(suara.map((s) => s.durasi));
+
+  const url = (b) => (b && !/^(https?|file):/.test(b) ? pathToFileURL(b).href : b);
+  const huruf = { tebal: url(path.join(FOLDER_HURUF, 'ArchivoBlack-Regular.ttf')), tangan: url(path.join(FOLDER_HURUF, 'Kalam-Bold.ttf')) };
+  const klip = [];
+  for (const [i, a] of rencana.entries()) {
+    const gambar = path.join(folder, `kartu-${i}.png`);
+    const atas = { ...a.atas, berkas: url(a.atas.berkas), layar: a.atas.layar?.map(url) };
+    await potret(peramban, { w: W, h: H, skala: 2, keluar: gambar, html: htmlIklan({ ...kartu, atas, bawah: url(a.bawah), variasi: a.variasi, tone: a.tone, huruf }) });
+    klip.push(await klipGerak(gambar, path.join(folder, `klip-${i}.mp4`), jadwalAdegan[i].durasi, a.gerak));
+  }
+
+  const ass = assKata(rencana.map((a, i) => ({ kata: suara[i].kata, suaraMulai: jadwalAdegan[i].suaraMulai, tone: a.tone, sorot: a.sorot })), { tengah: TENGAH_SUBTITLE, nama: kartu.produk?.nama ?? '' });
+  await rakitIklan({ folder, klip, jadwalAdegan, total, suara, ass, musik, keluar });
+  // Sampul Reels: bingkai detik ke-1 (judul besar + subtitle pembuka sudah tampil).
+  const sampul = path.join(folder, 'sampul.jpg');
+  await ffmpeg(['-y', '-ss', '1', '-i', keluar, '-frames:v', '1', '-q:v', '3', sampul]);
+  return { berkas: keluar, total, sampul };
 }
 
 export const _uji = { kurva };

@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Ikon aplikasi = logo kaligrafi Bakafrawi (public/logo.png) di latar gelap. Lapisan depan PNG per
+     kepadatan berisi logo 70dp di kanvas 108dp, jadi tetap utuh di masker bulat/kotak launcher.
+     Monokrom (ikon bertema Android 13+) = siluet putih logo yang sama. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/latar" />
-    <foreground android:drawable="@drawable/ikon_depan" />
-    <monochrome android:drawable="@drawable/ikon_depan" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
 </adaptive-icon>
