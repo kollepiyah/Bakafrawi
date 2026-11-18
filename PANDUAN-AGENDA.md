@@ -32,7 +32,7 @@ Agenda tersinkron **dua arah** dengan Google Calendar akun Kyai:
 
 ### 3. Database
 ```bash
-npx supabase db push
+npx supabase db push --remote
 ```
 (migrasi `20261118210000_agenda.sql`: tabel `agenda`, kolom Google di `studio_pengaturan`, detak 5 menit.)
 

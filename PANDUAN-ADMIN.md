@@ -9,7 +9,7 @@ bisa diubah dari sana tanpa coding. Setelah **Simpan**, situs langsung berubah.
 2. **Jalankan migrasi** dari folder ini:
    ```
    npx supabase link --project-ref <REF-PROYEK>
-   npx supabase db push
+   npx supabase db push --remote
    ```
 3. **Buat akun admin:** Supabase → Authentication → Users → *Add user* → email & kata sandi
    (centang *Auto Confirm User*). Lalu di **SQL Editor**:

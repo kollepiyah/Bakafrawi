@@ -22,7 +22,7 @@ Pasang (sekali):
 3. **Rahasia GitHub repo Bakafrawi** (Actions): `RCLONE_DRIVE_TOKEN`, `RCLONE_DRIVE_CLIENT_ID`,
    `RCLONE_DRIVE_CLIENT_SECRET` — isinya sama dengan rahasia bernama sama di repo Lek Kopi (nilainya tak
    bisa dibaca dari GitHub: ambil dari `rclone config dump` di PC, bagian `gdrive`).
-4. `npx supabase db push` (migrasi `20261118220000_studio_merek.sql` dan `20261118230000_studio_bank.sql`).
+4. `npx supabase db push --remote` (migrasi `20261118220000_studio_merek.sql` dan `20261118230000_studio_bank.sql`).
 5. Bakafrawi Studio → Konten → **Sambungan**: tekan **aktifkan** di Lek Kopi, dan tempel token Instagram
    @lekkopi.id. Dalam ≤ 5 menit mesin mengindeks folder `Lek Kopi Konten/bank` di Drive; sesudah itu ide
    pertama bisa dikirim.
@@ -65,7 +65,7 @@ tidak perlu menyala. Repo publik → menit Actions gratis.
 
 1. **Migrasi database** (tabel `studio_tugas` + bucket `studio`):
    ```
-   npx supabase db push
+   npx supabase db push --remote
    ```
 2. **Rahasia GitHub** — github.com/kollepiyah/Bakafrawi → Settings → Secrets and variables → Actions:
    - `SUPABASE_URL` — sama dengan di Vercel
@@ -107,7 +107,7 @@ caption yang terakhir jadi lebih santai"). Chat bebas memakai Claude Haiku 5.5 (
 `ANTHROPIC_API_KEY` di Vercel.
 
 ### Pasang (sekali)
-1. Migrasi: `npx supabase db push` (tabel `studio_pengaturan`, kolom tayang).
+1. Migrasi: `npx supabase db push --remote` (tabel `studio_pengaturan`, kolom tayang).
 2. **Bot Telegram baru:** Telegram → @BotFather → `/newbot` → nama "Bakafrawi Studio" → salin token.
    Buat dua kode acak (jalankan dua kali): `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`
    — pertama = rahasia webhook, kedua = kode daftar.
@@ -131,7 +131,7 @@ Tanpa `GEMINI_API_KEY` → latar polos, dengan catatan di kartu tugas.
 ## Pemicu dari Supabase (gelombang 3)
 
 Supabase memeriksa tiap 5 menit dan menyalakan mesin hanya bila ada kerja — jadwal 19.00 jadi tepat waktu.
-1. `npx supabase db push` (migrasi `20261118200000_studio_andal.sql`).
+1. `npx supabase db push --remote` (migrasi `20261118200000_studio_andal.sql`).
 2. Buat token GitHub *Fine-grained* (repo `Bakafrawi` saja, **Actions: Read and write**) — token yang sama
    boleh dipakai untuk `GITHUB_STUDIO_TOKEN` di Vercel.
 3. Supabase → SQL Editor, jalankan sekali (ganti isinya dengan token):
