@@ -36,8 +36,8 @@ export function Agenda({ sesi, kepala, pesanAwal }: { sesi: Session | null; kepa
   const [seharian, setSeharian] = useState(false);
 
   const muat = useCallback(async () => {
-    const [a, g] = await Promise.all([api("/api/agenda"), api("/api/agenda/google")]);
     setKini(Date.now());
+    const [a, g] = await Promise.all([api("/api/agenda"), api("/api/agenda/google")]);
     if (a.ok) setAcara(a.acara as Acara[]);
     else setPesan(`Gagal memuat agenda: ${a.pesan ?? ""}`);
     if (g.ok) setGoogle(g as unknown as StatusGoogle);
@@ -153,7 +153,7 @@ export function Agenda({ sesi, kepala, pesanAwal }: { sesi: Session | null; kepa
           )}
         </section>
 
-        <form key={diubah?.id ?? "baru"} onSubmit={simpan} className="grid gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6">
+        <form key={`${diubah?.id ?? "baru"}-${kini}`} onSubmit={simpan} className="grid gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6">
           <h2 className="flex items-center gap-2 font-heading text-lg">
             {diubah ? <Pencil className="size-5 text-emas" /> : <CalendarPlus className="size-5 text-emas" />}
             {diubah ? "Ubah acara" : "Tambah acara"}
@@ -166,7 +166,7 @@ export function Agenda({ sesi, kepala, pesanAwal }: { sesi: Session | null; kepa
           </label>
           <div className="grid gap-4 sm:grid-cols-3">
             <Kolom label="Tanggal">
-              <input name="tanggal" type="date" required defaultValue={awal.tanggal ?? tanggalWIB(new Date())} className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm" />
+              <input name="tanggal" type="date" required defaultValue={awal.tanggal ?? (kini ? tanggalWIB(new Date(kini)) : undefined)} className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm" />
             </Kolom>
             {seharian ? (
               <Kolom label="Sampai tanggal (opsional)">

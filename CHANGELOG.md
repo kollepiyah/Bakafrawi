@@ -1,5 +1,24 @@
 # CHANGELOG — bakafrawi.com
 
+## Bakafrawi Studio tahap 1 — Beranda, Agenda, APK (belum tayang)
+
+- **Admin jadi Bakafrawi Studio**: menu Beranda · Agenda · Konten (Studio AI) · Situs (editor). Beranda
+  merangkum agenda hari ini, 7 hari ke depan, dan konten yang menunggu persetujuan/terjadwal/gagal.
+- **Agenda tersinkron dua arah dengan Google Calendar** (`calendar.events`, OAuth sekali dari menu Agenda).
+  Tambah/ubah/hapus dari layar, APK, atau bot langsung didorong ke Google; isi Google 1 hari lalu–60 hari
+  ke depan ditarik tiap 5 menit. Perubahan lokal yang belum terkirim menang dan dicoba ulang tiap detak.
+  Acara yang hilang dari jendela dicek satu per satu (dihapus di Google → batal; digeser → diperbarui).
+- **Detak 5 menit dari Supabase** (`agenda_detak` → `/api/agenda/detak`, kode di Vault) karena cron Vercel
+  gratis hanya sekali sehari: sinkron, pengingat Telegram 30 menit sebelum acara, ringkasan pagi 05.30 WIB.
+- **Bot Telegram**: `/agenda`, `/agenda besok`, dan chat bebas ("besok jam 9 rapat di MU", "geser ke jam 10")
+  lewat alat lihat/tambah/ubah/hapus acara yang memakai aturan server yang sama.
+- **APK Android native (Kotlin + Jetpack Compose)** di `aplikasi-android/`: masuk akun admin, Beranda,
+  Agenda (tambah/ubah/hapus), notifikasi 30 menit sebelum acara (alarm disegarkan tiap jam oleh WorkManager,
+  bertahan setelah HP restart). Konten masih membuka Studio web.
+- Aturan tanggal WIB, acara seharian (selesai inklusif di formulir, eksklusif di simpanan seperti Google),
+  konversi Google, rencana sinkron, dan teks pesan ada di `src/lib/agenda-murni.ts` + tes (`npm run uji`).
+- Migrasi `20261118210000_agenda.sql`. Panduan: `PANDUAN-AGENDA.md`.
+
 ## Tahap 3, gelombang 3 — Studio lebih andal (belum tayang)
 
 - **Tugas tak lagi tersangkut.** Bila mesin mati di tengah jalan (batas 30 menit / galat GitHub), konten

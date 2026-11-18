@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema jendela sebelum Compose tampil: gelap seperti situs, supaya tak berkedip putih. -->
+    <style name="Tema.Bakafrawi" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/latar</item>
+        <item name="android:statusBarColor">@color/latar</item>
+        <item name="android:navigationBarColor">@color/latar</item>
+    </style>
+</resources>

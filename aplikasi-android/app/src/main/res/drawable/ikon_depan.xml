@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ikon sementara: kalender emas (zona aman ikon adaptif = lingkaran 66dp di tengah 108dp). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- badan kalender -->
+    <path android:fillColor="#C9A24B" android:pathData="M36,38h36a4,4 0,0 1,4 4v28a4,4 0,0 1,-4 4h-36a4,4 0,0 1,-4 -4v-28a4,4 0,0 1,4 -4z" />
+    <!-- area tanggal (gelap) -->
+    <path android:fillColor="#0C0E12" android:pathData="M36,48h36v22h-36z" />
+    <!-- cincin -->
+    <path android:fillColor="#C9A24B" android:pathData="M42,33h4v9h-4z M62,33h4v9h-4z" />
+    <!-- titik-titik tanggal -->
+    <path android:fillColor="#E3C989" android:pathData="M40,52h6v5h-6z M51,52h6v5h-6z M62,52h6v5h-6z M40,61h6v5h-6z M51,61h6v5h-6z" />
+</vector>

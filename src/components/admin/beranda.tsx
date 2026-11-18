@@ -17,8 +17,10 @@ type Ringkasan = {
 export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: ReactNode; buka: (h: "agenda" | "studio") => void }) {
   const [r, setR] = useState<Ringkasan | null>(null);
   const [pesan, setPesan] = useState("");
+  const [jam, setJam] = useState<number | null>(null); // jam WIB saat dimuat (render harus murni)
 
   const muat = useCallback(async () => {
+    setJam(Number(jamWIB(new Date().toISOString()).slice(0, 2)));
     const j = await apiAdmin(sesi)("/api/beranda");
     if (j.ok) setR(j as unknown as Ringkasan);
     else setPesan(j.pesan ?? "Gagal memuat ringkasan.");
@@ -29,10 +31,7 @@ export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: 
     return () => clearTimeout(t);
   }, [muat]);
 
-  const salam = (() => {
-    const jam = Number(jamWIB(new Date().toISOString()).slice(0, 2));
-    return jam < 11 ? "Selamat pagi" : jam < 15 ? "Selamat siang" : jam < 18 ? "Selamat sore" : "Selamat malam";
-  })();
+  const salam = jam === null ? "Assalamu'alaikum" : jam < 11 ? "Selamat pagi" : jam < 15 ? "Selamat siang" : jam < 18 ? "Selamat sore" : "Selamat malam";
 
   return (
     <div className="pb-16">
@@ -40,7 +39,7 @@ export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: 
       <main className="mx-auto max-w-4xl space-y-6 px-4 pt-6">
         <div>
           <h1 className="font-heading text-2xl">{salam}, Kyai</h1>
-          <p className="text-sm text-muted-foreground">{namaTanggal(r?.tanggal ?? tanggalWIB(new Date()))}</p>
+          {r && <p className="text-sm text-muted-foreground">{namaTanggal(r.tanggal)}</p>}
         </div>
         {pesan && <p className="text-sm text-red-300">{pesan}</p>}
         {!r ? (
