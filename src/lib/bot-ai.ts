@@ -162,7 +162,12 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
   switch (nama) {
     case "buat_konten": {
       const slug = String(isi.produk_slug);
-      if (!situs.produk.some((p) => p.slug === slug)) return `Produk "${slug}" tidak ada. Pilihan: ${situs.produk.map((p) => p.slug).join(", ")}`;
+      const produk = situs.produk.find((p) => p.slug === slug);
+      if (!produk) return `Produk "${slug}" tidak ada. Pilihan: ${situs.produk.map((p) => p.slug).join(", ")}`;
+      // Video produk = rekaman aplikasi: tanpa skenario demo maupun tautan, mesin pasti gagal (studio.mjs skenario()).
+      if (isi.jenis === "video" && !produk.demo?.url && !produk.tautan.length) {
+        return `Produk ${produk.nama} belum punya tautan/skenario demo untuk direkam — tawarkan poster saja, atau bila yang dimaksud video kafe Lek Kopi, pakai pesan_video_merek (merek lekkopi).`;
+      }
       const { tugas, dipicu } = await buatTugas({
         produk_slug: slug,
         jenis: isi.jenis === "video" ? "video" : "gambar",
@@ -250,7 +255,8 @@ Aturan:
 - Untuk memesan, melihat, mengubah caption, atau menayangkan konten, PAKAI ALAT — jangan pernah mengaku sudah melakukan sesuatu tanpa hasil alat.
 - Menayangkan ke Instagram hanya bila Kyai memintanya jelas. Kalau ragu konten mana yang dimaksud, lihat daftar_konten dulu lalu tanyakan.
 - Agenda: hitung sendiri tanggal dari kata seperti "besok", "Jumat depan", "ba'da Isya" (≈19.30) dari tanggal sekarang; semua jam WIB. Bila jam tidak disebut dan acara bukan seharian, tanyakan dulu. Sebelum ubah/hapus, cari id lewat lihat_agenda. Setelah menyimpan, sebutkan hari, tanggal, dan jamnya supaya Kyai bisa mengecek.
-- Merek lain selain Bakafrawi (mis. Lek Kopi, slug lekkopi): videonya dari bank foto/video kafe — pakai pesan_video_merek, bukan buat_konten. Naskahnya dikirim dulu untuk disetujui lewat tombol; revisi lewat revisi_naskah.
+- Merek lain selain Bakafrawi (mis. Lek Kopi, slug lekkopi): videonya dari bank foto/video kafe — pakai pesan_video_merek, bukan buat_konten.
+- AWAS nama ganda: "Lek Kopi" = kedai/kafe (merek lekkopi: minuman, suasana, promo kafe → pesan_video_merek), sedangkan produk "lek-kopi" = aplikasi kasir Lek Kopi POS buatan Bakafrawi (buat_konten, rekaman aplikasi). Kalau Kyai bilang "video Lek Kopi" tanpa menyebut aplikasi/kasir, maksudnya kafe. Ragu → tanyakan. Naskahnya dikirim dulu untuk disetujui lewat tombol; revisi lewat revisi_naskah.
 - Ide konten: beri daftar bernomor yang singkat; Kyai bisa membalas "nomor 2 jadikan poster".
 - Jangan menyebut harga paket atau angka yang tidak kamu ketahui. Jangan membagikan token/kunci apa pun.`;
 }
