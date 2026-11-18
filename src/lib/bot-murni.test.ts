@@ -8,6 +8,8 @@ test("uraiPerintah", () => {
   assert.deepEqual(uraiPerintah("/start ABC123"), { jenis: "daftar", kode: "ABC123" });
   assert.deepEqual(uraiPerintah("/start"), { jenis: "bantuan" });
   assert.deepEqual(uraiPerintah("halo"), { jenis: "lain" });
+  assert.deepEqual(uraiPerintah("/agenda"), { jenis: "agenda", besok: false });
+  assert.deepEqual(uraiPerintah("/agenda@BakafrawiBot Besok"), { jenis: "agenda", besok: true });
 });
 
 test("cariProduk", () => {

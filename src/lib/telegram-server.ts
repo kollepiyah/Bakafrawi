@@ -28,6 +28,7 @@ export async function pasangWebhook(asal: string) {
   });
   await tg("setMyCommands", {
     commands: [
+      { command: "agenda", description: "Acara hari ini (/agenda besok)" },
       { command: "poster", description: "Buat poster: /poster maktaba [ai]" },
       { command: "video", description: "Buat video: /video maktaba [ai]" },
       { command: "status", description: "5 konten terakhir" },

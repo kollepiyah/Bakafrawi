@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Admin", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Bakafrawi Studio", robots: { index: false, follow: false } };
 
 export default function LayoutAdmin({ children }: LayoutProps<"/admin">) {
   return <div className="min-h-dvh bg-background">{children}</div>;

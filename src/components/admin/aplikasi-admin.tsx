@@ -6,15 +6,41 @@ import { ExternalLink, Loader2, LogOut } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { jalurGudang, supabase } from "@/lib/gudang-admin";
+import { Agenda } from "./agenda";
+import { Beranda } from "./beranda";
 import { Editor } from "./editor";
 import { Studio } from "./studio";
 
 type Status = "memuat" | "keluar" | "bukan-admin" | "admin";
+type Halaman = "beranda" | "agenda" | "studio" | "situs";
+const MENU: { id: Halaman; label: string }[] = [
+  { id: "beranda", label: "Beranda" },
+  { id: "agenda", label: "Agenda" },
+  { id: "studio", label: "Konten" },
+  { id: "situs", label: "Situs" },
+];
+
+/** Halaman awal & pesan dari alamat (mis. kembali dari izin Google: ?halaman=agenda&google=ok). */
+function bacaAlamat(): { halaman: Halaman; google?: string } {
+  const q = new URLSearchParams(location.search);
+  const h = q.get("halaman") as Halaman | null;
+  return { halaman: h && MENU.some((m) => m.id === h) ? h : "beranda", google: q.get("google") ?? undefined };
+}
 
 export function AplikasiAdmin() {
   const [status, setStatus] = useState<Status>(jalurGudang === "lokal" ? "admin" : "memuat");
   const [sesi, setSesi] = useState<Session | null>(null);
-  const [halaman, setHalaman] = useState<"konten" | "studio">("konten");
+  const [halaman, setHalaman] = useState<Halaman>("beranda");
+  const [pesanGoogle, setPesanGoogle] = useState<string>();
+
+  // Dibaca sesudah hidrasi (bukan saat render) supaya HTML server & browser sama. ?google=… lalu
+  // dibersihkan supaya pesannya tak muncul lagi saat dimuat ulang.
+  useEffect(() => {
+    const a = bacaAlamat();
+    const t = setTimeout(() => (setHalaman(a.halaman), setPesanGoogle(a.google)), 0);
+    if (location.search) history.replaceState(null, "", location.pathname);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (jalurGudang !== "supabase") return;
@@ -58,18 +84,18 @@ export function AplikasiAdmin() {
   const kepala = (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4">
-        <nav className="flex items-center gap-1">
-          {(["konten", "studio"] as const).map((h) => (
+        <nav className="flex items-center gap-0.5 overflow-x-auto sm:gap-1">
+          {MENU.map((m) => (
             <button
-              key={h}
-              onClick={() => setHalaman(h)}
-              className={`rounded-full px-3.5 py-1.5 text-sm ${halaman === h ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              key={m.id}
+              onClick={() => setHalaman(m.id)}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-sm ${halaman === m.id ? "bg-white/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {h === "konten" ? "Konten" : "Studio AI"}
+              {m.label}
             </button>
           ))}
-          <a href="/" target="_blank" className="ml-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-emas">
-            Lihat situs <ExternalLink className="size-3" />
+          <a href="/" target="_blank" aria-label="Lihat situs" className="ml-1 inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-emas">
+            <span className="hidden sm:inline">Lihat situs</span> <ExternalLink className="size-3" />
           </a>
         </nav>
         {jalurGudang === "supabase" ? (
@@ -82,10 +108,12 @@ export function AplikasiAdmin() {
       </div>
     </header>
   );
-  // Editor tetap terpasang saat pindah ke Studio supaya draf yang belum disimpan tidak hilang.
+  // Editor situs tetap terpasang saat pindah halaman supaya draf yang belum disimpan tidak hilang.
   return (
     <>
-      <div hidden={halaman !== "konten"}><Editor sesi={sesi} kepala={kepala} /></div>
+      <div hidden={halaman !== "situs"}><Editor sesi={sesi} kepala={kepala} /></div>
+      {halaman === "beranda" && <Beranda sesi={sesi} kepala={kepala} buka={setHalaman} />}
+      {halaman === "agenda" && <Agenda sesi={sesi} kepala={kepala} pesanAwal={pesanGoogle} />}
       {halaman === "studio" && <Studio sesi={sesi} kepala={kepala} />}
     </>
   );
@@ -122,7 +150,7 @@ function FormMasuk() {
 
   return (
     <Layar>
-      <h1 className="font-heading text-3xl">Admin Bakafrawi</h1>
+      <h1 className="font-heading text-3xl">Bakafrawi Studio</h1>
       <form onSubmit={masuk} className="space-y-4 text-left">
         <div className="grid gap-2">
           <Label htmlFor="email">Email</Label>

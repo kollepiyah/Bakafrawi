@@ -1,24 +1,10 @@
 import "server-only";
-import { SUPABASE_URL } from "./lingkungan";
+import { adaKunciServer, rest } from "./db-server";
 
 // Aksi Studio di sisi server, dipakai bersama oleh panel admin (/api/studio/*) dan bot Telegram
 // (/api/telegram) — satu tempat supaya aturan tayang/jadwal tak berbeda antara keduanya.
-// Memakai kunci service role (rahasia server Vercel, TIDAK berawalan NEXT_PUBLIC_).
 
-const KUNCI = () => process.env.SUPABASE_SERVICE_KEY ?? "";
-export const adaKunciServer = () => Boolean(SUPABASE_URL && KUNCI());
-
-async function rest(jalur: string, init: RequestInit = {}) {
-  if (!adaKunciServer()) throw new Error("SUPABASE_SERVICE_KEY belum diisi di Vercel.");
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${jalur}`, {
-    ...init,
-    cache: "no-store",
-    headers: { apikey: KUNCI(), Authorization: `Bearer ${KUNCI()}`, "Content-Type": "application/json", ...init.headers },
-  });
-  if (!res.ok) throw new Error(`Database ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const teks = await res.text();
-  return teks ? JSON.parse(teks) : null;
-}
+export { adaKunciServer };
 
 export type Pengaturan = {
   telegram_chat_id: number | null;
@@ -27,6 +13,11 @@ export type Pengaturan = {
   ig_token: string | null;
   ig_host: "instagram" | "facebook";
   ig_kedaluwarsa: string | null;
+  google_refresh_token: string | null;
+  google_email: string | null;
+  google_galat: string | null;
+  google_disinkron: string | null;
+  ringkasan_terakhir: string | null;
 };
 
 export async function bacaPengaturan(): Promise<Pengaturan> {

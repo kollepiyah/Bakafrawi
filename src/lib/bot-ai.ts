@@ -1,6 +1,8 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Situs } from "@/content/skema";
+import { awalHariWIB, barisAcara, tanggalWIB } from "./agenda-murni";
+import { daftarAcara, hapusAcara, tambahAcara, ubahAcara } from "./agenda-server";
 import { rapikanRiwayat, type GiliranBot } from "./bot-murni";
 import { aturTayang, buatTugas, daftarTugasBot, ubahCaption, type AksiTayang } from "./studio-server";
 
@@ -50,6 +52,62 @@ const ALAT: Anthropic.Tool[] = [
     },
   },
   {
+    name: "lihat_agenda",
+    description: "Lihat acara di agenda Kyai (tersinkron Google Calendar) antara dua tanggal WIB, inklusif. Pakai juga untuk mencari id acara sebelum mengubah/menghapus.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["dari", "sampai"],
+      properties: {
+        dari: { type: "string", description: "tanggal awal YYYY-MM-DD (WIB)" },
+        sampai: { type: "string", description: "tanggal akhir YYYY-MM-DD (WIB), inklusif" },
+      },
+    },
+  },
+  {
+    name: "tambah_acara",
+    description: "Tambah acara ke agenda Kyai; otomatis masuk Google Calendar. Waktu ditulis WIB tanpa zona, mis. 2026-11-20T09:00.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["judul", "mulai", "selesai", "seharian", "lokasi", "catatan"],
+      properties: {
+        judul: { type: "string" },
+        mulai: { type: "string", description: "YYYY-MM-DDTHH:MM (WIB), atau YYYY-MM-DD bila seharian" },
+        selesai: { type: "string", description: "YYYY-MM-DDTHH:MM; kosong = 1 jam. Bila seharian: tanggal terakhir (inklusif) atau kosong" },
+        seharian: { type: "boolean" },
+        lokasi: { type: "string", description: "kosong bila tidak disebut" },
+        catatan: { type: "string", description: "kosong bila tidak ada" },
+      },
+    },
+  },
+  {
+    name: "ubah_acara",
+    description: "Ubah acara yang ada (geser waktu, ganti judul/lokasi/catatan). Isi hanya kolom yang berubah; kolom lain kosongkan.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id", "judul", "mulai", "selesai", "lokasi", "catatan"],
+      properties: {
+        id: { type: "string" },
+        judul: { type: "string" },
+        mulai: { type: "string", description: "YYYY-MM-DDTHH:MM (WIB); kosong = tetap" },
+        selesai: { type: "string", description: "kosong = tetap (bila mulai digeser, isi juga selesai baru)" },
+        lokasi: { type: "string" },
+        catatan: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "hapus_acara",
+    description: "Hapus acara dari agenda dan Google Calendar. Pakai hanya bila Kyai memintanya jelas.",
+    strict: true,
+    input_schema: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "string" } } },
+  },
+  {
     name: "atur_tayang",
     description: "Tayangkan konten yang sudah jadi ke Instagram sekarang, jadwalkan pukul 19.00 WIB, tolak, atau batalkan tayang. Pakai hanya bila pemilik memintanya dengan jelas.",
     strict: true,
@@ -82,6 +140,38 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
     case "ubah_caption":
       await ubahCaption(String(isi.id), String(isi.caption));
       return JSON.stringify({ ok: true });
+    case "lihat_agenda": {
+      const dari = awalHariWIB(String(isi.dari));
+      const sampai = new Date(awalHariWIB(String(isi.sampai)).getTime() + 86400000);
+      if (Number.isNaN(dari.getTime()) || Number.isNaN(sampai.getTime())) return "Tanggal tidak terbaca (pakai YYYY-MM-DD).";
+      const acara = await daftarAcara(dari, sampai);
+      return JSON.stringify(acara.map((a) => ({ id: a.id, ringkas: barisAcara(a), tanggal: tanggalWIB(new Date(a.mulai)), catatan: a.catatan })));
+    }
+    case "tambah_acara": {
+      const { acara, keGoogle } = await tambahAcara({
+        judul: String(isi.judul),
+        mulai: String(isi.mulai),
+        selesai: String(isi.selesai ?? "") || null,
+        seharian: Boolean(isi.seharian),
+        lokasi: String(isi.lokasi ?? ""),
+        catatan: String(isi.catatan ?? ""),
+      });
+      return JSON.stringify({ ok: true, id: acara.id, ringkas: barisAcara(acara), tanggal: tanggalWIB(new Date(acara.mulai)), google: keGoogle ? "sudah masuk Google Calendar" : "dikirim ke Google dalam ≤5 menit / Google belum tersambung" });
+    }
+    case "ubah_acara": {
+      const kosongJadiTetap = (v: unknown) => (String(v ?? "").trim() ? String(v) : undefined);
+      const { acara } = await ubahAcara(String(isi.id), {
+        judul: kosongJadiTetap(isi.judul),
+        mulai: kosongJadiTetap(isi.mulai),
+        selesai: kosongJadiTetap(isi.selesai),
+        lokasi: kosongJadiTetap(isi.lokasi),
+        catatan: kosongJadiTetap(isi.catatan),
+      });
+      return JSON.stringify({ ok: true, ringkas: barisAcara(acara), tanggal: tanggalWIB(new Date(acara.mulai)) });
+    }
+    case "hapus_acara":
+      await hapusAcara(String(isi.id));
+      return JSON.stringify({ ok: true });
     case "atur_tayang": {
       const t = await aturTayang(String(isi.id), isi.aksi as AksiTayang);
       return JSON.stringify({ ok: true, status_tayang: t.status_tayang, jadwal_tayang: t.jadwal_tayang });
@@ -94,9 +184,9 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
 function sistem(situs: Situs) {
   const produk = situs.produk.map((p) => `- ${p.slug}: ${p.nama} (${p.kategori}${p.tampil ? "" : ", disembunyikan di situs"}) — ${p.judul}`).join("\n");
   const hari = new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta", dateStyle: "full", timeStyle: "short" });
-  return `Kamu asisten Studio AI milik Kyai (pemilik Bakafrawi Project, software developer di Sidoarjo) di Telegram.
-Bakafrawi membuat website & aplikasi custom dan menjual aplikasi siap pakai (Maktaba POS). Tugasmu: membantu Kyai membuat dan mengelola konten promosi Instagram, memberi ide konten, dan menjawab pertanyaan seputar konten.
-Sekarang: ${hari} WIB.
+  return `Kamu asisten pribadi Kyai di Bakafrawi Studio (Kyai = pemilik Bakafrawi Project, software developer di Sidoarjo), lewat Telegram.
+Bakafrawi membuat website & aplikasi custom dan menjual aplikasi siap pakai (Maktaba POS). Tugasmu: mengatur agenda harian Kyai (tersinkron Google Calendar), membantu membuat dan mengelola konten promosi Instagram, memberi ide konten, dan menjawab pertanyaan seputar itu.
+Sekarang: ${hari} WIB (tanggal ${tanggalWIB(new Date())}).
 Produk:
 ${produk}
 
@@ -104,6 +194,7 @@ Aturan:
 - Jawab dalam Bahasa Indonesia yang hangat dan ringkas (pesan Telegram, bukan esai). Panggil pengguna "Kyai".
 - Untuk memesan, melihat, mengubah caption, atau menayangkan konten, PAKAI ALAT — jangan pernah mengaku sudah melakukan sesuatu tanpa hasil alat.
 - Menayangkan ke Instagram hanya bila Kyai memintanya jelas. Kalau ragu konten mana yang dimaksud, lihat daftar_konten dulu lalu tanyakan.
+- Agenda: hitung sendiri tanggal dari kata seperti "besok", "Jumat depan", "ba'da Isya" (≈19.30) dari tanggal sekarang; semua jam WIB. Bila jam tidak disebut dan acara bukan seharian, tanyakan dulu. Sebelum ubah/hapus, cari id lewat lihat_agenda. Setelah menyimpan, sebutkan hari, tanggal, dan jamnya supaya Kyai bisa mengecek.
 - Ide konten: beri daftar bernomor yang singkat; Kyai bisa membalas "nomor 2 jadikan poster".
 - Jangan menyebut harga paket atau angka yang tidak kamu ketahui. Jangan membagikan token/kunci apa pun.`;
 }

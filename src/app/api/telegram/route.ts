@@ -1,4 +1,6 @@
 import { after } from "next/server";
+import { pesanRingkasanPagi, rentangHariWIB, tanggalWIB } from "@/lib/agenda-murni";
+import { daftarAcara } from "@/lib/agenda-server";
 import { jawabBebas } from "@/lib/bot-ai";
 import { cariProduk, samaAman, uraiPerintah, uraiTombol } from "@/lib/bot-murni";
 import { ambilKonten } from "@/lib/konten";
@@ -8,12 +10,14 @@ import { kirim, tg } from "@/lib/telegram-server";
 // Webhook bot Telegram Bakafrawi. Hanya Telegram (yang tahu kode rahasia webhook) yang bisa
 // memanggil, dan hanya chat pemilik yang terdaftar lewat /start KODE yang dilayani.
 
-const BANTUAN = `Bot Studio Bakafrawi
+const BANTUAN = `Bot Bakafrawi Studio
+/agenda — acara hari ini (/agenda besok untuk besok)
 /poster <produk> — buat poster (tambah "ai" untuk latar gambar AI)
 /video <produk> — buat video Reels (tambah "ai" untuk pembuka gambar AI)
 /status — 5 konten terakhir
 Hasil dikirim ke sini dengan tombol: Tayangkan sekarang · Jadwal 19.00 · Buat ulang · Tolak.
-Boleh juga chat biasa, mis. "buatkan poster Maktaba untuk pemilik warung, pakai latar AI" atau "kasih 5 ide konten minggu ini".`;
+Boleh juga chat biasa, mis. "besok jam 9 rapat di MU", "geser rapat MU ke jam 10", "buatkan poster Maktaba untuk pemilik warung, pakai latar AI".
+Tiap pagi 05.30 WIB agenda hari itu dikirim ke sini, dan tiap acara diingatkan 30 menit sebelumnya.`;
 
 type Update = {
   message?: { chat: { id: number }; text?: string };
@@ -95,6 +99,12 @@ export async function POST(req: Request) {
     if (p.jenis === "status") {
       const daftar = await daftarTugas(5);
       await kirim(chat, daftar.length ? daftar.map((t) => `• ${t.jenis} ${t.produk_slug} — ${LABEL_STATUS[t.status] ?? t.status} ${LABEL_TAYANG[t.status_tayang] ?? ""}`).join("\n") : "Belum ada konten.");
+      return Response.json({ ok: true });
+    }
+    if (p.jenis === "agenda") {
+      const sekarang = new Date();
+      const { dari, sampai } = rentangHariWIB(sekarang, p.besok ? 1 : 0);
+      await kirim(chat, pesanRingkasanPagi(await daftarAcara(dari, sampai), tanggalWIB(dari), "📅"));
       return Response.json({ ok: true });
     }
     if (p.jenis === "lain" && process.env.ANTHROPIC_API_KEY) {

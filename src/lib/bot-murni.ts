@@ -4,6 +4,7 @@ export type Perintah =
   | { jenis: "daftar"; kode: string }
   | { jenis: "buat"; konten: "gambar" | "video"; kata: string; ai: boolean }
   | { jenis: "status" }
+  | { jenis: "agenda"; besok: boolean }
   | { jenis: "bantuan" }
   | { jenis: "lain" };
 
@@ -17,6 +18,7 @@ export function uraiPerintah(teks: string): Perintah {
     return { jenis: "buat", konten: cmd === "/video" ? "video" : "gambar", kata: kata.join(" "), ai: sisa.some((k) => k.toLowerCase() === "ai") };
   }
   if (cmd === "/status") return { jenis: "status" };
+  if (cmd === "/agenda") return { jenis: "agenda", besok: (sisa[0] ?? "").toLowerCase() === "besok" };
   if (cmd === "/bantuan" || cmd === "/help") return { jenis: "bantuan" };
   return { jenis: "lain" };
 }
