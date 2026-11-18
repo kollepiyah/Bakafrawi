@@ -4,8 +4,9 @@ import type { Situs } from "@/content/skema";
 import { awalHariWIB, barisAcara, tanggalWIB } from "./agenda-murni";
 import { daftarAcara, hapusAcara, tambahAcara, ubahAcara } from "./agenda-server";
 import { rapikanRiwayat, type GiliranBot } from "./bot-murni";
+import { usulkanIde } from "./naskah-bank";
 import { isiNaskah, naskahMenungguTerakhir, pesanNaskah } from "./studio-naskah";
-import { aturTayang, buatTugas, daftarTugasBot, ubahCaption, type AksiTayang } from "./studio-server";
+import { aturTayang, buatTugas, daftarMerek, daftarTugasBot, ubahCaption, type AksiTayang } from "./studio-server";
 
 // Chat bebas bot Telegram: Claude Haiku 5.5 effort rendah — sama dengan bot Kantor AI Lek Kopi
 // (tanya-jawab ringan, cepat & murah). Aksi nyata dijalankan lewat alat yang memakai aturan yang
@@ -64,6 +65,17 @@ const ALAT: Anthropic.Tool[] = [
         merek: { type: "string", description: "slug merek, mis. lekkopi" },
         permintaan: { type: "string", description: "ide/permintaan video dari Kyai, selengkap mungkin" },
       },
+    },
+  },
+  {
+    name: "usul_ide_merek",
+    description: "Usulkan ide video dari data kedai minggu lalu (menu laris/turun, jam sepi, promo) untuk merek berbahan bank media, mis. lekkopi. Tampilkan sebagai daftar bernomor; bila Kyai memilih, pakai pesan_video_merek dengan judul+sudut ide itu sebagai permintaan.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["merek", "jumlah"],
+      properties: { merek: { type: "string" }, jumlah: { type: "integer", description: "2-5" } },
     },
   },
   {
@@ -170,6 +182,12 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
       const { id, merek } = await pesanNaskah({ merek: String(isi.merek), permintaan: String(isi.permintaan) });
       await isiNaskah(id); // naskah + tombol persetujuan langsung dikirim ke chat ini
       return JSON.stringify({ ok: true, id, merek: merek.nama, catatan: "naskah sudah dikirim ke chat dengan tombol Setujui/Tolak" });
+    }
+    case "usul_ide_merek": {
+      const merek = (await daftarMerek()).find((m) => m.slug === String(isi.merek) && m.aktif);
+      if (!merek) return `Merek "${isi.merek}" tidak ada atau belum aktif.`;
+      const { ide, bankKosong } = await usulkanIde(merek, Math.min(5, Math.max(2, Number(isi.jumlah) || 4)));
+      return JSON.stringify({ merek: merek.nama, ide, ...(bankKosong ? { peringatan: "bank media masih kosong/belum diindeks" } : {}) });
     }
     case "revisi_naskah": {
       const id = String(isi.id ?? "").trim() || (await naskahMenungguTerakhir());

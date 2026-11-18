@@ -2,7 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { rest } from "./db-server";
 import {
-  captionAkhir, MODE_BAWAAN, promptNaskah, rapikanNaskah, skemaNaskah, SISTEM_KONTEN, teksNaskah,
+  captionAkhir, MODE_BAWAAN, promptIde, promptNaskah, rapikanNaskah, skemaNaskah, SKEMA_IDE, SISTEM_KONTEN, teksNaskah,
   type DataKonten, type ModeVideo, type Naskah,
 } from "./lekkopi/konten-murni";
 import type { Merek } from "./studio-server";
@@ -51,6 +51,24 @@ export async function dataKontenMerek(merek: Merek): Promise<DataKonten> {
     gambarAi: Number(merek.profil.gambar_ai_maks) || 0,
     kontenTerakhir: terakhir.map((t) => t.judul).filter((j): j is string => Boolean(j)),
   };
+}
+
+/** Usulan ide video dari data kedai minggu lalu (seperti /ide Lek AI) → [{ judul, alasan, sudut, rekaman }]. */
+export async function usulkanIde(merek: Merek, jumlah = 4) {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY belum diisi di Vercel.");
+  const data = await dataKontenMerek(merek);
+  const res = await new Anthropic().messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    output_config: { effort: "medium", format: { type: "json_schema", schema: SKEMA_IDE } },
+    system: SISTEM_KONTEN,
+    messages: [{ role: "user", content: promptIde(data, jumlah) }],
+  });
+  if (res.stop_reason === "refusal") throw new Error("Claude menolak mengusulkan ide.");
+  const teks = res.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "{}";
+  const ide = ((JSON.parse(teks) as { ide?: Record<string, string>[] }).ide ?? []).slice(0, jumlah);
+  if (!ide.length) throw new Error("Claude tidak memberi ide.");
+  return { ide, bankKosong: !data.tagBank.length };
 }
 
 /**

@@ -1,8 +1,10 @@
 // =====================================================================
 //  mata.mjs — pekerjaan "melihat" Studio (KB §81):
 //    • kurasiBank: foto/video bank yang belum dilihat → kurasi;
-//    • pelajariReferensi: video IG Lek Kopi + folder referensi → analisis
-//      per video → rangkuman "gaya Lek Kopi" di agent.gaya.
+//    • pelajariReferensi: video IG merek + folder referensi → analisis
+//      per video → rangkuman gaya merek.
+//  Bakafrawi Studio (18 Nov 2026): penyimpanan lewat objek `db` per merek (dbMata di
+//  merek-bank.mjs), bukan sql skema agent Lek Kopi; kredensial IG berbentuk studio_kredensial.
 // =====================================================================
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
@@ -19,10 +21,9 @@ const BATCH_KURASI = 25
  * Kurasi paling banyak BATCH_KURASI berkas per putaran (biaya & waktu terkendali).
  * `siapkan` (paths) memastikan berkasnya ada di disk (mode awan: unduh dari Drive).
  */
-export async function kurasiBank(sql, folderKerja, catat, siapkan = async () => {}) {
+export async function kurasiBank(db, folderKerja, catat, siapkan = async () => {}) {
   if (!aiSiap()) return 0
-  const daftar = await sql`select path, tag, jenis, durasi from agent.bank_media
-                            where jenis in ('foto', 'video') and kurasi is null order by diperbarui_at limit ${BATCH_KURASI}`
+  const daftar = await db.belumKurasi(BATCH_KURASI)
   if (!daftar.length) return 0
   const kerja = path.join(folderKerja, '_kurasi')
   await mkdir(kerja, { recursive: true })
@@ -36,12 +37,12 @@ export async function kurasiBank(sql, folderKerja, catat, siapkan = async () => 
         : { keluar: lembar, lebar: 384 }))
       const { data, pakai } = await kurasiMedia(lembar, m)
       const k = normalKurasi(data, m)
-      await sql`update agent.bank_media set kurasi = ${sql.json(k)}, kurasi_at = now() where path = ${m.path}`
+      await db.simpanKurasi(m.path, k)
       await catat('kurasi', `${m.tag}: ${k.deskripsi}`, { pemakaian: pakai })
       n++
     } catch (e) {
       // Berkas rusak/tak terbaca: tandai supaya tidak dicoba terus-menerus.
-      await sql`update agent.bank_media set kurasi = ${sql.json({ galat: e.message.slice(0, 200), kualitas: 1 })}, kurasi_at = now() where path = ${m.path}`
+      await db.simpanKurasi(m.path, { galat: e.message.slice(0, 200), kualitas: 1 })
       await catat('galat', `kurasi ${m.path}: ${e.message}`)
     }
   }
@@ -63,9 +64,10 @@ async function unduh(url, ke) {
  * Reels milik akun IG yang tersambung. Videonya hanya diunduh (ke folder referensi/ig) kalau
  * belum pernah dianalisis — yang sudah cukup diperbarui statistiknya.
  */
-async function ambilIg(sql, folder, catat, sudah) {
-  const k = (await sql`select data from agent.kredensial where layanan = 'instagram'`)[0]
-  if (!k) return []
+/** ig = data studio_kredensial instagram merek (ig_token, ig_host, ig_user_id) atau null. */
+async function ambilIg(ig, folder, catat, sudah) {
+  if (!ig?.ig_token) return []
+  const k = { data: { token: ig.ig_token, host: ig.ig_host, user_id: ig.ig_user_id } }
   const versi = process.env.IG_API_VERSI || 'v27.0'
   const q = new URLSearchParams({
     fields: 'id,caption,media_type,media_product_type,media_url,permalink,timestamp,like_count,comments_count',
@@ -109,7 +111,8 @@ async function berkasFolder(folder, daftar) {
   else nama = (await readdir(folder, { withFileTypes: true })).filter((e) => e.isFile()).map((e) => e.name)
   return nama.filter((n) => VIDEO.test(n)).map((n) => {
     const p = path.join(folder, n)
-    return { id: `berkas:${p}`, sumber: 'berkas', path: p, caption: '', statistik: {} }
+    // id = nama berkas saja: folder kerja di server GitHub bisa berbeda tiap putaran.
+    return { id: `berkas:${n}`, sumber: 'berkas', path: p, caption: '', statistik: {} }
   })
 }
 
@@ -131,17 +134,17 @@ async function potonganVideo(berkas, durasi) {
  * @param opsi.daftar  (mode awan) isi folder referensi di Drive
  * @param opsi.siapkan (mode awan) unduh video referensi sebelum dianalisis
  */
-export async function pelajariReferensi(sql, folderReferensi, folderKerja, catat, opsi = {}) {
+export async function pelajariReferensi(db, folderReferensi, folderKerja, catat, opsi = {}) {
   if (!aiSiap()) return null
-  const sudah = new Set((await sql`select id from agent.referensi where analisis is not null`).map((r) => r.id))
-  const sumber = [...await ambilIg(sql, folderReferensi, catat, sudah), ...await berkasFolder(folderReferensi, opsi.daftar)]
+  const sudah = await db.referensiSudah()
+  const sumber = [...await ambilIg(opsi.ig, folderReferensi, catat, sudah), ...await berkasFolder(folderReferensi, opsi.daftar)]
   const kerja = path.join(folderKerja, '_referensi')
   await mkdir(kerja, { recursive: true })
   let baru = 0
   for (const v of sumber) {
     // Statistik IG diperbarui setiap kali, walau videonya sudah dianalisis.
     if (sudah.has(v.id)) {
-      await sql`update agent.referensi set statistik = ${sql.json(v.statistik)} where id = ${v.id}`
+      await db.perbaruiStatistik(v.id, v.statistik)
       continue
     }
     try {
@@ -151,11 +154,7 @@ export async function pelajariReferensi(sql, folderReferensi, folderKerja, catat
       const lembar = path.join(kerja, `r${baru}.jpg`)
       await ffmpeg(argLembar(v.path, { durasi, n: 9, kolom: 3, lebar: 240, keluar: lembar }))
       const { data, pakai } = await analisisReferensi(lembar, { durasi, potong, caption: v.caption, statistik: v.statistik })
-      await sql`insert into agent.referensi (id, sumber, path, permalink, caption, diposting_at, durasi, potong, statistik, analisis, dianalisis_at)
-                values (${v.id}, ${v.sumber}, ${v.path}, ${v.permalink ?? null}, ${v.caption}, ${v.diposting_at ?? null}, ${durasi},
-                        ${sql.json(potong)}, ${sql.json(v.statistik)}, ${sql.json(data)}, now())
-                on conflict (id) do update set analisis = excluded.analisis, potong = excluded.potong, durasi = excluded.durasi,
-                  statistik = excluded.statistik, dianalisis_at = now()`
+      await db.simpanReferensi({ id: v.id, sumber: v.sumber, permalink: v.permalink ?? null, caption: v.caption, diposting_at: v.diposting_at ?? null, durasi, potong, statistik: v.statistik, analisis: data })
       await catat('referensi', data.ringkas, { pemakaian: pakai })
       baru++
     } catch (e) {
@@ -164,11 +163,11 @@ export async function pelajariReferensi(sql, folderReferensi, folderKerja, catat
   }
   await rm(kerja, { recursive: true, force: true })
 
-  const minta = (await sql`select minta_ulang from agent.gaya where id = 1`)[0]?.minta_ulang
+  const minta = await db.mintaUlang()
   if (!baru && !minta) return null
-  const semua = await sql`select caption, durasi, potong, statistik, analisis from agent.referensi where analisis is not null`
+  const semua = await db.semuaReferensi()
   if (!semua.length) {
-    await sql`update agent.gaya set minta_ulang = false where id = 1`
+    await db.simpanGaya(null)
     return null
   }
   const daftar = semua.map((r) => ({
@@ -178,7 +177,7 @@ export async function pelajariReferensi(sql, folderReferensi, folderKerja, catat
   const { data, pakai } = await rangkumGaya(daftar)
   // Simpan profil apa adanya + versi yang sudah dijepit, supaya yang dipakai render selalu aman.
   const profil = { ...data, render: parameterGaya(data.render), jumlah_referensi: daftar.length }
-  await sql`update agent.gaya set profil = ${sql.json(profil)}, ringkasan = ${data.ringkasan}, minta_ulang = false, diperbarui_at = now() where id = 1`
+  await db.simpanGaya({ profil, ringkasan: data.ringkasan })
   await catat('gaya', data.ringkasan, { pemakaian: pakai, referensi: daftar.length })
   return { ringkasan: data.ringkasan, jumlah: daftar.length, baru }
 }

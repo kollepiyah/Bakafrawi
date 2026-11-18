@@ -8,7 +8,45 @@ import { probe } from './bank/alat.mjs';
 import { daftarLokal, jenisBerkas, tagDari } from './bank/bank.mjs';
 import { buatDrive } from './bank/drive.mjs';
 import { renderKonten } from './bank/render.mjs';
-import { bacaBank, bacaGaya, hapusBank, simpanBank } from './db.mjs';
+import { kurasiBank, pelajariReferensi } from './bank/mata.mjs';
+import {
+  bacaBank, bacaGaya, bankBelumKurasi, gayaMintaUlang, hapusBank, perbaruiStatistikReferensi, referensiSudah,
+  semuaReferensi, simpanBank, simpanGaya, simpanKurasiBank, simpanReferensi,
+} from './db.mjs';
+
+/** Penyimpan untuk mata.mjs: path di database relatif, di disk absolut (folder bank merek). */
+function dbMata(merek, akarBank) {
+  const keRel = (p) => path.relative(akarBank, p).split(path.sep).join('/');
+  return {
+    belumKurasi: async (n) => (await bankBelumKurasi(merek.slug, n)).map((b) => ({ ...b, path: path.join(akarBank, b.path) })),
+    simpanKurasi: (p, k) => simpanKurasiBank(merek.slug, keRel(p), k),
+    referensiSudah: () => referensiSudah(merek.slug),
+    perbaruiStatistik: (id, s) => perbaruiStatistikReferensi(merek.slug, id, s),
+    simpanReferensi: (b) => simpanReferensi(merek.slug, b),
+    mintaUlang: () => gayaMintaUlang(merek.slug),
+    semuaReferensi: () => semuaReferensi(merek.slug),
+    simpanGaya: (g) => simpanGaya(merek.slug, g),
+  };
+}
+
+const catatMata = (jenis, pesan) => console.log(`👁 ${jenis}: ${String(pesan).slice(0, 160)}`);
+
+/**
+ * "Mata" Claude untuk satu merek: kurasi ≤25 berkas bank baru per putaran (deskripsi & kualitas
+ * dipakai naskah memilih tag), lalu pelajari video referensi baru (Reels IG merek + folder
+ * referensi Drive) → profil gaya. Tanpa ANTHROPIC_API_KEY keduanya dilewati diam-diam.
+ * @returns ringkasan gaya baru (untuk dikabarkan) atau null
+ */
+export async function lihatBankMerek(merek, ctx, ig) {
+  const db = dbMata(merek, ctx.folder.bank);
+  const n = await kurasiBank(db, ctx.folder.hasil, catatMata, ctx.siapkan);
+  if (n) console.log(`👁 Kurasi ${merek.slug}: ${n} berkas`);
+  return pelajariReferensi(db, ctx.folder.referensi, ctx.folder.hasil, catatMata, {
+    ig,
+    daftar: ctx.drive ? () => ctx.drive.daftar('referensi') : undefined,
+    siapkan: ctx.siapkan,
+  });
+}
 
 /**
  * Folder kerja + sambungan Drive satu merek. STUDIO_BANK_LOKAL (uji di laptop) menimpa Drive:

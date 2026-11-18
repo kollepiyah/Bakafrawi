@@ -130,6 +130,34 @@ export async function tandaiBankDiindeks(merek) {
   );
 }
 
+/** Panggilan REST singkat untuk tabel kurasi/referensi/gaya (galat dilempar dengan label). */
+async function sb(jalur, apa, init = {}) {
+  const res = await periksa(await fetch(`${URL_SB()}/rest/v1/${jalur}`, { ...init, headers: kepala({ 'Content-Type': 'application/json', ...init.headers }) }), apa);
+  const t = await res.text();
+  return t ? JSON.parse(t) : null;
+}
+const patch = (isi) => ({ method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(isi) });
+const upsert = (isi) => ({ method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(isi) });
+
+export const bankBelumKurasi = (merek, n) =>
+  sb(`studio_bank?merek=eq.${m(merek)}&jenis=in.(foto,video)&kurasi=is.null&order=diperbarui.asc&limit=${n}&select=path,tag,jenis,durasi`, 'Bank belum kurasi');
+export const simpanKurasiBank = (merek, rel, kurasi) =>
+  sb(`studio_bank?merek=eq.${m(merek)}&path=eq.${encodeURIComponent(rel)}`, 'Simpan kurasi', patch({ kurasi }));
+
+export const referensiSudah = async (merek) =>
+  new Set((await sb(`studio_referensi?merek=eq.${m(merek)}&analisis=not.is.null&select=id`, 'Referensi')).map((r) => r.id));
+export const perbaruiStatistikReferensi = (merek, id, statistik) =>
+  sb(`studio_referensi?merek=eq.${m(merek)}&id=eq.${encodeURIComponent(id)}`, 'Statistik referensi', patch({ statistik }));
+export const simpanReferensi = (merek, baris) =>
+  sb('studio_referensi?on_conflict=merek,id', 'Simpan referensi', upsert({ ...baris, merek, dianalisis: new Date().toISOString() }));
+export const semuaReferensi = (merek) =>
+  sb(`studio_referensi?merek=eq.${m(merek)}&analisis=not.is.null&select=caption,durasi,potong,statistik,analisis`, 'Semua referensi');
+export const gayaMintaUlang = async (merek) =>
+  Boolean((await sb(`studio_gaya?merek=eq.${m(merek)}&select=minta_ulang`, 'Gaya'))[0]?.minta_ulang);
+/** gaya null = hanya padamkan minta_ulang. */
+export const simpanGaya = (merek, gaya) =>
+  sb('studio_gaya?on_conflict=merek', 'Simpan gaya', upsert({ merek, minta_ulang: false, diubah: new Date().toISOString(), ...(gaya ?? {}) }));
+
 export async function bacaGaya(merek) {
   const res = await periksa(await fetch(`${URL_SB()}/rest/v1/studio_gaya?merek=eq.${m(merek)}&select=profil`, { headers: kepala() }), 'Baca gaya');
   return (await res.json())[0]?.profil ?? {};

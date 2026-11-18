@@ -31,11 +31,32 @@ create policy "bank dibaca admin" on public.studio_bank
 create table public.studio_gaya (
   merek text primary key references public.studio_merek (slug) on update cascade on delete cascade,
   profil jsonb not null default '{}'::jsonb,
+  ringkasan text,
   minta_ulang boolean not null default false,
   diubah timestamptz not null default now()
 );
 alter table public.studio_gaya enable row level security;
 create policy "gaya dibaca admin" on public.studio_gaya
+  for select to authenticated using ((select public.is_admin()));
+
+-- Video referensi yang sudah dianalisis "mata" Claude (Reels IG merek + folder referensi di Drive);
+-- rangkumannya menjadi studio_gaya.profil. id = 'ig:<media id>' atau 'berkas:<nama>'.
+create table public.studio_referensi (
+  merek text not null references public.studio_merek (slug) on update cascade on delete cascade,
+  id text not null,
+  sumber text not null check (sumber in ('ig', 'berkas')),
+  permalink text,
+  caption text,
+  diposting_at timestamptz,
+  durasi numeric,
+  potong jsonb,
+  statistik jsonb not null default '{}'::jsonb,
+  analisis jsonb,
+  dianalisis timestamptz,
+  primary key (merek, id)
+);
+alter table public.studio_referensi enable row level security;
+create policy "referensi dibaca admin" on public.studio_referensi
   for select to authenticated using ((select public.is_admin()));
 
 -- Kapan bank merek terakhir diindeks mesin. Naskah butuh daftar isi bank, jadi mesin juga

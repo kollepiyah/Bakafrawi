@@ -6,8 +6,9 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ambilTayang, ambilTugas, bacaKonten, bacaMerek, bacaPengaturan, daftarKredensial, merekBankBasi, perbaruiKredensial, perbaruiTugas, pulihkan, siapDb, tandaiBankDiindeks, unggah } from './lib/db.mjs';
-import { indeksBankMerek, renderBankMerek, siapkanMerekBank } from './lib/merek-bank.mjs';
-import { adaGambarAi, buatGambarAi } from './lib/gambar-ai.mjs';
+import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } from './lib/merek-bank.mjs';
+// Satu modul gambar AI untuk semua merek (versi pindahan Lek Kopi: penyedia berurutan + catatan biaya).
+import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { buatNaskah } from './lib/naskah.mjs';
 import { bukaPeramban, potret, rekamAplikasi } from './lib/peramban.mjs';
@@ -41,10 +42,10 @@ async function fotoAi(adegan, rasio, keluar, catatan) {
     return null;
   }
   try {
-    return berkasUrl(await buatGambarAi(adegan, rasio, keluar));
+    return berkasUrl((await buatGambarAi(adegan, rasio, keluar.replace(/\.\w+$/, ''))).berkas);
   } catch (e) {
-    // 429 = kuota semua penyedia habis (jatah harian Cloudflare / Gemini tanpa billing): berhenti mencoba.
-    if (/\(429\)/.test(e.message)) {
+    // Kuota semua penyedia habis (jatah harian Cloudflare / Gemini tanpa billing): berhenti mencoba.
+    if (galatKuota(e)) {
       catatan.push(`Latar AI gagal: ${e.message.slice(0, 200)}`);
       catatan.aiBerhenti = true;
     } else catatan.push(`Latar AI gagal: ${e.message.slice(0, 160)}`);
@@ -64,6 +65,14 @@ async function bankMerek(merek, kabar) {
     else console.log(`🗂 Bank ${merek.slug}: ${r.total} berkas (${r.baru} baru, ${r.hilang} hilang)`);
     await tandaiBankDiindeks(merek.slug);
     konteksBank.set(merek.slug, ctx);
+    // Mata Claude (kurasi bank + belajar gaya) — gagal di sini tak boleh menahan video.
+    try {
+      const ig = (await daftarKredensial('instagram')).find((k) => k.merek === merek.slug)?.data ?? null;
+      const g = await lihatBankMerek(merek, ctx, ig);
+      if (g) await kabar(`🎨 Gaya ${merek.nama} diperbarui dari ${g.jumlah} video (${g.baru} baru):\n${g.ringkasan}`);
+    } catch (e) {
+      console.error(`Mata ${merek.slug}:`, e.message);
+    }
   }
   return konteksBank.get(merek.slug);
 }
