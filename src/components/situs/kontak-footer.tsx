@@ -63,9 +63,12 @@ export async function Footer({ situs }: { situs: Situs }) {
             <div>{situs.kontak.lokasi}</div>
           </div>
         </div>
-        <a href={situs.analitik.umamiShareUrl} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-emas">
-          <BarChart3 className="size-4" /> Statistik pengunjung
-        </a>
+        <div className="flex items-center gap-5">
+          <a href="/privasi" className="text-muted-foreground hover:text-emas">Kebijakan privasi</a>
+          <a href={situs.analitik.umamiShareUrl} target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-emas">
+            <BarChart3 className="size-4" /> Statistik pengunjung
+          </a>
+        </div>
       </div>
     </footer>
   );
