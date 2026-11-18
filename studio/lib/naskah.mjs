@@ -20,6 +20,12 @@ export const SkemaNaskah = z.object({
 // Opus, dan biayanya kira-kira separuh.
 const MODEL = process.env.STUDIO_MODEL || 'claude-sonnet-5-5';
 
+// Cadangan bila profil merek belum berisi gaya (isi utamanya ada di studio_merek.profil.gaya).
+const GAYA_BAWAAN =
+  'Kamu copywriter iklan media sosial untuk Bakafrawi Project, software developer di Sidoarjo yang membuat website & aplikasi custom serta menjual aplikasi siap pakai. ' +
+  'Tulis dalam Bahasa Indonesia yang hangat, jelas, dan meyakinkan — bukan bahasa robot, tanpa klaim berlebihan atau angka yang tidak diberikan. ' +
+  'Untuk karya pesanan, posisikan sebagai bukti kemampuan: "kami bisa membuatkan yang serupa untuk Anda". Jangan menyebut harga kecuali diberikan.';
+
 function ringkasProduk(produk, situs) {
   const fitur = produk.fitur.map((f) => `- ${f.judul}: ${f.isi}`).join('\n');
   return [
@@ -34,18 +40,16 @@ function ringkasProduk(produk, situs) {
 }
 
 /** Naskah dari Claude; tanpa kunci API / bila gagal → naskah templat supaya tugas tetap jadi. */
-export async function buatNaskah(produk, situs, arahan, jenis) {
-  if (!process.env.ANTHROPIC_API_KEY) return { ...naskahTemplat(produk, situs), sumber: 'templat (tanpa kunci API)' };
+/** merek: baris studio_merek; profil.gaya = arahan copywriter merek itu (bawaan: Bakafrawi). */
+export async function buatNaskah(produk, situs, arahan, jenis, merek = null) {
+  if (!process.env.ANTHROPIC_API_KEY) return { ...naskahTemplat(produk, situs, merek), sumber: 'templat (tanpa kunci API)' };
   try {
     const client = new Anthropic();
     const res = await client.messages.parse({
       model: MODEL,
       max_tokens: 16000,
       output_config: { effort: 'medium', format: zodOutputFormat(SkemaNaskah) },
-      system:
-        'Kamu copywriter iklan media sosial untuk Bakafrawi Project, software developer di Sidoarjo yang membuat website & aplikasi custom serta menjual aplikasi siap pakai. ' +
-        'Tulis dalam Bahasa Indonesia yang hangat, jelas, dan meyakinkan — bukan bahasa robot, tanpa klaim berlebihan atau angka yang tidak diberikan. ' +
-        'Untuk karya pesanan, posisikan sebagai bukti kemampuan: "kami bisa membuatkan yang serupa untuk Anda". Jangan menyebut harga kecuali diberikan.',
+      system: merek?.profil?.gaya || GAYA_BAWAAN,
       messages: [
         {
           role: 'user',
@@ -57,11 +61,11 @@ export async function buatNaskah(produk, situs, arahan, jenis) {
     return { ...res.parsed_output, sumber: MODEL };
   } catch (e) {
     console.error('Naskah Claude gagal, memakai templat:', e.message);
-    return { ...naskahTemplat(produk, situs), sumber: `templat (Claude gagal: ${e.message.slice(0, 120)})` };
+    return { ...naskahTemplat(produk, situs, merek), sumber: `templat (Claude gagal: ${e.message.slice(0, 120)})` };
   }
 }
 
-export function naskahTemplat(produk, situs) {
+export function naskahTemplat(produk, situs, merek = null) {
   const poin = produk.fitur.slice(0, 4).map((f) => f.judul);
   const pesanan = produk.kategori === 'pesanan';
   return {
@@ -75,7 +79,7 @@ export function naskahTemplat(produk, situs) {
       `Hubungi Bakafrawi di WhatsApp ${situs.kontak.whatsappTampil}.`,
     ],
     caption: `${produk.judul}. ${produk.deskripsi}`,
-    hashtag: ['bakafrawi', 'jasapembuatanaplikasi', 'aplikasiandroid', 'websitebisnis', 'umkm'],
+    hashtag: merek?.profil?.hashtag?.length ? merek.profil.hashtag : ['bakafrawi', 'jasapembuatanaplikasi', 'aplikasiandroid', 'websitebisnis', 'umkm'],
     adegan: pesanan
       ? ['Staff of an Indonesian Islamic boarding school office working together at a wooden desk, warm afternoon light', 'Smiling Indonesian teacher holding a smartphone in a bright school courtyard']
       : ['Owner of a small Indonesian coffee shop serving a customer at the counter, warm evening light', 'Indonesian shop owner smiling while checking a smartphone behind a tidy counter'],

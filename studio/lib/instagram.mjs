@@ -1,5 +1,5 @@
 // Posting Instagram lewat Graph API — pola sama dengan Studio Lek Kopi (sosmed.mjs). Token disimpan
-// di studio_pengaturan; host 'instagram' (Instagram Login) atau 'facebook' (token gaya EA…).
+// per merek di studio_kredensial (kolom data); host 'instagram' (Instagram Login) atau 'facebook' (token gaya EA…).
 const VERSI = () => process.env.IG_API_VERSI || 'v27.0';
 const url = (k, p) => `https://graph.${k.ig_host === 'facebook' ? 'facebook' : 'instagram'}.com/${VERSI()}/${p}`;
 const form = (o) => new URLSearchParams(Object.entries(o).map(([a, b]) => [a, String(b)]));

@@ -11,6 +11,7 @@ import { situsBawaan } from "@/content/situs";
 type Hasil = { jenis: "gambar" | "video"; rasio: string; url: string; durasi?: number };
 type Tugas = {
   id: string;
+  merek: string;
   dibuat: string;
   jenis: "gambar" | "video";
   produk_slug: string;
@@ -46,6 +47,7 @@ const LABEL_STATUS: Record<Tugas["status"], { teks: string; kelas: string }> = {
 
 export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNode }) {
   const [situs, setSitus] = useState<Situs>(situsBawaan);
+  const [merek, setMerek] = useState<{ slug: string; nama: string; aktif: boolean }[]>([]);
   const [daftar, setDaftar] = useState<Tugas[]>([]);
   const [pesan, setPesan] = useState("");
   const [sibuk, setSibuk] = useState(false);
@@ -59,6 +61,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   useEffect(() => {
     if (jalurGudang !== "supabase") return;
     muatKonten().then((k) => k && setSitus(k)).catch(() => {});
+    supabase().from("studio_merek").select("slug,nama,aktif").order("urutan").then(({ data }) => data && setMerek(data));
     const t = setTimeout(muat, 0);
     return () => clearTimeout(t);
   }, [muat]);
@@ -77,7 +80,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     const d = new FormData(form);
     setSibuk(true);
     setPesan("");
-    const { error } = await supabase().from("studio_tugas").insert({ jenis: d.get("jenis"), produk_slug: d.get("produk"), arahan: String(d.get("arahan") ?? ""), latar: d.get("latar") ? "ai" : "polos" });
+    const { error } = await supabase().from("studio_tugas").insert({ merek: d.get("merek") ?? "bakafrawi", jenis: d.get("jenis"), produk_slug: d.get("produk"), arahan: String(d.get("arahan") ?? ""), latar: d.get("latar") ? "ai" : "polos" });
     if (error) {
       setSibuk(false);
       return setPesan(`Gagal membuat tugas: ${error.message}`);
@@ -111,6 +114,8 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   }
 
   const namaProduk = (slug: string) => situs.produk.find((p) => p.slug === slug)?.nama ?? slug;
+  const merekAktif = merek.filter((m) => m.aktif);
+  const namaMerek = (slug: string) => (merekAktif.length > 1 || slug !== "bakafrawi" ? `${merek.find((m) => m.slug === slug)?.nama ?? slug} · ` : "");
 
   return (
     <div className="pb-16">
@@ -122,6 +127,17 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
           <>
             <form onSubmit={buat} className="mb-8 grid gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6">
               <h2 className="flex items-center gap-2 font-heading text-lg"><Sparkles className="size-5 text-emas" /> Buat konten promosi</h2>
+              {/* Pilihan merek baru muncul bila lebih dari satu merek aktif (Lek Kopi menyusul di gelombang 2). */}
+              {merekAktif.length > 1 ? (
+                <label className="grid gap-1.5 sm:w-1/2">
+                  <span className="text-xs font-medium text-muted-foreground">Merek</span>
+                  <select name="merek" className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
+                    {merekAktif.map((m) => <option key={m.slug} value={m.slug} className="bg-card">{m.nama}</option>)}
+                  </select>
+                </label>
+              ) : (
+                <input type="hidden" name="merek" value={merekAktif[0]?.slug ?? "bakafrawi"} />
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="grid gap-1.5">
                   <span className="text-xs font-medium text-muted-foreground">Produk</span>
@@ -163,7 +179,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
             {daftar.length === 0 && <p className="text-sm text-muted-foreground">Belum ada konten.</p>}
             <div className="grid gap-4">
               {daftar.map((t) => (
-                <KartuTugas key={t.id} t={t} nama={namaProduk(t.produk_slug)} hapus={() => hapus(t)} tayang={(a) => tayang(t, a)} />
+                <KartuTugas key={t.id} t={t} nama={namaMerek(t.merek) + namaProduk(t.produk_slug)} hapus={() => hapus(t)} tayang={(a) => tayang(t, a)} />
               ))}
             </div>
           </>

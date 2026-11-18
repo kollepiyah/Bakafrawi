@@ -1,5 +1,23 @@
 # CHANGELOG — bakafrawi.com
 
+## Bakafrawi Studio tahap 3, gelombang 1 — Studio multi-merek (belum tayang)
+
+Awal penyatuan Studio Bakafrawi + Studio Lek Kopi menjadi satu mesin di repo ini.
+
+- **Tabel `studio_merek`**: Bakafrawi (aktif) dan Lek Kopi (terdaftar, belum aktif — bahan "bank media"
+  menyusul di gelombang 2). Profil merek berisi nama, warna aksen, situs, WA, logo, gaya copywriter,
+  hashtag, alur persetujuan (`langsung` / `naskah`), dan jenis bahan.
+- **Tugas milik satu merek** (`studio_tugas.merek`). Poster & video memakai identitas merek itu: warna,
+  nama di kepala, situs & WA di kaki/kartu penutup; naskah memakai gaya copywriter dan hashtag merek.
+  Tampilan Bakafrawi tidak berubah (diuji ulang lewat `--lokal`).
+- **Token Instagram per merek** di `studio_kredensial` (tanpa policy, hanya server & mesin). Token lama
+  dari `studio_pengaturan` dipindah otomatis lalu kolom lamanya dihapus — satu sumber. Konten →
+  Sambungan kini menampilkan status Instagram tiap merek dan bisa menyambung per merek. Perpanjangan
+  token & pemicu mesin (`studio_ada_kerja`) berlaku untuk semua merek.
+- Pilihan merek di formulir Konten muncul otomatis begitu ada lebih dari satu merek aktif.
+- Migrasi `20261118220000_studio_merek.sql` (diuji di PGlite dengan data rekaan). **Jalankan migrasi
+  bersamaan dengan deploy**: kode lama membaca kolom token yang dihapus migrasi ini.
+
 ## Bakafrawi Studio tahap 1 — Beranda, Agenda, APK (belum tayang)
 
 - **Admin jadi Bakafrawi Studio**: menu Beranda · Agenda · Konten (Studio AI) · Situs (editor). Beranda

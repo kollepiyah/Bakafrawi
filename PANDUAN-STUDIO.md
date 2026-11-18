@@ -1,5 +1,12 @@
 # Panduan Studio AI bakafrawi.com
 
+> **Multi-merek (sejak 18 Nov 2026).** Studio kini satu mesin untuk beberapa merek (`studio_merek`):
+> **Bakafrawi** aktif; **Lek Kopi** sudah terdaftar tetapi belum aktif (video dari bank foto/video
+> kafe menyusul). Identitas tampilan (nama, warna aksen, situs, WA, logo) dan gaya copywriter tiap
+> merek ada di kolom `profil`. Token Instagram disimpan **per merek** (Konten → Sambungan → pilih
+> merek → tempel token); token Bakafrawi yang lama dipindah otomatis oleh migrasi
+> `20261118220000_studio_merek.sql`.
+
 Studio ada di **/admin → Studio AI**. Pilih produk + jenis (poster atau video), tekan **Buat**.
 Mesinnya berjalan di **GitHub Actions** (repo `kollepiyah/Bakafrawi`, workflow *Studio AI*) — PC
 tidak perlu menyala. Repo publik → menit Actions gratis.

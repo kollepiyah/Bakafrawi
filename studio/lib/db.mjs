@@ -74,6 +74,31 @@ export async function ambilTayang() {
   return (await res.json())[0] ?? null;
 }
 
+/** Profil satu merek (studio_merek) → { slug, nama, profil } atau null. */
+export async function bacaMerek(slug) {
+  const res = await periksa(await fetch(`${URL_SB()}/rest/v1/studio_merek?slug=eq.${encodeURIComponent(slug)}&select=slug,nama,profil`, { headers: kepala() }), 'Baca merek');
+  return (await res.json())[0] ?? null;
+}
+
+/** Semua kredensial sosmed satu layanan → [{ merek, data, dicek }]. */
+export async function daftarKredensial(layanan) {
+  const res = await periksa(await fetch(`${URL_SB()}/rest/v1/studio_kredensial?layanan=eq.${layanan}&select=merek,data,dicek`, { headers: kepala() }), 'Baca kredensial');
+  return res.json();
+}
+
+/** Perbarui kredensial (gabung ke data lama) dan/atau tandai sudah dicek. */
+export async function perbaruiKredensial(merek, layanan, { data, dicek }) {
+  const isi = { diubah: new Date().toISOString(), ...(dicek ? { dicek } : {}), ...(data ? { data } : {}) };
+  await periksa(
+    await fetch(`${URL_SB()}/rest/v1/studio_kredensial?merek=eq.${encodeURIComponent(merek)}&layanan=eq.${layanan}`, {
+      method: 'PATCH',
+      headers: kepala({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+      body: JSON.stringify(isi),
+    }),
+    'Simpan kredensial',
+  );
+}
+
 export async function bacaPengaturan() {
   const res = await periksa(await fetch(`${URL_SB()}/rest/v1/studio_pengaturan?id=eq.1&select=*`, { headers: kepala() }), 'Baca pengaturan');
   return (await res.json())[0] ?? {};

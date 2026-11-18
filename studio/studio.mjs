@@ -5,7 +5,7 @@
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ambilTayang, ambilTugas, bacaKonten, bacaPengaturan, perbaruiTugas, pulihkan, siapDb, simpanPengaturan, unggah } from './lib/db.mjs';
+import { ambilTayang, ambilTugas, bacaKonten, bacaMerek, bacaPengaturan, daftarKredensial, perbaruiKredensial, perbaruiTugas, pulihkan, siapDb, unggah } from './lib/db.mjs';
 import { adaGambarAi, buatGambarAi } from './lib/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { buatNaskah } from './lib/naskah.mjs';
@@ -13,7 +13,7 @@ import { bukaPeramban, potret, rekamAplikasi } from './lib/peramban.mjs';
 import { rakitVideo } from './lib/rakit.mjs';
 import { bacakan } from './lib/suara.mjs';
 import { adaTelegram, kirimHasil, kirimTeks } from './lib/telegram.mjs';
-import { htmlBingkai, htmlKartu, htmlPoster, UKURAN } from './lib/templat.mjs';
+import { htmlBingkai, htmlKartu, htmlPoster, temaMerek, UKURAN } from './lib/templat.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const LOGO = pathToFileURL(path.join(DIR, '..', 'public', 'logo.png')).href;
@@ -51,14 +51,19 @@ async function fotoAi(adegan, rasio, keluar, catatan) {
   }
 }
 
-async function kerjakan(tugas, situs, peramban, folder, simpan) {
+/** merek: baris studio_merek tugas ini (identitas tampilan, gaya naskah, WA bila beda dari situs). */
+async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   const produk = situs.produk.find((p) => p.slug === tugas.produk_slug);
   if (!produk) throw new Error(`Produk "${tugas.produk_slug}" tidak ada di konten.`);
-  const naskah = await buatNaskah(produk, situs, tugas.arahan, tugas.jenis);
-  const caption = `${naskah.caption}\n\n${naskah.ajakan} → WA ${situs.kontak.whatsappTampil} · bakafrawi.com\n\n${naskah.hashtag.map((h) => `#${h.replace(/^#/, '')}`).join(' ')}`;
+  const tema = temaMerek(merek);
+  const kontak = { ...situs.kontak, ...(merek?.profil?.whatsapp ? { whatsappTampil: merek.profil.whatsapp } : {}) };
+  const naskah = await buatNaskah(produk, situs, tugas.arahan, tugas.jenis, merek);
+  const tujuan = [`WA ${kontak.whatsappTampil}`, tema.situs].filter(Boolean).join(' · ');
+  const caption = `${naskah.caption}\n\n${naskah.ajakan} → ${tujuan}\n\n${naskah.hashtag.map((h) => `#${h.replace(/^#/, '')}`).join(' ')}`;
   const layar = produk.layarHp?.[0]?.src ?? produk.layarDesktop?.[0]?.src;
   const gambar = layar ?? produk.logo?.src;
-  const umum = { naskah, produk, logo: LOGO, kontak: situs.kontak };
+  const logo = merek?.profil?.logo ?? (merek?.slug === 'bakafrawi' || !merek ? LOGO : '');
+  const umum = { naskah, produk, logo, kontak, tema };
   const pakaiAi = tugas.latar === 'ai';
   const catatan = [];
   const hasil = [];
@@ -107,24 +112,29 @@ async function tayangkan(tugas, k) {
   return { instagram: { feed, story, waktu: new Date().toISOString() } };
 }
 
-async function putaranTayang(pengaturan, kabar) {
-  let k = pengaturan;
-  if (adaInstagram(k)) {
-    const baru = await segarkanToken(k).catch((e) => (kabar(`⚠️ Token Instagram gagal diperpanjang: ${e.message}`), null));
-    if (baru) {
-      await simpanPengaturan(baru);
-      k = { ...k, ...baru };
-    }
-    // token_dicek: studio_ada_kerja() tak memicu mesin lagi untuk token ini sampai besok. Kolomnya
-    // dari migrasi 20261118200000 — gagal (migrasi belum dipasang) tak boleh menghentikan tayang.
-    await simpanPengaturan({ token_dicek: new Date().toISOString() }).catch((e) => console.error(e.message));
+/** Token Instagram tiap merek (diperpanjang bila hampir habis) → Map slug → kredensial. */
+async function akunInstagram(kabar) {
+  const peta = new Map();
+  for (const { merek, data } of await daftarKredensial('instagram')) {
+    let k = data;
+    const baru = await segarkanToken(k).catch((e) => (kabar(`⚠️ Token Instagram ${merek} gagal diperpanjang: ${e.message}`), null));
+    if (baru) k = { ...k, ...baru };
+    // dicek: studio_ada_kerja() tak memicu mesin lagi untuk token ini sampai besok.
+    await perbaruiKredensial(merek, 'instagram', { data: baru ? k : undefined, dicek: new Date().toISOString() }).catch((e) => console.error(e.message));
+    peta.set(merek, k);
   }
+  return peta;
+}
+
+async function putaranTayang(kabar) {
+  const akun = await akunInstagram(kabar);
   for (let i = 0; i < MAKS_TUGAS; i++) {
     const tugas = await ambilTayang();
     if (!tugas) break;
+    const k = akun.get(tugas.merek ?? 'bakafrawi');
     if (!adaInstagram(k)) {
-      await perbaruiTugas(tugas.id, { status_tayang: 'gagal', galat: 'Instagram belum tersambung (admin → Studio AI → Sambungan).' });
-      await kabar('⚠️ Postingan belum bisa tayang: Instagram belum tersambung. Tempel token di admin → Studio AI → Sambungan.');
+      await perbaruiTugas(tugas.id, { status_tayang: 'gagal', galat: `Instagram merek ${tugas.merek} belum tersambung (Bakafrawi Studio → Konten → Sambungan).` });
+      await kabar(`⚠️ Postingan ${tugas.merek} belum bisa tayang: Instagram merek itu belum tersambung. Tempel token di Konten → Sambungan.`);
       continue;
     }
     console.log(`📤 Tayang ${tugas.id}`);
@@ -165,6 +175,7 @@ async function modeAwan() {
     const situs = await bacaKonten();
     if (!situs) throw new Error('Konten situs belum ada di database (simpan sekali dari /admin).');
     const peramban = await bukaPeramban();
+    const merekCache = new Map();
     try {
       for (let i = 0; i < MAKS_TUGAS; i++) {
         const tugas = i === 0 ? tugasPertama : await ambilTugas();
@@ -173,8 +184,10 @@ async function modeAwan() {
         const folder = path.join(DIR, 'kerja', tugas.id);
         await mkdir(folder, { recursive: true });
         try {
+          const slug = tugas.merek ?? 'bakafrawi';
+          if (!merekCache.has(slug)) merekCache.set(slug, await bacaMerek(slug));
           const simpan = async (b, jenis) => unggah(`${tugas.id}/${path.basename(b)}`, await readFile(b), jenis);
-          const { naskah, caption, hasil, namaProduk } = await kerjakan(tugas, situs, peramban, folder, simpan);
+          const { naskah, caption, hasil, namaProduk } = await kerjakan(tugas, situs, peramban, folder, simpan, merekCache.get(slug));
           await perbaruiTugas(tugas.id, { status: 'selesai', selesai: new Date().toISOString(), naskah, caption, hasil, galat: null });
           console.log(`✔ Selesai: ${hasil.length} berkas`);
           if (chat && adaTelegram()) {
@@ -192,16 +205,17 @@ async function modeAwan() {
       await peramban.close();
     }
   }
-  await putaranTayang(pengaturan, kabar);
+  await putaranTayang(kabar);
 }
 
 async function modeLokal(berkasTugas) {
-  const { tugas, situs } = JSON.parse(await readFile(berkasTugas, 'utf8'));
+  // Berkas uji boleh membawa "merek" (bentuk baris studio_merek); bawaannya Bakafrawi.
+  const { tugas, situs, merek = { slug: 'bakafrawi', nama: 'Bakafrawi', profil: { situs: 'bakafrawi.com' } } } = JSON.parse(await readFile(berkasTugas, 'utf8'));
   const folder = path.join(DIR, 'keluaran', `${tugas.jenis}-${Date.now()}`);
   await mkdir(folder, { recursive: true });
   const peramban = await bukaPeramban();
   try {
-    const hasil = await kerjakan(tugas, situs, peramban, folder, async (b) => b);
+    const hasil = await kerjakan(tugas, situs, peramban, folder, async (b) => b, merek);
     console.log(JSON.stringify(hasil, null, 2));
   } finally {
     await peramban.close();

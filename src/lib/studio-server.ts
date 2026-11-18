@@ -8,11 +8,6 @@ export { adaKunciServer };
 
 export type Pengaturan = {
   telegram_chat_id: number | null;
-  ig_akun: string | null;
-  ig_user_id: string | null;
-  ig_token: string | null;
-  ig_host: "instagram" | "facebook";
-  ig_kedaluwarsa: string | null;
   google_refresh_token: string | null;
   google_email: string | null;
   google_galat: string | null;
@@ -61,7 +56,34 @@ export async function aturTayang(id: string, aksi: AksiTayang) {
   return hasil[0];
 }
 
-export async function buatTugas(isi: { produk_slug: string; jenis: "gambar" | "video"; latar: "polos" | "ai"; arahan?: string }) {
+// ------------------------------------------------------------ merek & kredensial sosmed
+
+export type Merek = { slug: string; nama: string; aktif: boolean; urutan: number; profil: Record<string, unknown> };
+export type Layanan = "instagram" | "tiktok";
+
+export async function daftarMerek(): Promise<Merek[]> {
+  return rest("studio_merek?select=slug,nama,aktif,urutan,profil&order=urutan.asc");
+}
+
+/** Kredensial satu merek; isinya rahasia — jangan pernah dikirim utuh ke browser. */
+export async function bacaKredensial(merek: string, layanan: Layanan): Promise<Record<string, string> | null> {
+  const [k] = (await rest(`studio_kredensial?merek=eq.${encodeURIComponent(merek)}&layanan=eq.${layanan}&select=data`)) as { data: Record<string, string> }[];
+  return k?.data ?? null;
+}
+
+export async function simpanKredensial(merek: string, layanan: Layanan, data: Record<string, string>) {
+  await rest("studio_kredensial?on_conflict=merek,layanan", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ merek, layanan, data, dicek: null, diubah: new Date().toISOString() }),
+  });
+}
+
+export async function hapusKredensial(merek: string, layanan: Layanan) {
+  await rest(`studio_kredensial?merek=eq.${encodeURIComponent(merek)}&layanan=eq.${layanan}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
+}
+
+export async function buatTugas(isi: { produk_slug: string; jenis: "gambar" | "video"; latar: "polos" | "ai"; arahan?: string; merek?: string }) {
   const [t] = (await rest("studio_tugas", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ arahan: "", ...isi }) })) as RingkasTugas[];
   return { tugas: t, dipicu: await picuStudio() };
 }

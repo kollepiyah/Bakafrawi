@@ -10,7 +10,8 @@ const q = (o: Record<string, string>) => new URLSearchParams(o).toString();
 
 export type AkunIg = { ig_token: string; ig_host: "instagram" | "facebook"; ig_user_id: string; ig_akun: string; ig_dibuat: string; ig_kedaluwarsa: string };
 
-export async function kenaliTokenInstagram(token: string, idIg?: string): Promise<AkunIg> {
+/** petunjuk: slug merek, untuk memilih akun IG yang namanya mirip bila token Facebook mengelola beberapa akun. */
+export async function kenaliTokenInstagram(token: string, idIg?: string, petunjuk = "bakafrawi"): Promise<AkunIg> {
   const dasar = { ig_token: token, ig_dibuat: new Date().toISOString(), ig_kedaluwarsa: new Date(Date.now() + 60 * 864e5).toISOString() };
   const r = await fetch(`${IG("me")}?${q({ fields: "user_id,username", access_token: token })}`, { cache: "no-store" });
   if (r.ok) {
@@ -33,7 +34,8 @@ export async function kenaliTokenInstagram(token: string, idIg?: string): Promis
   const hal = await fetch(`${FB("me/accounts")}?${q({ fields: "name,instagram_business_account{id,username}", access_token: token })}`, { cache: "no-store" });
   if (hal.ok) {
     const akun = ((await hal.json()).data ?? []).map((p: { instagram_business_account?: { id: string; username: string } }) => p.instagram_business_account).filter(Boolean);
-    const pilih = akun.find((a: { username: string }) => /bakafrawi/i.test(a.username)) ?? akun[0];
+    const kunci = petunjuk.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const pilih = akun.find((a: { username: string }) => a.username.toLowerCase().replace(/[^a-z0-9]/g, "").includes(kunci)) ?? akun[0];
     if (pilih) return { ...dasar, ig_host: "facebook", ig_user_id: String(pilih.id), ig_akun: `@${pilih.username}` };
     throw new Error("Token Facebook terbaca, tetapi tidak ada akun Instagram yang terlihat. Isi juga ID akun Instagram-nya.");
   }
