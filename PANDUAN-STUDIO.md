@@ -90,5 +90,10 @@ Supabase memeriksa tiap 5 menit dan menyalakan mesin hanya bila ada kerja — ja
    ```
    Tanpa langkah ini semuanya tetap jalan lewat jadwal 30 menit GitHub, hanya lebih lambat.
 
-**Latar gambar AI butuh billing Google.** Model gambar Gemini tidak punya kuota gratis (galat 429).
+**Latar gambar AI — Cloudflare (gratis) dulu.** Buat token di dash.cloudflare.com → Manage account →
+Account API tokens → *Create Token* → *Custom token* → Permissions: **Account · Workers AI · Edit** saja
+(jangan token berizin luas). Simpan di GitHub → Secrets → Actions: `CF_ACCOUNT_ID` (Account ID) dan
+`CF_API_TOKEN`. Jatah gratis 10.000 Neuron/hari ≈ 60 gambar; habis → Gemini.
+
+**Cadangan Gemini butuh billing Google.** Model gambar Gemini tidak punya kuota gratis (galat 429).
 Buka aistudio.google.com → proyek pemilik `GEMINI_API_KEY` → *Set up billing*. Biaya ± Rp650/gambar.

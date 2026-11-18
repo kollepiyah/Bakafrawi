@@ -17,6 +17,10 @@
 - **Latar AI berhenti mencoba saat kuota Gemini 0/habis (429)** dan menulis sebabnya di kartu tugas. Uji
   18 Nov: poster berlatar AI gagal 429 karena model gambar Gemini butuh **billing aktif** di Google AI Studio.
 - Migrasi `20261118200000_studio_andal.sql` (pg_cron, pg_net).
+- **Latar AI lewat Cloudflare dulu.** Penyedia gambar kini dicoba berurutan: Cloudflare Workers AI (FLUX.2
+  klein, 10.000 Neuron gratis/hari ≈ 60 gambar) lalu Gemini (butuh billing). Penyedia yang kuotanya habis
+  dilewati sampai putaran selesai; FLUX.2 yang menolak permintaan jatuh ke schnell persegi. Rahasia GitHub
+  baru `CF_ACCOUNT_ID` + `CF_API_TOKEN` (izin *Workers AI Edit* saja). Pola sama dengan Studio Lek Kopi.
 
 ## Tahap 3, gelombang 2 — Instagram, bot Telegram, latar AI (tayang 18 Nov 2026)
 

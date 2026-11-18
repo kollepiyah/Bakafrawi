@@ -142,7 +142,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
               <label className="flex items-start gap-2 text-sm">
                 <input type="checkbox" name="latar" className="mt-0.5 size-4 accent-[#c9a24b]" />
                 <span>
-                  Latar gambar AI <span className="text-xs text-redup">(poster: foto suasana; video: pembuka & penutup bergerak — ± Rp650 per gambar)</span>
+                  Latar gambar AI <span className="text-xs text-redup">(poster: foto suasana; video: pembuka & penutup bergerak — gratis ±60 gambar/hari lewat Cloudflare)</span>
                 </span>
               </label>
               <label className="grid gap-1.5">

@@ -22,7 +22,7 @@ const ALAT: Anthropic.Tool[] = [
       properties: {
         produk_slug: { type: "string", description: "slug produk dari daftar produk" },
         jenis: { type: "string", enum: ["gambar", "video"] },
-        latar_ai: { type: "boolean", description: "pakai latar foto suasana buatan AI (±Rp650/gambar)" },
+        latar_ai: { type: "boolean", description: "pakai latar foto suasana buatan AI (gratis lewat Cloudflare, ±60 gambar/hari)" },
         arahan: { type: "string", description: "arahan gaya/sasaran untuk penulis naskah; kosong bila tidak ada" },
       },
     },

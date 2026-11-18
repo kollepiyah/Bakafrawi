@@ -35,16 +35,16 @@ function skenario(produk) {
 async function fotoAi(adegan, rasio, keluar, catatan) {
   if (!adegan || catatan.aiBerhenti) return null;
   if (!adaGambarAi()) {
-    catatan.push('Latar AI dilewati: rahasia GEMINI_API_KEY belum diisi.');
+    catatan.push('Latar AI dilewati: rahasia CF_ACCOUNT_ID + CF_API_TOKEN (atau GEMINI_API_KEY) belum diisi.');
     catatan.aiBerhenti = true;
     return null;
   }
   try {
     return berkasUrl(await buatGambarAi(adegan, rasio, keluar));
   } catch (e) {
-    // 429 = kuota model gambar habis/0 (kunci gratis); mencoba gambar berikutnya hanya buang waktu.
+    // 429 = kuota semua penyedia habis (jatah harian Cloudflare / Gemini tanpa billing): berhenti mencoba.
     if (/\(429\)/.test(e.message)) {
-      catatan.push('Latar AI gagal: kuota gambar Gemini habis (429). Model gambar butuh billing aktif di Google AI Studio.');
+      catatan.push(`Latar AI gagal: ${e.message.slice(0, 200)}`);
       catatan.aiBerhenti = true;
     } else catatan.push(`Latar AI gagal: ${e.message.slice(0, 160)}`);
     return null;
