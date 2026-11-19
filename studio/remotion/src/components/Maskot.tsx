@@ -3,7 +3,7 @@
 // berulang; gambar diam (PNG transparan) hanya bernapas & mengangguk halus saat kata diucapkan.
 // Kosong → di Remotion Studio tampil kotak penanda, di render tidak tampil.
 import React from 'react';
-import { getRemotionEnvironment, Img, Loop, OffthreadVideo, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { getRemotionEnvironment, Img, Loop, OffthreadVideo, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import type { Kata } from '../data/script';
 import { H, SANS } from './dasar';
 
@@ -39,11 +39,15 @@ export const MascotOverlay: React.FC<P> = ({ berkas, atas, ganti = false, awal =
   const wadah: React.CSSProperties = { position: 'absolute', left: 0, right: 0, top: atas, height: tinggi, overflow: 'hidden', opacity: Math.min(1, p * 1.5) };
   if (/\.(webm|mp4|mov)$/i.test(berkas)) {
     // Video karakter (Veo) sudah bergerak sendiri: cukup diputar berulang, tanpa gerak tambahan.
+    const panjangLoop = Math.max(30, Math.round((durasiVideo || 8) * fps));
     return (
       <div style={wadah}>
-        <Loop durationInFrames={Math.max(30, Math.round((durasiVideo || 8) * fps))}>
-          <OffthreadVideo src={staticFile(berkas)} transparent={/\.webm$/i.test(berkas)} muted style={{ ...bingkai, transform: `translateX(-50%) translateY(${(1 - p) * 90}px)` }} />
-        </Loop>
+        {/* Mulai dari posisi waktu global (awal adegan) supaya video berlanjut antar-adegan, tak kembali ke detik 0. */}
+        <Sequence from={-(awal % panjangLoop)} layout="none">
+          <Loop durationInFrames={panjangLoop}>
+            <OffthreadVideo src={staticFile(berkas)} transparent={/\.webm$/i.test(berkas)} muted style={{ ...bingkai, transform: `translateX(-50%) translateY(${(1 - p) * 90}px)` }} />
+          </Loop>
+        </Sequence>
       </div>
     );
   }

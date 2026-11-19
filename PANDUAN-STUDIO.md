@@ -67,7 +67,9 @@ tidak perlu menyala. Repo publik → menit Actions gratis.
     `ibu-hijab`, `bapak-kopiah`; Claude memilih yang cocok dengan sasaran produk, satu karakter per
     video; tak ada yang cocok → acak). Isinya pose: `kaget`, `tunjuk`, `hp`, `jempol`, `lambai`
     (gambar .jpg/.png — latar dihapus AI otomatis; **video .mp4 dari Veo berlatar hijau #00FF00** — latar
-    dibuang & dipangkas otomatis, karakter bergerak sungguhan; video didahulukan dari gambar untuk pose sama).
+    dibuang & dipangkas otomatis, karakter bergerak sungguhan). **Satu video sudah cukup** (mis.
+    `bicara.mp4`, 8 dtk): bila karakter punya video, video dipakai di SEMUA adegan, diputar bolak-balik
+    tanpa lompatan dan berlanjut antar-adegan; gambar pose hanya dipakai bila tak ada video.
     Pose dipakai: kaget di pembuka, tunjuk di layar aplikasi, hp di kasir, jempol di alur/daftar,
     lambai di penutup; pose yang belum ada diganti pose lain. Satu gambar tanpa nama pose juga boleh.
   - `musik/` — lagu bebas royalti, satu dipilih acak tiap video. Kosong → tanpa maskot / musik contoh.

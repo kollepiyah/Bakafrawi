@@ -81,7 +81,7 @@ export function kotakGabung(kotak, lebar, tinggi, tepi = 0.06) {
  * latar dibuang chromakey memakai warna pojok bingkai pertama (hijau terang paling bersih).
  * → { berkas, durasi }
  */
-export async function videoTransparan(masuk, keluar, { maks = 10 } = {}) {
+export async function videoTransparan(masuk, keluar, { maks = 10, bolakBalik = true } = {}) {
   const info = await probe(masuk);
   const durasi = Math.min(maks, info.durasi || maks);
   const kotak = [];
@@ -98,9 +98,11 @@ export async function videoTransparan(masuk, keluar, { maks = 10 } = {}) {
   const k = kotakGabung(kotak, info.lebar, info.tinggi);
   const hex = `0x${warna.map((x) => x.toString(16).padStart(2, '0')).join('')}`;
   const hijau = warna[1] > warna[0] + 40 && warna[1] > warna[2] + 40;
-  const filter = [`crop=${k.w}:${k.h}:${k.x}:${k.y}`, `chromakey=${hex}:0.13:0.06`, ...(hijau ? ['despill=type=green'] : []), 'scale=-2:min(1280\\,ih)', 'fps=30', 'format=yuva420p'].join(',');
-  await ffmpeg(['-y', '-t', durasi.toFixed(2), '-i', masuk, '-vf', filter, '-an', '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '32', '-auto-alt-ref', '0', '-deadline', 'good', '-cpu-used', '4', keluar]);
-  return { berkas: keluar, durasi, hijau };
+  const dasar = [`crop=${k.w}:${k.h}:${k.x}:${k.y}`, `chromakey=${hex}:0.13:0.06`, ...(hijau ? ['despill=type=green'] : []), 'scale=-2:min(1100\\,ih)', 'fps=30', 'format=yuva420p'].join(',');
+  // Bolak-balik (maju lalu mundur): video Veo 8 dtk diulang tanpa lompatan dari bingkai akhir ke awal.
+  const filter = bolakBalik ? `[0:v]${dasar},split[maju][b];[b]reverse[mundur];[maju][mundur]concat=n=2:v=1:a=0[v]` : `[0:v]${dasar}[v]`;
+  await ffmpeg(['-y', '-t', durasi.toFixed(2), '-i', masuk, '-filter_complex', filter, '-map', '[v]', '-an', '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '32', '-auto-alt-ref', '0', '-deadline', 'good', '-cpu-used', '4', keluar]);
+  return { berkas: keluar, durasi: bolakBalik ? durasi * 2 : durasi, hijau };
 }
 
 /** ffmpeg yang keluarannya (stdout) dibutuhkan sebagai Buffer, mis. satu bingkai PNG. */

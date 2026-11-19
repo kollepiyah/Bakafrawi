@@ -89,11 +89,16 @@ test('pilihKarakter: pilihan Claude → slug merek → acak', async () => {
   assert.equal(pilihKarakter([], {}), null);
 });
 
-test('maskotAdegan: pose Claude → pose bawaan jenis → tunjuk → pose lain → gambar tanpa pose', async () => {
+test('maskotAdegan: video didahulukan; lalu pose Claude → pose bawaan → tunjuk → pose lain → tanpa pose', async () => {
   const { maskotAdegan } = await import('./video.mjs');
   const adegan = [{ jenis: 'hook' }, { jenis: 'layar', pose: 'jempol' }, { jenis: 'kasir' }, { jenis: 'penutup' }];
   const ibu = ['ibu/kaget.JPG', 'ibu/tunjuk.jpg', 'ibu/jempol.png', 'ibu/jempol.webm'];
-  assert.deepEqual(maskotAdegan(adegan, ibu), ['ibu/kaget.JPG', 'ibu/jempol.webm', 'ibu/tunjuk.jpg', 'ibu/tunjuk.jpg']);
+  // Ada video → video dipakai di semua adegan (pose video lebih dulu), gambar hanya bila tak ada video.
+  assert.deepEqual(maskotAdegan(adegan, ibu), Array(4).fill('ibu/jempol.webm'));
+  const satuVideo = ['ibu/kaget.jpg', 'ibu/tunjuk.jpg', 'ibu/bicara.mp4'];
+  assert.deepEqual(maskotAdegan(adegan, satuVideo), Array(4).fill('ibu/bicara.mp4'));
+  const gambarSaja = ['ibu/kaget.JPG', 'ibu/tunjuk.jpg', 'ibu/jempol.png'];
+  assert.deepEqual(maskotAdegan(adegan, gambarSaja), ['ibu/kaget.JPG', 'ibu/jempol.png', 'ibu/tunjuk.jpg', 'ibu/tunjuk.jpg']);
   assert.deepEqual(maskotAdegan(adegan, ['Bakafrawi.jpg']), Array(4).fill('Bakafrawi.jpg'));
   assert.deepEqual(maskotAdegan(adegan.slice(0, 1), ['lek-kopi-lambai.jpg']), ['lek-kopi-lambai.jpg']);
   assert.deepEqual(maskotAdegan(adegan.slice(0, 1), []), [null]);

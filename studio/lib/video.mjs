@@ -77,14 +77,20 @@ export function pilihKarakter(nama, { pilihan = '', slug = '', acak = Math.rando
  */
 export function maskotAdegan(adegan, berkasKarakter) {
   const urutExt = (a, b) => EXT_MASKOT.indexOf(extDari(a)) - EXT_MASKOT.indexOf(extDari(b));
-  const berpose = (p) => berkasKarakter.filter((b) => poseDari(b) === p).sort(urutExt)[0];
-  const polos = [...berkasKarakter.filter((b) => !poseDari(b))].sort(urutExt)[0] ?? null;
+  const video = (b) => ['webm', 'mov', 'mp4'].includes(extDari(b));
+  // Video didahulukan di SEMUA adegan bila karakter punya video: campuran video bergerak & gambar diam
+  // terasa tak konsisten (Kyai baru sanggup membuat 1 video 8 dtk per karakter, 19 Nov 2026).
+  const kelompok = berkasKarakter.some(video) ? [berkasKarakter.filter(video), berkasKarakter] : [berkasKarakter];
   return adegan.map((a) => {
-    for (const p of new Set([a.pose, POSE_BAWAAN[a.jenis], 'tunjuk', ...POSE])) {
-      const ada = POSE.includes(p) && berpose(p);
-      if (ada) return ada;
+    for (const isi of kelompok) {
+      for (const p of new Set([a.pose, POSE_BAWAAN[a.jenis], 'tunjuk', ...POSE])) {
+        const ada = POSE.includes(p) && isi.filter((b) => poseDari(b) === p).sort(urutExt)[0];
+        if (ada) return ada;
+      }
+      const polos = [...isi.filter((b) => !poseDari(b))].sort(urutExt)[0];
+      if (polos) return polos;
     }
-    return polos;
+    return null;
   });
 }
 

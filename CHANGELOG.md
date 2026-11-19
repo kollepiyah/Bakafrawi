@@ -1,5 +1,14 @@
 # CHANGELOG — bakafrawi.com
 
+## Satu video karakter 8 detik cukup untuk satu iklan (19 Nov, gelombang 4)
+
+- Kyai hanya sanggup membuat 1 video Veo 8 dtk per karakter. Bila karakter punya video, video itu
+  kini dipakai di **semua adegan** (dulu hanya pose yang namanya cocok; sisanya gambar diam → tak
+  konsisten). Video diubah jadi **bolak-balik** (maju lalu mundur, 16 dtk) supaya berulang tanpa
+  lompatan, dan Remotion memutarnya mengikuti waktu global sehingga **berlanjut antar-adegan**.
+- Diuji di PC: satu video hijau 8 dtk → lima adegan memakai berkas yang sama, bingkai sebelum/sesudah
+  pergantian adegan nyaris identik. Tes 14/14.
+
 ## Zoom layar pas satu kartu & karakter video dari Veo (19 Nov, gelombang 3)
 
 - Kyai: kotak perbesaran memotong "Laporan & Grafik" dan gerak karakter kurang bagus. Kotak kini
