@@ -183,14 +183,14 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   <span className="text-xs font-medium text-muted-foreground">Jenis</span>
                   <select name="jenis" className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
                     <option value="gambar" className="bg-card">Poster (1:1, 4:5, 9:16)</option>
-                    <option value="video" className="bg-card">Video Reels/TikTok (rekaman aplikasi)</option>
+                    <option value="video" className="bg-card">Video Reels/TikTok (animasi aplikasi + karakter)</option>
                   </select>
                 </label>
               </div>
               <label hidden={merekBank} className="flex items-start gap-2 text-sm">
                 <input type="checkbox" name="latar" className="mt-0.5 size-4 accent-[#c9a24b]" />
                 <span>
-                  Latar gambar AI <span className="text-xs text-redup">(poster: foto suasana; video: pembuka & penutup bergerak — gratis ±60 gambar/hari lewat Cloudflare)</span>
+                  Latar gambar AI <span className="text-xs text-redup">(khusus poster: foto suasana — gratis ±60 gambar/hari lewat Cloudflare; video memakai karakter dari Drive)</span>
                 </span>
               </label>
               <label className="grid gap-1.5">
