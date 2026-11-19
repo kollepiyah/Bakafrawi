@@ -66,7 +66,8 @@ tidak perlu menyala. Repo publik → menit Actions gratis.
   - `maskot/<nama-karakter>/` — **satu subfolder per karakter** (nama menggambarkan karakternya, mis.
     `ibu-hijab`, `bapak-kopiah`; Claude memilih yang cocok dengan sasaran produk, satu karakter per
     video; tak ada yang cocok → acak). Isinya pose: `kaget`, `tunjuk`, `hp`, `jempol`, `lambai`
-    (.webm transparan / .png / .jpg berlatar polos — latar dibuang otomatis, paling bersih hijau #00FF00).
+    (gambar .jpg/.png — latar dihapus AI otomatis; **video .mp4 dari Veo berlatar hijau #00FF00** — latar
+    dibuang & dipangkas otomatis, karakter bergerak sungguhan; video didahulukan dari gambar untuk pose sama).
     Pose dipakai: kaget di pembuka, tunjuk di layar aplikasi, hp di kasir, jempol di alur/daftar,
     lambai di penutup; pose yang belum ada diganti pose lain. Satu gambar tanpa nama pose juga boleh.
   - `musik/` — lagu bebas royalti, satu dipilih acak tiap video. Kosong → tanpa maskot / musik contoh.

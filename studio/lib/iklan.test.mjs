@@ -122,3 +122,12 @@ test('bersihkanTepi: hijau di tepi setengah tembus dibuang, piksel padat tak dis
   assert.deepEqual([...d.subarray(4, 8)], [10, 200, 20, 255]);
   assert.deepEqual([...d.subarray(8)], [0, 0, 0, 0]);
 });
+
+test('kotakGabung: gabungan kotak karakter di beberapa bingkai, diperlebar & genap, tak keluar bingkai', async () => {
+  const { kotakGabung } = await import('./latar.mjs');
+  const k = kotakGabung([{ x: 100, y: 50, w: 200, h: 600 }, { x: 60, y: 40, w: 220, h: 610 }], 720, 1280, 0.1);
+  assert.deepEqual(k, { x: 36, y: 0, w: 288, h: 710 });
+  assert.equal(k.w % 2, 0);
+  const tepi = kotakGabung([{ x: 0, y: 0, w: 720, h: 1280 }], 720, 1280);
+  assert.deepEqual(tepi, { x: 0, y: 0, w: 720, h: 1280 });
+});

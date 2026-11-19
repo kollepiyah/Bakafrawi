@@ -4,9 +4,9 @@
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ffmpeg, jalankan } from './bank/alat.mjs';
+import { ffmpeg, jalankan, probe } from './bank/alat.mjs';
 import { musikContoh, suaraKata } from './iklan.mjs';
-import { hapusLatar } from './latar.mjs';
+import { hapusLatar, videoTransparan } from './latar.mjs';
 import { FPS, hitungWaktu } from '../remotion/src/data/script.ts';
 
 export const REMOTION = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'remotion');
@@ -195,14 +195,23 @@ export async function renderIklan({ naskah, aset, folder, musik = null, suara = 
   for (const [i, sumber] of daftarMaskot.entries()) {
     if (!sumber || !n.adegan[i]) continue;
     if (!siap.has(sumber)) {
-      // Gambar (jpg/png/webp) → latar dihapus AI + dipangkas ke tubuh; video disalin apa adanya.
-      const gambar = /\.(jpe?g|png|webp)$/i.test(sumber);
-      const nama = `maskot-${siap.size}${gambar ? '.png' : path.extname(sumber).toLowerCase()}`;
-      if (gambar) await hapusLatar(sumber, path.join(publik, nama));
-      else await copyFile(sumber, path.join(publik, nama));
-      siap.set(sumber, nama);
+      // Gambar → latar dihapus AI + dipangkas ke tubuh. Video Veo (mp4/mov, latar hijau) → WebM
+      // transparan terpangkas. WebM dianggap sudah transparan, disalin apa adanya.
+      const nama = `maskot-${siap.size}`;
+      if (/\.(jpe?g|png|webp)$/i.test(sumber)) {
+        siap.set(sumber, { berkas: await hapusLatar(sumber, path.join(publik, `${nama}.png`)).then(() => `${nama}.png`) });
+      } else if (/\.webm$/i.test(sumber)) {
+        await copyFile(sumber, path.join(publik, `${nama}.webm`));
+        siap.set(sumber, { berkas: `${nama}.webm`, durasi: (await probe(sumber)).durasi });
+      } else {
+        const v = await videoTransparan(sumber, path.join(publik, `${nama}.webm`));
+        siap.set(sumber, { berkas: `${nama}.webm`, durasi: v.durasi });
+        if (!v.hijau) log(`⚠️ Video maskot ${path.basename(sumber)} tidak berlatar hijau — tepi bisa kurang bersih.`);
+      }
     }
-    n.adegan[i].maskot = siap.get(sumber);
+    const m = siap.get(sumber);
+    n.adegan[i].maskot = m.berkas;
+    if (m.durasi) n.adegan[i].maskotDurasi = m.durasi;
   }
   const pertama = n.adegan.find((a) => a.maskot)?.maskot;
   if (pertama) n.maskot = pertama; // menandai tata letak bermaskot

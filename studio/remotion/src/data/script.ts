@@ -8,7 +8,7 @@ export type SuaraAdegan = { berkas: string; durasi: number; kata: Kata[] }; // b
 export type Layar = { berkas: string; lebar: number; tinggi: number }; // tangkapan layar aplikasi asli
 
 // maskot: berkas pose karakter untuk adegan ini (di public/); kosong = memakai Naskah.maskot.
-type Dasar = { narasi: string; kunci: string[]; durasi: number; pose?: string; maskot?: string };
+type Dasar = { narasi: string; kunci: string[]; durasi: number; pose?: string; maskot?: string; maskotDurasi?: number };
 export type Adegan =
   // Pembuka gaya karosel IG: label pil hitam, judul kapital bertumpuk (bagian `tekan` dalam kotak
   // warna), sub kalimat, coretan tangan berpanah, dua ikon bertegel "dari → ke".

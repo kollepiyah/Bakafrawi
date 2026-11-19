@@ -1,5 +1,16 @@
 # CHANGELOG — bakafrawi.com
 
+## Zoom layar pas satu kartu & karakter video dari Veo (19 Nov, gelombang 3)
+
+- Kyai: kotak perbesaran memotong "Laporan & Grafik" dan gerak karakter kurang bagus. Kotak kini
+  menampilkan pita **selebar layar** (satu kartu UI utuh) dengan bingkai sorot di HP pada baris yang
+  sama; titik fokus mendatar dari Claude tak dipakai lagi.
+- **Video karakter Veo** (mp4/mov latar hijau): mesin mencari kotak karakter dengan MODNet di 3 bingkai,
+  membuang latar dengan chromakey + despill, dan membuat WebM VP9 transparan terpangkas
+  (`latar.mjs` `videoTransparan`); Remotion memutarnya berulang setengah badan.
+- Gambar diam: gerak dibuat halus (tanpa memutar badan, anggukan kecil).
+- Diuji di PC: video hijau buatan → WebM transparan bersih, render karakter bapak-kopiah. Tes 14/14.
+
 ## Maskot: latar dihapus AI, setengah badan, bergerak, suara ikut karakter (19 Nov, gelombang 2)
 
 - Keluhan Kyai pada putaran sungguhan pertama: karakter kecil, diam, sweter krem bolong di latar biru

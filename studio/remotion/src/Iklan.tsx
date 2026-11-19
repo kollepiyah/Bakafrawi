@@ -91,7 +91,7 @@ export const Iklan: React.FC<Naskah> = (naskah) => {
         const sebelum = i > 0 ? (adegan[i - 1].maskot ?? maskot) : null;
         return (
           <Sequence key={`m${i}`} from={waktu[i].mulai} durationInFrames={waktu[i].durasi} layout="none">
-            <MascotOverlay berkas={berkas} atas={letak.maskotAtas} ganti={berkas !== sebelum} awal={waktu[i].mulai} kata={suara?.[i]?.kata ?? []} mulaiDetik={JEDA_AWAL} />
+            <MascotOverlay berkas={berkas} atas={letak.maskotAtas} ganti={berkas !== sebelum} awal={waktu[i].mulai} kata={suara?.[i]?.kata ?? []} mulaiDetik={JEDA_AWAL} durasiVideo={a.maskotDurasi} />
           </Sequence>
         );
       })}
