@@ -13,7 +13,7 @@ import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } fr
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { ffmpeg, probe } from './lib/bank/alat.mjs';
-import { ASET_LOKAL, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihMusik, renderIklan, salinAsetDrive, WARNA } from './lib/video.mjs';
+import { ASET_LOKAL, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihMusik, renderIklan, salinAsetDrive, suaraKarakter, WARNA } from './lib/video.mjs';
 import { buatNaskah, buatNaskahVideo } from './lib/naskah.mjs';
 import { bukaPeramban, potret, potretLayar } from './lib/peramban.mjs';
 import { adaTelegram, kirimHasil, kirimTeks } from './lib/telegram.mjs';
@@ -196,7 +196,7 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     if (tokoh) naskah.karakter = tokoh;
     const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
     const musik = process.env.STUDIO_MUSIK || (lagu && path.join(dirMusik, lagu));
-    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot }, folder, musik, keluar: berkas('video.mp4') });
+    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot }, folder, musik, suara: suaraKarakter(tokoh), keluar: berkas('video.mp4') });
     hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') });
     hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   }

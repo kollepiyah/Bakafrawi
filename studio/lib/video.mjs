@@ -1,12 +1,12 @@
 // Video iklan produk lewat Remotion (studio/remotion), dipilih Kyai 19 Nov 2026: naskah Claude
 // (adegan datar) dirapikan jadi props `Naskah`, narasi edge-tts + waktu tiap kata dibuat per adegan,
 // aset disalin ke folder publik tugas, lalu `remotion render` dijalankan dengan --public-dir.
-import { spawn } from 'node:child_process';
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ffmpeg, jalankan } from './bank/alat.mjs';
 import { musikContoh, suaraKata } from './iklan.mjs';
+import { hapusLatar } from './latar.mjs';
 import { FPS, hitungWaktu } from '../remotion/src/data/script.ts';
 
 export const REMOTION = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'remotion');
@@ -88,21 +88,15 @@ export function maskotAdegan(adegan, berkasKarakter) {
   });
 }
 
-/**
- * JPG tak punya latar transparan: latar polos (warna diambil dari piksel pojok kiri atas) dibuang
- * dengan colorkey ffmpeg → PNG transparan. Cocok untuk karakter di latar polos/putih.
- */
-export async function jpgKePng(masuk, keluar) {
-  const piksel = await new Promise((ok, gagal) => {
-    const p = spawn(process.env.STUDIO_FFMPEG || 'ffmpeg', ['-v', 'error', '-i', masuk, '-vf', 'crop=4:4:0:0,scale=1:1', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
-    const buf = [];
-    p.stdout.on('data', (d) => buf.push(d));
-    p.on('error', gagal);
-    p.on('close', (k) => (k === 0 ? ok(Buffer.concat(buf)) : gagal(new Error(`ffmpeg gagal membaca warna latar maskot (${k})`))));
-  });
-  const warna = `0x${[...piksel.subarray(0, 3)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
-  await ffmpeg(['-y', '-i', masuk, '-vf', `format=rgba,colorkey=${warna}:0.16:0.08`, keluar]);
-  return keluar;
+// Suara narasi mengikuti karakter: nama folder berisi kata perempuan → suara wanita (Gadis), selain
+// itu pria (Ardi). Kyai: "pakai karakter ibu hijab tapi kok suaranya pria" (19 Nov 2026).
+const KATA_WANITA = /(^|[-_\s])(ibu|bu|mbak|mba|kak|wanita|perempuan|cewek|hijab|jilbab|akhwat|putri|nyonya|bunda|umi|ning)([-_\s]|$)/i;
+export const SUARA = { wanita: 'id-ID-GadisNeural', pria: 'id-ID-ArdiNeural' };
+
+/** Suara edge-tts untuk karakter; tanpa karakter → STUDIO_SUARA atau pria. Murni. */
+export function suaraKarakter(nama, bawaan = process.env.STUDIO_SUARA || SUARA.pria) {
+  if (!nama) return bawaan;
+  return KATA_WANITA.test(String(nama)) ? SUARA.wanita : SUARA.pria;
 }
 
 export const WARNA = { utama: '#0F2A5F', kedua: '#F5B800', latar: '#FAFAFA', kisi: '#EAEAEA', tinta: '#0B0B0F' };
@@ -170,7 +164,7 @@ export function keNaskah(k, { nama, logo, utama = WARNA.utama, kedua = WARNA.ked
  * Semua bahan disalin ke `folder/publik` (jadi --public-dir); musik: berkas lokal atau buatan ffmpeg.
  * → { berkas, sampul, durasi }
  */
-export async function renderIklan({ naskah, aset, folder, musik = null, keluar, log = console.log }) {
+export async function renderIklan({ naskah, aset, folder, musik = null, suara = undefined, keluar, log = console.log }) {
   const publik = path.join(folder, 'publik');
   await mkdir(publik, { recursive: true });
   const n = structuredClone(naskah);
@@ -186,7 +180,7 @@ export async function renderIklan({ naskah, aset, folder, musik = null, keluar, 
   }
   n.suara = [];
   for (const [i, a] of n.adegan.entries()) {
-    const s = await suaraKata(a.narasi, path.join(publik, `narasi-${i}.mp3`));
+    const s = await suaraKata(a.narasi, path.join(publik, `narasi-${i}.mp3`), suara ? { suara } : {});
     n.suara.push({ berkas: `narasi-${i}.mp3`, durasi: s.durasi, kata: s.kata });
     log(`🎙 ${i + 1}. ${a.jenis}: ${s.durasi.toFixed(2)} dtk`);
   }
@@ -201,8 +195,10 @@ export async function renderIklan({ naskah, aset, folder, musik = null, keluar, 
   for (const [i, sumber] of daftarMaskot.entries()) {
     if (!sumber || !n.adegan[i]) continue;
     if (!siap.has(sumber)) {
-      const nama = `maskot-${siap.size}${/\.jpe?g$/i.test(sumber) ? '.png' : path.extname(sumber).toLowerCase()}`;
-      if (/\.jpe?g$/i.test(sumber)) await jpgKePng(sumber, path.join(publik, nama));
+      // Gambar (jpg/png/webp) → latar dihapus AI + dipangkas ke tubuh; video disalin apa adanya.
+      const gambar = /\.(jpe?g|png|webp)$/i.test(sumber);
+      const nama = `maskot-${siap.size}${gambar ? '.png' : path.extname(sumber).toLowerCase()}`;
+      if (gambar) await hapusLatar(sumber, path.join(publik, nama));
       else await copyFile(sumber, path.join(publik, nama));
       siap.set(sumber, nama);
     }

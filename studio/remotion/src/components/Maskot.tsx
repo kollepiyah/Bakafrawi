@@ -1,13 +1,25 @@
-// Slot karakter/maskot di 40% bawah layar, satu per adegan (pose boleh berganti). Isi: video
-// transparan .webm (VP9 alpha), .mp4, atau gambar (.png) yang "bernapas" pelan. Kosong → di Remotion
-// Studio tampil kotak penanda, di render tidak tampil apa-apa (tata letak versi tanpa maskot).
+// Slot karakter/maskot di 40% bawah layar, satu per adegan (pose boleh berganti). Gambar (PNG
+// transparan, sudah dipangkas ke tubuh oleh mesin) dibingkai SETENGAH BADAN seperti pembicara Reels
+// dan "hidup": bergoyang, bernapas, dan mengangguk kecil tiap kata diucapkan. Video .webm transparan
+// diputar apa adanya. Kosong → di Remotion Studio tampil kotak penanda, di render tidak tampil.
 import React from 'react';
 import { AbsoluteFill, getRemotionEnvironment, Img, Loop, OffthreadVideo, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import type { Kata } from '../data/script';
 import { H, SANS } from './dasar';
 
-type P = { berkas?: string; atas: number; ganti?: boolean; awal?: number };
+type P = { berkas?: string; atas: number; ganti?: boolean; awal?: number; kata?: Kata[]; mulaiDetik?: number };
 
-export const MascotOverlay: React.FC<P> = ({ berkas, atas, ganti = false, awal = 0 }) => {
+/** Kuat "ketukan bicara" pada bingkai ini: 1 saat kata mulai, meluruh cepat. Murni. */
+export function ketukBicara(frame: number, fps: number, kata: Kata[], mulaiDetik: number) {
+  let k = 0;
+  for (const w of kata) {
+    const f = frame - Math.round((mulaiDetik + w.mulai) * fps);
+    if (f >= 0 && f < 20) k = Math.max(k, Math.exp(-f / 4.5));
+  }
+  return k;
+}
+
+export const MascotOverlay: React.FC<P> = ({ berkas, atas, ganti = false, awal = 0, kata = [], mulaiDetik = 0 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const tinggi = H - atas;
@@ -19,24 +31,34 @@ export const MascotOverlay: React.FC<P> = ({ berkas, atas, ganti = false, awal =
       </div>
     );
   }
-  // Pose baru muncul dengan pegas dari bawah; pose yang sama dengan adegan sebelumnya tetap diam.
+  // Pose baru muncul dengan pegas dari bawah; pose yang sama dengan adegan sebelumnya tetap di tempat.
   const p = ganti ? spring({ frame, fps, config: { damping: 13, stiffness: 170, mass: 0.7 } }) : 1;
-  const masuk: React.CSSProperties = { opacity: Math.min(1, p * 1.5), transform: `translateY(${(1 - p) * 70}px)` };
-  const gaya: React.CSSProperties = { position: 'absolute', left: 0, right: 0, bottom: 0, height: tinggi, objectFit: 'contain', objectPosition: 'bottom center', width: '100%' };
   if (/\.(webm|mp4|mov)$/i.test(berkas)) {
     return (
-      <AbsoluteFill style={masuk}>
+      <AbsoluteFill style={{ opacity: Math.min(1, p * 1.5), transform: `translateY(${(1 - p) * 70}px)` }}>
         <Loop durationInFrames={10 * 30}>
-          <OffthreadVideo src={staticFile(berkas)} transparent={/\.webm$/i.test(berkas)} muted style={gaya} />
+          <OffthreadVideo src={staticFile(berkas)} transparent={/\.webm$/i.test(berkas)} muted style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: tinggi, width: '100%', objectFit: 'contain', objectPosition: 'bottom center' }} />
         </Loop>
       </AbsoluteFill>
     );
   }
-  // Gambar diam: napas pelan (naik-turun 1%) memakai waktu global supaya tak melompat antar-adegan.
-  const napas = Math.sin((frame + awal) / 22) * 0.01;
+  // Waktu global supaya goyangan tak melompat saat adegan berganti dengan pose yang sama.
+  const t = frame + awal;
+  const ketuk = ketukBicara(frame, fps, kata, mulaiDetik);
+  const goyang = Math.sin(t / 45) * 1.2 + ketuk * 0.8;
+  const napas = 1 + Math.sin(t / 22) * 0.008 + ketuk * 0.012;
+  const angguk = -ketuk * 12 + Math.sin(t / 30) * 4;
   return (
-    <AbsoluteFill style={masuk}>
-      <Img src={staticFile(berkas)} style={{ ...gaya, transform: `scale(${1 + napas})`, transformOrigin: 'bottom center' }} />
-    </AbsoluteFill>
+    <div style={{ position: 'absolute', left: 0, right: 0, top: atas, height: tinggi, overflow: 'hidden', opacity: Math.min(1, p * 1.5) }}>
+      {/* Setengah badan: tinggi gambar ≈ 1,85× slot, kepala di atas slot, pinggang ke bawah terpotong tepi video. */}
+      <Img
+        src={staticFile(berkas)}
+        style={{
+          position: 'absolute', left: '50%', top: 24, height: tinggi * 1.85, width: 'auto', maxWidth: 'none',
+          transform: `translateX(-50%) translateY(${(1 - p) * 90 + angguk}px) rotate(${goyang}deg) scale(${napas})`,
+          transformOrigin: '50% 85%',
+        }}
+      />
+    </div>
   );
 };

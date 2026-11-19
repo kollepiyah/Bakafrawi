@@ -104,3 +104,21 @@ test('keNaskah: pose dari Claude ikut bila sah', () => {
   assert.equal(n.adegan[0].pose, 'kaget');
   assert.equal(n.adegan[1].pose, undefined);
 });
+
+test('suaraKarakter: nama karakter perempuan → suara wanita, lainnya pria', async () => {
+  const { suaraKarakter, SUARA } = await import('./video.mjs');
+  assert.equal(suaraKarakter('ibu-hijab'), SUARA.wanita);
+  assert.equal(suaraKarakter('Mbak_Kasir'), SUARA.wanita);
+  assert.equal(suaraKarakter('bapak-kopiah'), SUARA.pria);
+  assert.equal(suaraKarakter('ibuprofen'), SUARA.pria); // "ibu" harus kata utuh
+  assert.equal(suaraKarakter(null, 'x'), 'x');
+});
+
+test('bersihkanTepi: hijau di tepi setengah tembus dibuang, piksel padat tak disentuh', async () => {
+  const { bersihkanTepi } = await import('./latar.mjs');
+  const d = Buffer.from([10, 200, 20, 128, 10, 200, 20, 255, 0, 0, 0, 0]);
+  bersihkanTepi(d);
+  assert.deepEqual([...d.subarray(0, 4)], [10, 20, 20, Math.round((88 * 255) / 215)]);
+  assert.deepEqual([...d.subarray(4, 8)], [10, 200, 20, 255]);
+  assert.deepEqual([...d.subarray(8)], [0, 0, 0, 0]);
+});

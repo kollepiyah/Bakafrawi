@@ -1,5 +1,17 @@
 # CHANGELOG — bakafrawi.com
 
+## Maskot: latar dihapus AI, setengah badan, bergerak, suara ikut karakter (19 Nov, gelombang 2)
+
+- Keluhan Kyai pada putaran sungguhan pertama: karakter kecil, diam, sweter krem bolong di latar biru
+  (colorkey ffmpeg ikut menghapus warna mirip latar abu-abu Flow), dan suara pria untuk ibu hijab.
+- `studio/lib/latar.mjs`: latar dihapus model segmentasi **MODNet** (transformers.js, Apache-2.0,
+  ±2 dtk/gambar, gratis) + pembersih tepi hijau + pangkas ke tubuh. Model di-cache di Actions.
+- Remotion: karakter dibingkai **setengah badan** (kepala–pinggang), bergoyang & bernapas, dan
+  **mengangguk kecil tiap kata diucapkan** (dari waktu kata edge-tts).
+- **Suara mengikuti karakter**: nama folder berisi ibu/mbak/hijab/wanita/… → `id-ID-GadisNeural`,
+  lainnya `id-ID-ArdiNeural`.
+- Diuji di PC dengan karakter asli Kyai dari Drive (ibu-hijab, bapak-kopiah). Tes 13/13.
+
 ## Maskot karakter 3D dari Google Drive: banyak karakter & pose per adegan (19 Nov, belum tayang)
 
 - Aset video dikelola Kyai di Drive `Bakafrawi Studio/Aset` (bukan di laptop): `maskot/` dan `musik/`

@@ -108,6 +108,14 @@ jobs:
           ffmpeg -hide_banner -filters | grep -q zscale || echo "⚠️ ffmpeg tanpa zscale — klip HDR akan gagal"
           google-chrome --version
 
+      # Model penghapus latar karakter maskot (MODNet, ±25 MB dari Hugging Face) disimpan antar-putaran.
+      - name: Cache model hapus latar
+        if: steps.cek.outputs.kerja == 'true'
+        uses: actions/cache@v4
+        with:
+          path: studio/.model
+          key: model-latar-modnet-v1
+
       - name: Pasang paket Node
         if: steps.cek.outputs.kerja == 'true'
         working-directory: studio
