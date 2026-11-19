@@ -37,20 +37,55 @@ export function pilihMusik(berkasAda, acak = Math.random) {
   return lagu.length ? lagu[Math.floor(acak() * lagu.length) % lagu.length] : null;
 }
 
+// ------------------------------------------------------------ karakter & pose maskot
+// Drive "Aset/maskot": satu subfolder per karakter (nama bebas, mis. "ibu-hijab"), isinya pose
+// kaget/tunjuk/hp/jempol/lambai (.webm/.png/.jpg). Berkas di akar juga diterima: "<karakter>-<pose>.jpg"
+// atau "<karakter>.jpg" (tanpa pose). Satu video memakai satu karakter dari awal sampai akhir.
+export const POSE = ['kaget', 'tunjuk', 'hp', 'jempol', 'lambai'];
+const POSE_BAWAAN = { hook: 'kaget', layar: 'tunjuk', kasir: 'hp', alur: 'jempol', daftar: 'jempol', penutup: 'lambai' };
+const EXT_MASKOT = ['webm', 'mov', 'mp4', 'png', 'webp', 'jpg', 'jpeg']; // bergerak → transparan → JPG
+const extDari = (b) => b.slice(b.lastIndexOf('.') + 1).toLowerCase();
+const dasarDari = (b) => b.slice(b.lastIndexOf('/') + 1, b.lastIndexOf('.')).toLowerCase();
+const poseDari = (b) => POSE.find((p) => dasarDari(b) === p || dasarDari(b).endsWith(`-${p}`)) ?? null;
+
+/** Berkas maskot (path relatif, pemisah "/") → Map nama karakter → [berkas]. Murni. */
+export function kelompokKarakter(berkas) {
+  const peta = new Map();
+  for (const b of berkas.map((x) => x.replace(/\\/g, '/'))) {
+    if (!EXT_MASKOT.includes(extDari(b))) continue;
+    const nama = b.includes('/') ? b.split('/')[0] : (() => {
+      const d = b.slice(0, b.lastIndexOf('.'));
+      const p = poseDari(b);
+      return p && d.toLowerCase().endsWith(`-${p}`) ? d.slice(0, -(p.length + 1)) : d;
+    })();
+    if (!nama) continue;
+    const kunci = [...peta.keys()].find((k) => k.toLowerCase() === nama.toLowerCase()) ?? nama;
+    peta.set(kunci, [...(peta.get(kunci) ?? []), b]);
+  }
+  return peta;
+}
+
+/** Karakter video: pilihan Claude → karakter bernama slug merek → acak (supaya bervariasi). Murni. */
+export function pilihKarakter(nama, { pilihan = '', slug = '', acak = Math.random } = {}) {
+  const sama = (x) => nama.find((n) => n.toLowerCase() === String(x).toLowerCase().trim());
+  return sama(pilihan) ?? sama(slug) ?? (nama.length ? [...nama].sort()[Math.floor(acak() * nama.length) % nama.length] : null);
+}
+
 /**
- * Berkas maskot merek: aset/maskot/<slug merek>.(webm|mov|mp4|png|webp|jpg|jpeg), cadangan
- * bakafrawi.*. Yang bergerak didahulukan, lalu yang sudah transparan, JPG terakhir. Huruf besar/kecil
- * nama berkas diabaikan (unggahan HP sering ".JPG"). Murni terhadap daftar berkas yang ada.
+ * Berkas pose tiap adegan dari berkas satu karakter: pose pilihan Claude → pose bawaan jenis adegan
+ * → tunjuk → pose lain yang ada → gambar tanpa pose. Antar-ekstensi: yang bergerak didahulukan. Murni.
  */
-export function pilihMaskot(berkasAda, slug) {
-  const ext = ['webm', 'mov', 'mp4', 'png', 'webp', 'jpg', 'jpeg'];
-  for (const nama of [slug, 'bakafrawi'].filter(Boolean)) {
-    for (const e of ext) {
-      const ada = berkasAda.find((b) => b.toLowerCase() === `${nama}.${e}`.toLowerCase());
+export function maskotAdegan(adegan, berkasKarakter) {
+  const urutExt = (a, b) => EXT_MASKOT.indexOf(extDari(a)) - EXT_MASKOT.indexOf(extDari(b));
+  const berpose = (p) => berkasKarakter.filter((b) => poseDari(b) === p).sort(urutExt)[0];
+  const polos = [...berkasKarakter.filter((b) => !poseDari(b))].sort(urutExt)[0] ?? null;
+  return adegan.map((a) => {
+    for (const p of new Set([a.pose, POSE_BAWAAN[a.jenis], 'tunjuk', ...POSE])) {
+      const ada = POSE.includes(p) && berpose(p);
       if (ada) return ada;
     }
-  }
-  return null;
+    return polos;
+  });
 }
 
 /**
@@ -86,7 +121,7 @@ export function keNaskah(k, { nama, logo, utama = WARNA.utama, kedua = WARNA.ked
   const daftarFitur = fitur.map((f) => teks(f, 48)).filter(Boolean).slice(0, 3);
   const keDaftar = (a, badge) => ({ jenis: 'daftar', narasi: a.narasi, kunci: a.kunci, durasi: DURASI.daftar, badge: teks(badge || a.badge, 26) || 'Fitur Utama', labelAngka: '', angka: nama, catatan: '', daftar: daftarFitur.length ? daftarFitur : [nama] });
   const adegan = (k.adegan ?? []).filter((a) => teks(a?.narasi)).slice(0, 7).map((a) => {
-    const d = { narasi: teks(a.narasi, 220), kunci: daftarTeks(a.kunci, 4, 24) };
+    const d = { narasi: teks(a.narasi, 220), kunci: daftarTeks(a.kunci, 4, 24), ...(POSE.includes(a.pose) ? { pose: a.pose } : {}) };
     switch (a.jenis) {
       case 'hook': {
         const judul = teks(a.judul, 60) || nama;
@@ -131,7 +166,7 @@ export function keNaskah(k, { nama, logo, utama = WARNA.utama, kedua = WARNA.ked
 
 /**
  * Render satu video iklan. aset: { logo (berkas lokal | null), layar: [{ berkas, lebar, tinggi }],
- * maskot (berkas lokal | null) }.
+ * maskot (berkas lokal | daftar per adegan | null) }.
  * Semua bahan disalin ke `folder/publik` (jadi --public-dir); musik: berkas lokal atau buatan ffmpeg.
  * → { berkas, sampul, durasi }
  */
@@ -159,16 +194,22 @@ export async function renderIklan({ naskah, aset, folder, musik = null, keluar, 
   if (musik) await copyFile(musik, path.join(publik, `musik${path.extname(musik)}`));
   else await musikContoh(path.join(publik, 'musik.mp3'), detik + 1);
   n.musik = musik ? `musik${path.extname(musik)}` : 'musik.mp3';
-  // Maskot (karakter 3D) di 40% bawah layar; tanpa berkas → tata letak tanpa maskot.
-  if (aset.maskot) {
-    if (/\.jpe?g$/i.test(aset.maskot)) {
-      n.maskot = 'maskot.png';
-      await jpgKePng(aset.maskot, path.join(publik, n.maskot));
-    } else {
-      n.maskot = `maskot${path.extname(aset.maskot).toLowerCase()}`;
-      await copyFile(aset.maskot, path.join(publik, n.maskot));
+  // Maskot (karakter 3D) di 40% bawah layar, boleh berganti pose per adegan. aset.maskot: satu
+  // berkas atau daftar berkas per adegan (null = tanpa maskot di adegan itu).
+  const daftarMaskot = Array.isArray(aset.maskot) ? aset.maskot : n.adegan.map(() => aset.maskot ?? null);
+  const siap = new Map(); // berkas sumber → nama di publik (tiap pose disalin/dikonversi sekali)
+  for (const [i, sumber] of daftarMaskot.entries()) {
+    if (!sumber || !n.adegan[i]) continue;
+    if (!siap.has(sumber)) {
+      const nama = `maskot-${siap.size}${/\.jpe?g$/i.test(sumber) ? '.png' : path.extname(sumber).toLowerCase()}`;
+      if (/\.jpe?g$/i.test(sumber)) await jpgKePng(sumber, path.join(publik, nama));
+      else await copyFile(sumber, path.join(publik, nama));
+      siap.set(sumber, nama);
     }
+    n.adegan[i].maskot = siap.get(sumber);
   }
+  const pertama = n.adegan.find((a) => a.maskot)?.maskot;
+  if (pertama) n.maskot = pertama; // menandai tata letak bermaskot
 
   const props = path.join(folder, 'props.json');
   await writeFile(props, JSON.stringify(n));

@@ -77,6 +77,7 @@ export const SkemaVideo = z.object({
         jenis: z.enum(JENIS).describe('hook = pembuka judul besar (selalu adegan 1); layar = tangkapan layar asli di HP + kotak perbesaran; kasir = mockup transaksi kasir (HANYA aplikasi kasir/POS); alur = diagram 3 simpul + notifikasi; daftar = angka besar + daftar centang; penutup = ajakan (selalu terakhir)'),
         narasi: z.string().describe('Narasi lisan adegan ini, 1-2 kalimat pendek, santai & kekinian, bukan bahasa brosur'),
         kunci: z.array(z.string()).describe('1-3 kata penting dari narasi yang disorot stabilo di subtitle'),
+        pose: z.enum(['kaget', 'tunjuk', 'hp', 'jempol', 'lambai']).describe('Pose karakter maskot di bawah layar yang paling cocok dengan narasi: kaget (masalah/pembuka), tunjuk (menunjuk tampilan aplikasi), hp (memegang HP), jempol (hasil/manfaat), lambai (penutup/ajakan)'),
         badge: z.string().describe('Nama langkah 2-3 kata di lencana kiri atas (layar/kasir/alur/daftar), mis. "Kasir Kilat"; kosong untuk hook/penutup'),
         label: z.string().describe('hook: label pil hitam kecil, 3-6 kata, mis. "Sebelum tutup toko hari ini"'),
         judul: z.string().describe('hook: judul besar 4-8 kata yang menyentil (mis. "Jangan rekap manual lagi, pakai Maktaba POS"); penutup: judul ajakan 3-6 kata'),
@@ -106,6 +107,7 @@ export const SkemaVideo = z.object({
       }),
     )
     .describe('5-6 adegan berurutan, total narasi dibaca 30-45 detik'),
+  karakter: z.string().describe('Nama karakter maskot (persis dari daftar yang diberikan) yang paling cocok dengan sasaran produk; kosong bila tak ada daftar'),
   ajakan: z.string().describe('Ajakan bertindak singkat untuk caption, maksimal 5 kata'),
   caption: z.string().describe('Caption media sosial 2-4 kalimat, tanpa hashtag'),
   hashtag: z.array(z.string()).describe('5-8 hashtag tanpa tanda #'),
@@ -125,7 +127,7 @@ kartu UI beranimasi, lencana langkah 1-2-3, subtitle kata-per-kata). Urutan:
  * Claude sebagai gambar (diperkecil) supaya ia memilih bagian yang disorot. Tanpa kunci / gagal →
  * templat. Hasil: keluaran mentah (dirapikan video.mjs keNaskah) + narasi/judul untuk tampilan lama.
  */
-export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar = [], kecilkan = null) {
+export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar = [], kecilkan = null, karakter = []) {
   const templat = () => naskahVideoTemplat(produk, situs, merek, layar.length);
   if (!process.env.ANTHROPIC_API_KEY) return { ...templat(), sumber: 'templat (tanpa kunci API)' };
   try {
@@ -146,7 +148,7 @@ export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar
         role: 'user',
         content: [
           ...gambar,
-          { type: 'text', text: `${ATURAN_VIDEO}\n\nAda ${layar.length} layar aplikasi di atas (nomor 0-${Math.max(0, layar.length - 1)}).${layar.length ? '' : ' Tidak ada layar: jangan pakai jenis "layar".'}\n\n${ringkasProduk(produk, situs)}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}` },
+          { type: 'text', text: `${ATURAN_VIDEO}\n\nAda ${layar.length} layar aplikasi di atas (nomor 0-${Math.max(0, layar.length - 1)}).${layar.length ? '' : ' Tidak ada layar: jangan pakai jenis "layar".'}\n\nKarakter maskot 3D yang tersedia (tampil di bawah layar, satu karakter untuk seluruh video): ${karakter.length ? karakter.join(', ') : '(belum ada — isi karakter kosong)'}.\n\n${ringkasProduk(produk, situs)}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}` },
         ],
       }],
     });
@@ -172,6 +174,7 @@ export function naskahVideoTemplat(produk, situs, merek = null, jumlahLayar = 0)
         : { jenis: 'daftar', narasi: `${f.judul}: ${f.isi}`, kunci: [f.judul], badge: f.judul, label_angka: '', angka: produk.nama, catatan: '', daftar: [f.judul] })),
       { jenis: 'penutup', narasi: `${lama.ajakan}. Hubungi kami lewat link di bio!`, kunci: [produk.nama], judul: lama.ajakan, tombol: lama.ajakan },
     ],
+    karakter: '',
     ajakan: lama.ajakan,
     caption: lama.caption,
     hashtag: lama.hashtag,

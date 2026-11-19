@@ -1,5 +1,19 @@
 # CHANGELOG — bakafrawi.com
 
+## Maskot karakter 3D dari Google Drive: banyak karakter & pose per adegan (19 Nov, belum tayang)
+
+- Aset video dikelola Kyai di Drive `Bakafrawi Studio/Aset` (bukan di laptop): `maskot/` dan `musik/`
+  disalin rclone sekali per putaran. Musik: satu lagu acak per video.
+- **Banyak karakter**: satu subfolder per karakter; Claude menerima daftar nama karakter dan memilih
+  yang cocok dengan sasaran produk (cadangan: karakter bernama slug merek, lalu acak). Satu karakter
+  dipakai konsisten di seluruh video.
+- **Pose per adegan** (kaget/tunjuk/hp/jempol/lambai; Claude boleh memilih per adegan): pose baru
+  muncul dengan pegas, pose sama tak berkedip. JPG diterima — latar polos (warna pojok) dibuang
+  otomatis; hijau #00FF00 paling bersih. Subtitle penutup dipindah ke atas maskot.
+- Aturan murni `kelompokKarakter`, `pilihKarakter`, `maskotAdegan`, `pilihMusik` + tes (11/11).
+- Diuji di PC: pose hijau buatan, pergantian pose antar-adegan, dua karakter. **Belum**: karakter asli
+  Kyai dari Google Flow (folder Drive masih kosong), putaran di GitHub Actions.
+
 ## Mesin Studio memakai Remotion untuk video iklan produk (19 Nov, gelombang 2, belum tayang)
 
 - Pilihan Kyai: gaya Remotion. Mesin (`studio.mjs`) kini: tangkapan layar tajam → **Claude melihat

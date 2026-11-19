@@ -13,7 +13,7 @@ import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } fr
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { ffmpeg, probe } from './lib/bank/alat.mjs';
-import { ASET_LOKAL, keNaskah, pilihMaskot, pilihMusik, renderIklan, salinAsetDrive, WARNA } from './lib/video.mjs';
+import { ASET_LOKAL, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihMusik, renderIklan, salinAsetDrive, WARNA } from './lib/video.mjs';
 import { buatNaskah, buatNaskahVideo } from './lib/naskah.mjs';
 import { bukaPeramban, potret, potretLayar } from './lib/peramban.mjs';
 import { adaTelegram, kirimHasil, kirimTeks } from './lib/telegram.mjs';
@@ -153,8 +153,13 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   // Video: layar aplikasi dipotret dulu supaya Claude bisa melihatnya saat memilih bagian yang disorot.
   const layarApp = tugas.jenis === 'video' ? await kumpulkanLayar(produk, situs, peramban, folder, catatan) : [];
   if (tugas.jenis === 'video' && !layarApp.length) throw new Error('Produk ini belum punya layar aplikasi (tautan/skenario demo atau gambar layar HP) untuk video.');
+  // Video: maskot & musik dari Drive "Bakafrawi Studio/Aset" (sekali per putaran); daftar karakter
+  // ikut dikirim ke Claude supaya ia memilih karakter yang cocok dengan sasaran produk.
+  const dirMaskot = path.join(ASET_LOKAL, 'maskot'), dirMusik = path.join(ASET_LOKAL, 'musik');
+  if (tugas.jenis === 'video') await salinAsetDrive();
+  const karakter = tugas.jenis === 'video' ? kelompokKarakter(await readdir(dirMaskot, { recursive: true }).catch(() => [])) : new Map();
   const naskah = tugas.jenis === 'video'
-    ? await buatNaskahVideo(produk, situs, tugas.arahan, merek, layarApp, kecilkan)
+    ? await buatNaskahVideo(produk, situs, tugas.arahan, merek, layarApp, kecilkan, [...karakter.keys()])
     : await buatNaskah(produk, situs, tugas.arahan, tugas.jenis, merek);
   const tujuan = [`WA ${kontak.whatsappTampil}`, tema.situs].filter(Boolean).join(' · ');
   const caption = `${naskah.caption}\n\n${naskah.ajakan} → ${tujuan}\n\n${naskah.hashtag.map((h) => `#${h.replace(/^#/, '')}`).join(' ')}`;
@@ -185,13 +190,13 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       info: [tema.situs, kontak.whatsappTampil && `WA ${kontak.whatsappTampil}`].filter(Boolean).join(' · '),
       fitur: produk.fitur.map((f) => f.judul),
     });
-    // Maskot & musik dari folder Drive "Bakafrawi Studio/Aset" (disalin sekali per putaran).
-    await salinAsetDrive();
-    const dirMaskot = path.join(ASET_LOKAL, 'maskot'), dirMusik = path.join(ASET_LOKAL, 'musik');
-    const maskot = pilihMaskot(await readdir(dirMaskot).catch(() => []), merek?.slug);
+    // Satu karakter per video (pilihan Claude → slug merek → acak), pose berganti per adegan.
+    const tokoh = pilihKarakter([...karakter.keys()], { pilihan: naskah.karakter, slug: merek?.slug });
+    const maskot = tokoh ? maskotAdegan(props.adegan, karakter.get(tokoh)).map((b) => b && path.join(dirMaskot, b)) : null;
+    if (tokoh) naskah.karakter = tokoh;
     const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
     const musik = process.env.STUDIO_MUSIK || (lagu && path.join(dirMusik, lagu));
-    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot: maskot && path.join(dirMaskot, maskot) }, folder, musik, keluar: berkas('video.mp4') });
+    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot }, folder, musik, keluar: berkas('video.mp4') });
     hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') });
     hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   }

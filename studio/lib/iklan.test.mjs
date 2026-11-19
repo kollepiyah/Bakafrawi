@@ -65,13 +65,6 @@ test('naskahContoh lolos keNaskah tanpa berubah jenis (skema TS & perapi tetap s
   assert.deepEqual(n.adegan.map((a) => a.jenis), naskahContoh.adegan.map((a) => a.jenis));
 });
 
-test('pilihMaskot: berkas merek dulu, cadangan bakafrawi, video didahulukan dari gambar', async () => {
-  const { pilihMaskot } = await import('./video.mjs');
-  assert.equal(pilihMaskot(['bakafrawi.png', 'lek-kopi.webm'], 'lek-kopi'), 'lek-kopi.webm');
-  assert.equal(pilihMaskot(['bakafrawi.png', 'bakafrawi.webm', 'README.md'], 'maktaba'), 'bakafrawi.webm');
-  assert.equal(pilihMaskot(['README.md'], 'bakafrawi'), null);
-});
-
 test('pilihMusik: hanya berkas audio, acak tapi pasti salah satu', async () => {
   const { pilihMusik } = await import('./video.mjs');
   assert.equal(pilihMusik(['README.md', 'gambar.png']), null);
@@ -79,8 +72,35 @@ test('pilihMusik: hanya berkas audio, acak tapi pasti salah satu', async () => {
   assert.equal(pilihMusik(['b.mp3', 'a.m4a'], () => 0.99), 'b.mp3');
 });
 
-test('pilihMaskot: JPG diterima paling akhir, huruf besar/kecil diabaikan', async () => {
-  const { pilihMaskot } = await import('./video.mjs');
-  assert.equal(pilihMaskot(['Bakafrawi.JPG'], 'maktaba-pos'), 'Bakafrawi.JPG');
-  assert.equal(pilihMaskot(['bakafrawi.jpg', 'bakafrawi.png'], 'x'), 'bakafrawi.png');
+test('kelompokKarakter: subfolder per karakter + berkas akar lama, bukan gambar diabaikan', async () => {
+  const { kelompokKarakter } = await import('./video.mjs');
+  const k = kelompokKarakter(['ibu-hijab', 'ibu-hijab\\kaget.JPG', 'ibu-hijab/tunjuk.png', 'bapak-kopiah/lambai.webm', 'bakafrawi-jempol.jpg', 'Bakafrawi.jpg', 'catatan.txt']);
+  assert.deepEqual([...k.keys()].sort(), ['bakafrawi-jempol'.replace('-jempol', ''), 'bapak-kopiah', 'ibu-hijab'].sort());
+  assert.deepEqual(k.get('ibu-hijab'), ['ibu-hijab/kaget.JPG', 'ibu-hijab/tunjuk.png']);
+  assert.deepEqual(k.get('bakafrawi'), ['bakafrawi-jempol.jpg', 'Bakafrawi.jpg']);
+});
+
+test('pilihKarakter: pilihan Claude → slug merek → acak', async () => {
+  const { pilihKarakter } = await import('./video.mjs');
+  const nama = ['ibu-hijab', 'bapak-kopiah', 'lek-kopi'];
+  assert.equal(pilihKarakter(nama, { pilihan: 'Bapak-Kopiah ', slug: 'lek-kopi' }), 'bapak-kopiah');
+  assert.equal(pilihKarakter(nama, { pilihan: 'karangan', slug: 'lek-kopi' }), 'lek-kopi');
+  assert.equal(pilihKarakter(nama, { acak: () => 0 }), 'bapak-kopiah'); // urut abjad
+  assert.equal(pilihKarakter([], {}), null);
+});
+
+test('maskotAdegan: pose Claude → pose bawaan jenis → tunjuk → pose lain → gambar tanpa pose', async () => {
+  const { maskotAdegan } = await import('./video.mjs');
+  const adegan = [{ jenis: 'hook' }, { jenis: 'layar', pose: 'jempol' }, { jenis: 'kasir' }, { jenis: 'penutup' }];
+  const ibu = ['ibu/kaget.JPG', 'ibu/tunjuk.jpg', 'ibu/jempol.png', 'ibu/jempol.webm'];
+  assert.deepEqual(maskotAdegan(adegan, ibu), ['ibu/kaget.JPG', 'ibu/jempol.webm', 'ibu/tunjuk.jpg', 'ibu/tunjuk.jpg']);
+  assert.deepEqual(maskotAdegan(adegan, ['Bakafrawi.jpg']), Array(4).fill('Bakafrawi.jpg'));
+  assert.deepEqual(maskotAdegan(adegan.slice(0, 1), ['lek-kopi-lambai.jpg']), ['lek-kopi-lambai.jpg']);
+  assert.deepEqual(maskotAdegan(adegan.slice(0, 1), []), [null]);
+});
+
+test('keNaskah: pose dari Claude ikut bila sah', () => {
+  const n = keNaskah({ adegan: [{ jenis: 'hook', narasi: 'Halo', judul: 'Halo', pose: 'kaget' }, { jenis: 'daftar', narasi: 'x', daftar: ['a'], pose: 'menari' }] }, opsi);
+  assert.equal(n.adegan[0].pose, 'kaget');
+  assert.equal(n.adegan[1].pose, undefined);
 });

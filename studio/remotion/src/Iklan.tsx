@@ -86,7 +86,15 @@ export const Iklan: React.FC<Naskah> = (naskah) => {
           ) : null}
         </Sequence>
       ))}
-      <MascotOverlay berkas={maskot} atas={letak.maskotAtas} />
+      {adegan.map((a, i) => {
+        const berkas = a.maskot ?? maskot;
+        const sebelum = i > 0 ? (adegan[i - 1].maskot ?? maskot) : null;
+        return (
+          <Sequence key={`m${i}`} from={waktu[i].mulai} durationInFrames={waktu[i].durasi} layout="none">
+            <MascotOverlay berkas={berkas} atas={letak.maskotAtas} ganti={berkas !== sebelum} awal={waktu[i].mulai} />
+          </Sequence>
+        );
+      })}
       {adegan.map((a, i) => (
         <Sequence key={`c${i}`} from={waktu[i].mulai} durationInFrames={waktu[i].durasi} layout="none">
           <Caption
