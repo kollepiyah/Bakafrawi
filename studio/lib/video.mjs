@@ -11,6 +11,43 @@ import { FPS, hitungWaktu } from '../remotion/src/data/script.ts';
 export const REMOTION = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'remotion');
 const CLI = path.join(REMOTION, 'node_modules', '@remotion', 'cli', 'remotion-cli.js');
 
+// Aset video dikelola Kyai di Google Drive (bukan di laptop): maskot/ dan musik/ disalin ke
+// studio/aset/ sekali per putaran lewat rclone (remote gdrive yang sama dengan bank media).
+export const ASET_DRIVE = process.env.STUDIO_DRIVE_ASET || 'gdrive:Bakafrawi Studio/Aset';
+export const ASET_LOKAL = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'aset');
+let asetDisalin = false;
+
+/** Salin maskot/ & musik/ dari Drive (hanya yang baru/berubah). Gagal → pakai yang sudah ada saja. */
+export async function salinAsetDrive({ jalan = (a) => jalankan(process.env.STUDIO_RCLONE || 'rclone', a), log = console.log } = {}) {
+  if (asetDisalin) return;
+  asetDisalin = true;
+  for (const bagian of ['maskot', 'musik']) {
+    try {
+      await jalan(['copy', `${ASET_DRIVE}/${bagian}`, path.join(ASET_LOKAL, bagian), '--max-size', '60M', '--drive-skip-gdocs']);
+    } catch (e) {
+      log(`Aset ${bagian} dari Drive tak tersalin: ${String(e.message).slice(0, 160)}`);
+    }
+  }
+}
+
+/** Musik latar: satu lagu acak dari aset/musik supaya tiap video tak terdengar sama. Murni. */
+export function pilihMusik(berkasAda, acak = Math.random) {
+  const lagu = berkasAda.filter((b) => /\.(mp3|m4a|wav|aac|ogg)$/i.test(b)).sort();
+  return lagu.length ? lagu[Math.floor(acak() * lagu.length) % lagu.length] : null;
+}
+
+/**
+ * Berkas maskot merek: aset/maskot/<slug merek>.(webm|mov|mp4|png|webp), cadangan bakafrawi.*.
+ * Urutan ekstensi = yang bergerak didahulukan. Murni terhadap daftar berkas yang ada.
+ */
+export function pilihMaskot(berkasAda, slug) {
+  const ext = ['webm', 'mov', 'mp4', 'png', 'webp'];
+  for (const nama of [slug, 'bakafrawi'].filter(Boolean)) {
+    for (const e of ext) if (berkasAda.includes(`${nama}.${e}`)) return `${nama}.${e}`;
+  }
+  return null;
+}
+
 export const WARNA = { utama: '#0F2A5F', kedua: '#F5B800', latar: '#FAFAFA', kisi: '#EAEAEA', tinta: '#0B0B0F' };
 const DURASI = { hook: 5, layar: 7, kasir: 9, alur: 9, daftar: 9, penutup: 6 };
 
@@ -71,7 +108,8 @@ export function keNaskah(k, { nama, logo, utama = WARNA.utama, kedua = WARNA.ked
 }
 
 /**
- * Render satu video iklan. aset: { logo (berkas lokal | null), layar: [{ berkas, lebar, tinggi }] }.
+ * Render satu video iklan. aset: { logo (berkas lokal | null), layar: [{ berkas, lebar, tinggi }],
+ * maskot (berkas lokal | null) }.
  * Semua bahan disalin ke `folder/publik` (jadi --public-dir); musik: berkas lokal atau buatan ffmpeg.
  * → { berkas, sampul, durasi }
  */
@@ -99,6 +137,11 @@ export async function renderIklan({ naskah, aset, folder, musik = null, keluar, 
   if (musik) await copyFile(musik, path.join(publik, `musik${path.extname(musik)}`));
   else await musikContoh(path.join(publik, 'musik.mp3'), detik + 1);
   n.musik = musik ? `musik${path.extname(musik)}` : 'musik.mp3';
+  // Maskot (karakter 3D) di 40% bawah layar; tanpa berkas → tata letak tanpa maskot.
+  if (aset.maskot) {
+    n.maskot = `maskot${path.extname(aset.maskot)}`;
+    await copyFile(aset.maskot, path.join(publik, n.maskot));
+  }
 
   const props = path.join(folder, 'props.json');
   await writeFile(props, JSON.stringify(n));

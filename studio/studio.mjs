@@ -2,7 +2,7 @@
 // untuk disetujui, lalu tayangkan ke Instagram yang sudah disetujui/jadwalnya tiba.
 //   node studio.mjs                → mode awan (GitHub Actions), baca/tulis Supabase
 //   node studio.mjs --lokal f.json → uji di laptop tanpa database; hasil di studio/keluaran/
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { drafTiktok, segarkanTiktok } from './lib/bank/sosmed.mjs';
@@ -13,7 +13,7 @@ import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } fr
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { ffmpeg, probe } from './lib/bank/alat.mjs';
-import { keNaskah, renderIklan, WARNA } from './lib/video.mjs';
+import { ASET_LOKAL, keNaskah, pilihMaskot, pilihMusik, renderIklan, salinAsetDrive, WARNA } from './lib/video.mjs';
 import { buatNaskah, buatNaskahVideo } from './lib/naskah.mjs';
 import { bukaPeramban, potret, potretLayar } from './lib/peramban.mjs';
 import { adaTelegram, kirimHasil, kirimTeks } from './lib/telegram.mjs';
@@ -185,7 +185,13 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       info: [tema.situs, kontak.whatsappTampil && `WA ${kontak.whatsappTampil}`].filter(Boolean).join(' · '),
       fitur: produk.fitur.map((f) => f.judul),
     });
-    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp }, folder, musik: process.env.STUDIO_MUSIK || null, keluar: berkas('video.mp4') });
+    // Maskot & musik dari folder Drive "Bakafrawi Studio/Aset" (disalin sekali per putaran).
+    await salinAsetDrive();
+    const dirMaskot = path.join(ASET_LOKAL, 'maskot'), dirMusik = path.join(ASET_LOKAL, 'musik');
+    const maskot = pilihMaskot(await readdir(dirMaskot).catch(() => []), merek?.slug);
+    const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
+    const musik = process.env.STUDIO_MUSIK || (lagu && path.join(dirMusik, lagu));
+    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot: maskot && path.join(dirMaskot, maskot) }, folder, musik, keluar: berkas('video.mp4') });
     hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') });
     hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   }

@@ -62,7 +62,9 @@ tidak perlu menyala. Repo publik → menit Actions gratis.
   kasir untuk aplikasi kasir, diagram alur, daftar centang) → penutup (kontak dari situs). Narasi
   edge-tts id-ID dengan waktu tiap kata → subtitle kata-per-kata yang sinkron. Dirender Remotion di
   `studio/remotion` (kode adegan & warna di sana; contoh naskah di `src/data/script.ts`).
-  Musik: `STUDIO_MUSIK` (berkas) atau musik contoh buatan ffmpeg. Slot maskot sudah ada, belum diisi.
+  **Maskot & musik dari Google Drive** folder `Bakafrawi Studio/Aset`: taruh karakter 3D di `maskot/`
+  bernama `bakafrawi.webm` (atau `.png`; per merek: `<slug-merek>.webm`), lagu bebas royalti di `musik/`
+  (satu dipilih acak tiap video). Disalin mesin tiap putaran; kosong → tanpa maskot / musik contoh ffmpeg.
 - **Naskah & caption** ditulis Claude (`claude-sonnet-5-5`, effort medium — sama dengan konten Lek Kopi). Tanpa kunci API, Studio memakai naskah
   templat dari data produk — tetap jadi, hanya kurang luwes.
 

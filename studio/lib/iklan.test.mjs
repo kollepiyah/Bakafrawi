@@ -64,3 +64,17 @@ test('naskahContoh lolos keNaskah tanpa berubah jenis (skema TS & perapi tetap s
   const n = keNaskah({ adegan: naskahContoh.adegan.map((a) => ({ ...a, label_angka: a.labelAngka, hitung_label: a.hitung?.label, hitung_dari: a.hitung?.dari, hitung_ke: a.hitung?.ke })) }, { ...opsi, layar: [L[0]] });
   assert.deepEqual(n.adegan.map((a) => a.jenis), naskahContoh.adegan.map((a) => a.jenis));
 });
+
+test('pilihMaskot: berkas merek dulu, cadangan bakafrawi, video didahulukan dari gambar', async () => {
+  const { pilihMaskot } = await import('./video.mjs');
+  assert.equal(pilihMaskot(['bakafrawi.png', 'lek-kopi.webm'], 'lek-kopi'), 'lek-kopi.webm');
+  assert.equal(pilihMaskot(['bakafrawi.png', 'bakafrawi.webm', 'README.md'], 'maktaba'), 'bakafrawi.webm');
+  assert.equal(pilihMaskot(['README.md'], 'bakafrawi'), null);
+});
+
+test('pilihMusik: hanya berkas audio, acak tapi pasti salah satu', async () => {
+  const { pilihMusik } = await import('./video.mjs');
+  assert.equal(pilihMusik(['README.md', 'gambar.png']), null);
+  assert.equal(pilihMusik(['b.mp3', 'a.m4a', 'x.txt'], () => 0), 'a.m4a');
+  assert.equal(pilihMusik(['b.mp3', 'a.m4a'], () => 0.99), 'b.mp3');
+});
