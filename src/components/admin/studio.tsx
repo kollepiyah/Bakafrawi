@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { CalendarClock, Check, Copy, Download, ImageIcon, Loader2, RefreshCw, Send, Sparkles, Trash2, Video, X } from "lucide-react";
 import { Sambungan } from "./studio-sambungan";
@@ -8,6 +8,7 @@ import type { Situs } from "@/content/skema";
 import { jalurGudang, muatKonten, supabase } from "@/lib/gudang-admin";
 import { situsBawaan } from "@/content/situs";
 import { teksNaskah, type Naskah } from "@/lib/lekkopi/konten-murni";
+import type { UsulanArahan } from "@/lib/usul-arahan-murni";
 
 type Hasil = { jenis: "gambar" | "video"; rasio: string; url: string; durasi?: number };
 type Tugas = {
@@ -54,6 +55,10 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [daftar, setDaftar] = useState<Tugas[]>([]);
   const [pesan, setPesan] = useState("");
   const [sibuk, setSibuk] = useState(false);
+  const [usulan, setUsulan] = useState<UsulanArahan[]>([]);
+  const [mengusulkan, setMengusulkan] = useState(false);
+  const [galatUsulan, setGalatUsulan] = useState("");
+  const kolomArahan = useRef<HTMLTextAreaElement>(null);
 
   const muat = useCallback(async () => {
     const { data, error } = await supabase().from("studio_tugas").select("*").order("dibuat", { ascending: false }).limit(30);
@@ -76,6 +81,31 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     const t = setInterval(muat, 10000);
     return () => clearInterval(t);
   }, [masihJalan, muat]);
+
+  // Usulan arahan dari Claude untuk produk & jenis yang sedang dipilih; diklik → mengisi kolom arahan.
+  async function mintaUsulan(e: MouseEvent<HTMLButtonElement>) {
+    const form = e.currentTarget.form;
+    if (!form) return;
+    const d = new FormData(form);
+    setMengusulkan(true);
+    setGalatUsulan("");
+    setUsulan([]);
+    const res = await fetch("/api/studio/arahan", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ produk: d.get("produk"), jenis: d.get("jenis") }),
+    }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    setMengusulkan(false);
+    if (!j.ok) return setGalatUsulan(j.pesan ?? "Gagal meminta usulan arahan.");
+    setUsulan(j.usulan as UsulanArahan[]);
+  }
+
+  function pakaiUsulan(teks: string) {
+    if (!kolomArahan.current) return;
+    kolomArahan.current.value = teks;
+    kolomArahan.current.focus();
+  }
 
   async function buat(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -193,9 +223,18 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   Latar gambar AI <span className="text-xs text-redup">(khusus poster: foto suasana — gratis ±60 gambar/hari lewat Cloudflare; video memakai karakter dari Drive)</span>
                 </span>
               </label>
-              <label className="grid gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground">{merekBank ? "Ide video" : "Arahan untuk AI (opsional)"}</span>
+              <div className="grid gap-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label htmlFor="studio-arahan" className="text-xs font-medium text-muted-foreground">{merekBank ? "Ide video" : "Arahan untuk AI (opsional)"}</label>
+                  {!merekBank && (
+                    <button type="button" onClick={mintaUsulan} disabled={mengusulkan} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-xs hover:border-emas hover:text-emas disabled:opacity-60">
+                      {mengusulkan ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} Usulkan arahan
+                    </button>
+                  )}
+                </div>
                 <textarea
+                  id="studio-arahan"
+                  ref={kolomArahan}
                   key={merekBank ? "ide" : "arahan"}
                   name="arahan"
                   rows={2}
@@ -203,7 +242,18 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   placeholder={merekBank ? "Mis. suasana malam minggu, tonjolkan es kopi susu & latte art, ajak nongkrong" : "Mis. sasar pemilik warung kopi, tonjolkan fitur struk WhatsApp, nada santai"}
                   className="rounded-lg border border-input bg-transparent px-3 py-2 text-sm"
                 />
-              </label>
+                {!merekBank && galatUsulan && <p className="text-xs text-red-300">{galatUsulan}</p>}
+                {!merekBank && usulan.length > 0 && (
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {usulan.map((u) => (
+                      <button key={u.judul + u.arahan} type="button" onClick={() => pakaiUsulan(u.arahan)} className="rounded-xl border border-white/10 bg-white/[.03] p-3 text-left text-xs hover:border-emas">
+                        <span className="mb-1 block font-semibold text-emas-muda">{u.judul}</span>
+                        <span className="text-muted-foreground">{u.arahan}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <button disabled={sibuk} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
                   {sibuk ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Buat

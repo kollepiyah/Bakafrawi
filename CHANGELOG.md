@@ -1,5 +1,15 @@
 # CHANGELOG — bakafrawi.com
 
+## Tombol "Usulkan arahan" di formulir Studio (19 Nov)
+
+- Kyai: "apakah ada arahan AI?" — formulir Studio kini punya tombol **Usulkan arahan**: Claude Sonnet
+  5.5 (effort rendah) memberi 3 sudut iklan berbeda untuk produk & jenis yang dipilih (sasaran,
+  masalah, fitur, ajakan); diklik → mengisi kolom arahan. Rute admin `/api/studio/arahan`, aturan &
+  prompt di `src/lib/usul-arahan-murni.ts` + tes.
+- Keterangan formulir disesuaikan dengan mesin Remotion (video = animasi aplikasi + karakter; latar
+  AI khusus poster).
+- Diuji: tes murni, tipe, lint, build produksi. **Belum**: dicoba sungguhan (kunci Claude hanya di Vercel).
+
 ## Satu video karakter 8 detik cukup untuk satu iklan (19 Nov, gelombang 4)
 
 - Kyai hanya sanggup membuat 1 video Veo 8 dtk per karakter. Bila karakter punya video, video itu
