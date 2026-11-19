@@ -2,166 +2,66 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Loader2, RefreshCw } from "lucide-react";
-import type { KesimpulanWorkflow, RunWorkflow, StatusWorkflow } from "@/lib/deck-server";
+import {
+  BarChart3,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  ExternalLink,
+  Eye,
+  Heart,
+  ImageIcon,
+  Loader2,
+  MessageCircle,
+  RefreshCw,
+  Sparkles,
+  Video,
+  Workflow,
+  XCircle,
+} from "lucide-react";
+import type { KesimpulanWorkflow, RunWorkflow } from "@/lib/deck-server";
 import type { RingkasTugas } from "@/lib/studio-server";
+import type { RingkasInsight } from "@/lib/instagram-insight";
 import { apiAdmin } from "./agenda";
-
-// ───────────────────────────────────────── konfigurasi warna & ikon
-
-type StatusTile = "sukses" | "jalan" | "gagal" | "antre" | "lewat" | "idle";
-
-function statusDariWorkflow(s: StatusWorkflow, k: KesimpulanWorkflow): StatusTile {
-  if (s === "in_progress") return "jalan";
-  if (s === "queued") return "antre";
-  if (k === "success") return "sukses";
-  if (k === "failure" || k === "timed_out") return "gagal";
-  if (k === "cancelled") return "lewat";
-  if (k === "skipped") return "lewat";
-  return "idle";
-}
-
-function statusDariTugas(s: string): StatusTile {
-  if (s === "selesai") return "sukses";
-  if (s === "proses" || s === "antre") return "jalan";
-  if (s === "gagal") return "gagal";
-  return "idle";
-}
-
-const WARNA: Record<StatusTile, { bg: string; border: string; dot: string; teks: string }> = {
-  sukses:  { bg: "bg-emerald-500/8",  border: "border-emerald-500/25", dot: "bg-emerald-400", teks: "text-emerald-300" },
-  jalan:   { bg: "bg-amber-500/8",    border: "border-amber-500/25",   dot: "bg-amber-400",   teks: "text-amber-300" },
-  gagal:   { bg: "bg-red-500/8",      border: "border-red-500/25",     dot: "bg-red-400",     teks: "text-red-300" },
-  antre:   { bg: "bg-blue-500/8",     border: "border-blue-500/25",    dot: "bg-blue-400",    teks: "text-blue-300" },
-  lewat:   { bg: "bg-zinc-500/8",     border: "border-zinc-500/25",    dot: "bg-zinc-500",    teks: "text-zinc-400" },
-  idle:    { bg: "bg-zinc-500/5",     border: "border-zinc-500/15",    dot: "bg-zinc-600",    teks: "text-zinc-500" },
-};
-
-const LABEL: Record<StatusTile, string> = {
-  sukses: "done",
-  jalan: "running",
-  gagal: "failed",
-  antre: "queued",
-  lewat: "skipped",
-  idle: "idle",
-};
-
-// ───────────────────────────────────────── pixel robot SVG
-
-/** Robot pixel-art kecil (20×20) yang warnanya berubah sesuai status. */
-function RobotPixel({ status }: { status: StatusTile }) {
-  const w = WARNA[status];
-  // Warna fill utama bergantung status
-  const fills: Record<StatusTile, string> = {
-    sukses: "#34d399",
-    jalan: "#fbbf24",
-    gagal: "#f87171",
-    antre: "#60a5fa",
-    lewat: "#71717a",
-    idle: "#52525b",
-  };
-  const c = fills[status];
-  return (
-    <svg viewBox="0 0 20 20" className="size-10 drop-shadow-sm" aria-hidden>
-      {/* antena */}
-      <rect x="9" y="0" width="2" height="3" fill={c} opacity={0.6} />
-      <rect x="8" y="0" width="4" height="1" fill={c} opacity={0.6} />
-      {/* kepala */}
-      <rect x="4" y="3" width="12" height="8" rx="1" fill={c} />
-      {/* mata */}
-      <rect x="6" y="5" width="3" height="3" rx="0.5" fill="#0c0e12" />
-      <rect x="11" y="5" width="3" height="3" rx="0.5" fill="#0c0e12" />
-      {/* pupil */}
-      <rect x="7" y="6" width="1" height="1" fill={status === "jalan" ? "#fff" : "#e9eaee"} className={status === "jalan" ? "animate-pulse" : ""} />
-      <rect x="12" y="6" width="1" height="1" fill={status === "jalan" ? "#fff" : "#e9eaee"} className={status === "jalan" ? "animate-pulse" : ""} />
-      {/* badan */}
-      <rect x="5" y="12" width="10" height="6" rx="1" fill={c} opacity={0.75} />
-      {/* tangan */}
-      <rect x="2" y="13" width="3" height="4" rx="0.5" fill={c} opacity={0.5} />
-      <rect x="15" y="13" width="3" height="4" rx="0.5" fill={c} opacity={0.5} />
-      {/* kaki */}
-      <rect x="6" y="18" width="3" height="2" rx="0.5" fill={c} opacity={0.5} />
-      <rect x="11" y="18" width="3" height="2" rx="0.5" fill={c} opacity={0.5} />
-    </svg>
-  );
-}
-
-// ───────────────────────────────────────── waktu relatif
-
-function waktuRelatif(iso: string) {
-  const dtk = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (dtk < 60) return `${dtk}s ago`;
-  const mnt = Math.floor(dtk / 60);
-  if (mnt < 60) return `${mnt}m ago`;
-  const jam = Math.floor(mnt / 60);
-  if (jam < 24) return `${jam}h ago`;
-  const hari = Math.floor(jam / 24);
-  return `${hari}d ago`;
-}
-
-function formatDurasi(detik: number) {
-  if (detik < 60) return `${detik}s`;
-  const m = Math.floor(detik / 60);
-  const s = detik % 60;
-  return s > 0 ? `${m}m${s}s` : `${m}m`;
-}
-
-// ───────────────────────────────────────── tile
-
-type TileData = {
-  id: string;
-  nama: string;
-  status: StatusTile;
-  waktu: string;
-  durasi: number | null;
-  jenis: "workflow" | "tugas";
-  url?: string;
-  keterangan?: string;
-};
-
-function Tile({ d }: { d: TileData }) {
-  const w = WARNA[d.status];
-  const konten = (
-    <div className={`group relative flex flex-col items-center gap-1.5 rounded-xl border p-3 transition-colors ${w.bg} ${w.border} hover:border-emas/40`}>
-      {/* dot status di pojok kanan atas */}
-      <span className={`absolute right-2 top-2 size-2 rounded-full ${w.dot} ${d.status === "jalan" ? "animate-pulse" : ""}`} />
-
-      <RobotPixel status={d.status} />
-
-      <p className="max-w-full truncate text-center text-xs font-medium leading-tight">{d.nama}</p>
-
-      <p className={`text-center font-mono text-[10px] leading-none ${w.teks}`}>
-        {LABEL[d.status]}
-        {d.durasi != null && ` · ${formatDurasi(d.durasi)}`}
-      </p>
-
-      <p className="text-center text-[10px] leading-none text-muted-foreground">{waktuRelatif(d.waktu)}</p>
-    </div>
-  );
-
-  if (d.url) {
-    return (
-      <a href={d.url} target="_blank" rel="noopener noreferrer" className="outline-none focus-visible:ring-2 focus-visible:ring-emas rounded-xl">
-        {konten}
-      </a>
-    );
-  }
-  return konten;
-}
-
-// ───────────────────────────────────────── komponen utama
 
 type DeckResponse = {
   ok: boolean;
   workflows: RunWorkflow[];
   tugas: RingkasTugas[];
+  insight?: RingkasInsight;
   pesan?: string;
 };
 
-export function Deck({ sesi }: { sesi: Session | null }) {
-  const [data, setData] = useState<TileData[] | null>(null);
+function formatDurasi(detik: number | null) {
+  if (detik == null) return "-";
+  if (detik < 60) return `${detik}s`;
+  const m = Math.floor(detik / 60);
+  const s = detik % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
+function waktuRelatif(iso: string) {
+  const dtk = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (dtk < 60) return `${dtk}s lalu`;
+  const mnt = Math.floor(dtk / 60);
+  if (mnt < 60) return `${mnt}m lalu`;
+  const jam = Math.floor(mnt / 60);
+  if (jam < 24) return `${jam}j lalu`;
+  const hari = Math.floor(jam / 24);
+  return `${hari}h lalu`;
+}
+
+export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: () => void }) {
+  const [data, setData] = useState<{
+    workflows: RunWorkflow[];
+    tugas: RingkasTugas[];
+    insight?: RingkasInsight;
+  } | null>(null);
   const [galat, setGalat] = useState("");
   const [sedangMuat, setSedangMuat] = useState(false);
+  const [tampilSemuaRun, setTampilSemuaRun] = useState(false);
+  const [tabAktif, setTabAktif] = useState<"mesin" | "insight">("mesin");
 
   const muat = useCallback(async () => {
     setSedangMuat(true);
@@ -169,41 +69,15 @@ export function Deck({ sesi }: { sesi: Session | null }) {
     try {
       const j = (await apiAdmin(sesi)("/api/deck")) as DeckResponse;
       if (!j.ok) {
-        setGalat(j.pesan ?? "Gagal memuat deck.");
+        setGalat(j.pesan ?? "Gagal memuat status Studio.");
         setSedangMuat(false);
         return;
       }
-
-      const tiles: TileData[] = [];
-
-      // Workflow runs → tiles
-      for (const w of j.workflows) {
-        tiles.push({
-          id: `wf-${w.id}`,
-          nama: w.nama,
-          status: statusDariWorkflow(w.status, w.kesimpulan),
-          waktu: w.selesai ?? w.mulai,
-          durasi: w.durasi,
-          jenis: "workflow",
-          url: w.url,
-          keterangan: `${w.pemicu} · ${w.cabang}`,
-        });
-      }
-
-      // Tugas Studio → tiles
-      for (const t of j.tugas) {
-        tiles.push({
-          id: `tg-${t.id}`,
-          nama: `${t.produk_slug} · ${t.jenis}`,
-          status: statusDariTugas(t.status),
-          waktu: t.jadwal_tayang ?? new Date().toISOString(),
-          durasi: null,
-          jenis: "tugas",
-          keterangan: `tayang: ${t.status_tayang}`,
-        });
-      }
-
-      setData(tiles);
+      setData({
+        workflows: j.workflows ?? [],
+        tugas: j.tugas ?? [],
+        insight: j.insight,
+      });
     } catch (e) {
       setGalat(e instanceof Error ? e.message : "Gagal memuat.");
     }
@@ -221,62 +95,392 @@ export function Deck({ sesi }: { sesi: Session | null }) {
     return () => clearInterval(iv);
   }, [muat]);
 
-  if (!data && !galat) return <Loader2 className="size-4 animate-spin text-emas" />;
-  if (galat) return <p className="text-sm text-red-300">{galat}</p>;
-  if (!data || data.length === 0) return <p className="text-sm text-muted-foreground">Belum ada workflow.</p>;
+  if (!data && !galat) {
+    return (
+      <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+        <Loader2 className="size-4 animate-spin text-emas" /> Memeriksa status Studio & Insight…
+      </div>
+    );
+  }
 
-  // Pisahkan workflow dan tugas
-  const workflows = data.filter((d) => d.jenis === "workflow");
-  const tugas = data.filter((d) => d.jenis === "tugas");
+  if (galat) {
+    return (
+      <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
+        <span>{galat}</span>
+        <button onClick={muat} className="underline hover:text-white">Coba lagi</button>
+      </div>
+    );
+  }
+
+  const workflows = data?.workflows ?? [];
+  const tugas = data?.tugas ?? [];
+  const insight = data?.insight;
+
+  const runSedangJalan = workflows.find((w) => w.status === "in_progress" || w.status === "queued");
+  const runTerakhir = workflows[0];
+  const suksesTotal = workflows.filter((w) => w.kesimpulan === "success").length;
+  const gagalTotal = workflows.filter((w) => w.kesimpulan === "failure" || w.kesimpulan === "timed_out").length;
+
+  const workflowsDitampilkan = tampilSemuaRun ? workflows : workflows.slice(0, 3);
+  const tugasDitampilkan = tugas.slice(0, 4);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          {/* Ringkasan status */}
-          <LencanaDeck label="Running" jumlah={data.filter((d) => d.status === "jalan").length} warna="text-amber-300 bg-amber-500/15" />
-          <LencanaDeck label="Done" jumlah={data.filter((d) => d.status === "sukses").length} warna="text-emerald-300 bg-emerald-500/15" />
-          <LencanaDeck label="Failed" jumlah={data.filter((d) => d.status === "gagal").length} warna="text-red-300 bg-red-500/15" />
+      {/* ── Status Mesin & Navigasi Tab ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-3.5">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTabAktif("mesin")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+              tabAktif === "mesin"
+                ? "bg-white/10 text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+            }`}
+          >
+            <Sparkles className="size-3.5 text-emas" /> Tugas & Mesin
+          </button>
+          <button
+            type="button"
+            onClick={() => setTabAktif("insight")}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+              tabAktif === "insight"
+                ? "bg-white/10 text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+            }`}
+          >
+            <BarChart3 className="size-3.5 text-sky-400" /> Insight Instagram
+            {insight && insight.totalTayang > 0 && (
+              <span className="rounded-full bg-sky-500/20 px-1.5 py-0.2 text-[10px] text-sky-300">
+                {insight.totalTayang}
+              </span>
+            )}
+          </button>
         </div>
-        <button
-          onClick={muat}
-          disabled={sedangMuat}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:border-emas hover:text-foreground disabled:opacity-50"
-        >
-          <RefreshCw className={`size-3 ${sedangMuat ? "animate-spin" : ""}`} /> Refresh
-        </button>
+
+        <div className="flex items-center gap-2">
+          {tabAktif === "mesin" && (
+            <>
+              {runSedangJalan ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-[11px] font-medium text-amber-300">
+                  <span className="size-1.5 rounded-full bg-amber-400 animate-pulse" />
+                  Mesin aktif
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
+                  <span className="size-1.5 rounded-full bg-emerald-400" />
+                  Mesin Siap
+                </span>
+              )}
+            </>
+          )}
+
+          {tabAktif === "insight" && insight?.akun && (
+            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-muted-foreground">
+              {insight.akun}
+            </span>
+          )}
+
+          <button
+            onClick={muat}
+            disabled={sedangMuat}
+            title="Segarkan data status & insight"
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:border-emas hover:text-foreground disabled:opacity-50"
+          >
+            <RefreshCw className={`size-3 ${sedangMuat ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">Segarkan</span>
+          </button>
+        </div>
       </div>
 
-      {workflows.length > 0 && (
-        <div>
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">GitHub Actions</p>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-            {workflows.map((d) => (
-              <Tile key={d.id} d={d} />
-            ))}
+      {/* ── TAB 1: TUGAS & MESIN WORKFLOW ── */}
+      {tabAktif === "mesin" && (
+        <div className="space-y-4">
+          {/* Tugas Konten Studio Terakhir */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                <Sparkles className="size-3.5 text-emas" /> Tugas Konten Studio
+              </p>
+              {bukaStudio && (
+                <button
+                  onClick={bukaStudio}
+                  className="text-xs text-muted-foreground transition hover:text-emas hover:underline"
+                >
+                  Buka Studio →
+                </button>
+              )}
+            </div>
+
+            {tugas.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border/60 py-4 text-center text-xs text-muted-foreground">
+                Belum ada tugas konten. Buat konten di tab Studio.
+              </p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {tugasDitampilkan.map((t) => {
+                  const adalahVideo = t.jenis === "video";
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={bukaStudio}
+                      className="group flex cursor-pointer items-center justify-between rounded-xl border border-border/70 bg-white/[0.02] p-3 transition hover:border-emas/50 hover:bg-white/[0.04]"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                          {adalahVideo ? (
+                            <Video className="size-4 text-sky-400" />
+                          ) : (
+                            <ImageIcon className="size-4 text-amber-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold text-foreground group-hover:text-emas">
+                            {t.produk_slug}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {adalahVideo ? "Video Reels" : "Poster promosi"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1 shrink-0 pl-2">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            t.status === "selesai"
+                              ? "bg-emerald-500/15 text-emerald-300"
+                              : t.status === "proses"
+                              ? "bg-amber-500/15 text-amber-300"
+                              : t.status === "gagal"
+                              ? "bg-red-500/15 text-red-300"
+                              : "bg-white/10 text-muted-foreground"
+                          }`}
+                        >
+                          {t.status === "selesai" ? "Selesai" : t.status === "proses" ? "Diproses" : t.status}
+                        </span>
+
+                        {t.status_tayang && t.status_tayang !== "belum" && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {t.status_tayang === "tayang"
+                              ? "Tayang IG"
+                              : t.status_tayang === "dijadwalkan"
+                              ? "Terjadwal"
+                              : t.status_tayang === "antre"
+                              ? "Siap tayang"
+                              : t.status_tayang}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
+          {/* Riwayat Eksekusi GitHub Actions */}
+          {workflows.length > 0 && (
+            <div className="pt-1">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <Workflow className="size-3.5 text-muted-foreground" /> Eksekusi Mesin ({suksesTotal} sukses, {gagalTotal} gagal)
+                </p>
+                {workflows.length > 3 && (
+                  <button
+                    onClick={() => setTampilSemuaRun((prev) => !prev)}
+                    className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    {tampilSemuaRun ? (
+                      <>Ringkas <ChevronUp className="size-3" /></>
+                    ) : (
+                      <>+{workflows.length - 3} lainnya <ChevronDown className="size-3" /></>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              <div className="divide-y divide-border/40 rounded-xl border border-border/70 bg-white/[0.01]">
+                {workflowsDitampilkan.map((w) => {
+                  const sukses = w.kesimpulan === "success";
+                  const gagal = w.kesimpulan === "failure" || w.kesimpulan === "timed_out";
+                  const sedangJalan = w.status === "in_progress" || w.status === "queued";
+
+                  return (
+                    <div
+                      key={w.id}
+                      className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-xs transition hover:bg-white/[0.02]"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {sedangJalan ? (
+                          <Loader2 className="size-3.5 shrink-0 animate-spin text-amber-400" />
+                        ) : sukses ? (
+                          <CheckCircle2 className="size-3.5 shrink-0 text-emerald-400" />
+                        ) : gagal ? (
+                          <XCircle className="size-3.5 shrink-0 text-red-400" />
+                        ) : (
+                          <Clock className="size-3.5 shrink-0 text-zinc-500" />
+                        )}
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[11px] font-medium text-foreground">
+                              #{w.id.toString().slice(-4)}
+                            </span>
+                            <span className="text-muted-foreground">·</span>
+                            <span className="truncate text-muted-foreground">{w.pemicu}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
+                        <span className="font-mono text-[11px]">
+                          {formatDurasi(w.durasi)}
+                        </span>
+                        <span className="text-[11px]">
+                          {waktuRelatif(w.selesai ?? w.mulai)}
+                        </span>
+                        <a
+                          href={w.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Lihat log di GitHub Actions"
+                          className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-emas"
+                        >
+                          <ExternalLink className="size-3" />
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {tugas.length > 0 && (
-        <div>
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Tugas Studio</p>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-            {tugas.map((d) => (
-              <Tile key={d.id} d={d} />
-            ))}
+      {/* ── TAB 2: INSIGHT KONTEN INSTAGRAM ── */}
+      {tabAktif === "insight" && (
+        <div className="space-y-4">
+          {/* Kartu Ringkasan Metrik Instagram */}
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+            <div className="rounded-xl border border-border/80 bg-white/[0.02] p-3 text-center sm:text-left">
+              <p className="text-[11px] text-muted-foreground flex items-center justify-center sm:justify-start gap-1">
+                <Video className="size-3 text-emas" /> Konten Tayang
+              </p>
+              <p className="mt-1 font-heading text-xl font-bold text-foreground">
+                {insight?.totalTayang ?? 0}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border/80 bg-white/[0.02] p-3 text-center sm:text-left">
+              <p className="text-[11px] text-muted-foreground flex items-center justify-center sm:justify-start gap-1">
+                <Heart className="size-3 text-red-400" /> Total Suka
+              </p>
+              <p className="mt-1 font-heading text-xl font-bold text-foreground">
+                {insight?.totalLikes ?? 0}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-border/80 bg-white/[0.02] p-3 text-center sm:text-left">
+              <p className="text-[11px] text-muted-foreground flex items-center justify-center sm:justify-start gap-1">
+                <MessageCircle className="size-3 text-sky-400" /> Komentar
+              </p>
+              <p className="mt-1 font-heading text-xl font-bold text-foreground">
+                {insight?.totalComments ?? 0}
+              </p>
+            </div>
+          </div>
+
+          {/* Daftar Postingan Tayang */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Postingan Terbaru di Instagram
+              </p>
+              {insight?.akun && (
+                <span className="text-[11px] text-muted-foreground">
+                  Akun: <b className="text-foreground">{insight.akun}</b>
+                </span>
+              )}
+            </div>
+
+            {!insight || insight.posts.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border/60 py-6 text-center text-xs text-muted-foreground space-y-2">
+                <p>{insight?.pesan ?? "Belum ada konten yang dipublikasikan ke Instagram."}</p>
+                {bukaStudio && (
+                  <button
+                    onClick={bukaStudio}
+                    className="inline-flex items-center gap-1 text-emas hover:underline"
+                  >
+                    Buat dan jadwalkan konten di Studio →
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {insight.posts.map((p) => {
+                  const adalahVideo = p.jenis === "video";
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border/70 bg-white/[0.02] p-3 transition hover:border-border hover:bg-white/[0.03]"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+                          {adalahVideo ? (
+                            <Video className="size-4 text-sky-400" />
+                          ) : (
+                            <ImageIcon className="size-4 text-amber-400" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">
+                            {p.produk} · {adalahVideo ? "Reels" : "Feed"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground truncate max-w-sm">
+                            {p.caption ? p.caption.slice(0, 60) + "…" : "Tanpa caption"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-border/30 text-xs">
+                        <div className="flex items-center gap-3 text-muted-foreground">
+                          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-red-300">
+                            <Heart className="size-3 text-red-400 fill-red-400/20" /> {p.likes}
+                          </span>
+                          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-sky-300">
+                            <MessageCircle className="size-3 text-sky-400" /> {p.comments}
+                          </span>
+                          {p.views != null && (
+                            <span className="inline-flex items-center gap-1 font-mono text-[11px] text-zinc-400">
+                              <Eye className="size-3" /> {p.views}
+                            </span>
+                          )}
+                          <span className="text-[11px] text-zinc-500">
+                            {waktuRelatif(p.tayangWaktu ?? p.dibuat)}
+                          </span>
+                        </div>
+
+                        {p.permalink && (
+                          <a
+                            href={p.permalink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-muted-foreground hover:border-emas hover:text-emas"
+                          >
+                            <span>Buka di IG</span>
+                            <ExternalLink className="size-3" />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
     </div>
-  );
-}
-
-function LencanaDeck({ label, jumlah, warna }: { label: string; jumlah: number; warna: string }) {
-  if (jumlah === 0) return null;
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${warna}`}>
-      {jumlah} {label}
-    </span>
   );
 }
