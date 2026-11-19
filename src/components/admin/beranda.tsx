@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { AlertTriangle, CalendarDays, Clock, LayoutGrid, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, Bot, CalendarDays, Clock, LayoutGrid, Loader2, Sparkles } from "lucide-react";
 import { TandaAplikasi, useRingkasanAplikasi } from "./aplikasi";
+import { Deck } from "./deck";
 import { jamWIB, namaTanggal, tanggalWIB, type Acara } from "@/lib/agenda-murni";
 import { apiAdmin } from "./agenda";
 
@@ -53,6 +54,10 @@ export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: 
                 <AlertTriangle className="size-4 shrink-0" /> {r.google.galat ?? "Google Calendar belum tersambung — ketuk untuk menghubungkan."}
               </button>
             )}
+
+            <Kartu judul="Agents & Workflow Deck" ikon={<Bot className="size-5 text-emas" />} aksi={() => buka("studio")}>
+              <Deck sesi={sesi} />
+            </Kartu>
 
             <Kartu judul="Agenda hari ini" ikon={<CalendarDays className="size-5 text-emas" />} aksi={() => buka("agenda")}>
               {r.acaraHariIni.length === 0 ? (
