@@ -55,8 +55,8 @@ export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: 
               </button>
             )}
 
-            <Kartu judul="Agents & Workflow Deck" ikon={<Bot className="size-5 text-emas" />} aksi={() => buka("studio")}>
-              <Deck sesi={sesi} />
+            <Kartu judul="Studio AI & Mesin" ikon={<Bot className="size-5 text-emas" />} aksi={() => buka("studio")}>
+              <Deck sesi={sesi} bukaStudio={() => buka("studio")} />
             </Kartu>
 
             <Kartu judul="Agenda hari ini" ikon={<CalendarDays className="size-5 text-emas" />} aksi={() => buka("agenda")}>

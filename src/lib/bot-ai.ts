@@ -6,6 +6,8 @@ import { daftarAcara, hapusAcara, tambahAcara, ubahAcara } from "./agenda-server
 import { rapikanRiwayat, type GiliranBot } from "./bot-murni";
 import { ringkasanAplikasi } from "./aplikasi-server";
 import { usulkanIde } from "./naskah-bank";
+import { usulkanArahan } from "./usul-arahan";
+import { JADWAL_OPTIMAL, statusWaktuSekarang } from "./riset-reels-murni";
 import { isiNaskah, naskahMenungguTerakhir, pesanNaskah } from "./studio-naskah";
 import { aturTayang, buatTugas, daftarMerek, daftarTugasBot, ubahCaption, type AksiTayang } from "./studio-server";
 
@@ -16,6 +18,26 @@ const MODEL = "claude-haiku-5-5";
 const MAKS_PUTARAN = 5;
 
 const ALAT: Anthropic.Tool[] = [
+  {
+    name: "info_jam_tayang",
+    description: "Cek jadwal jam tayang Reels/Instagram yang paling bagus dan optimal (WIB), serta status waktu saat ini (apakah sedang Golden Prime Time atau waktu lainnya).",
+    strict: true,
+    input_schema: { type: "object", additionalProperties: false, required: [], properties: {} },
+  },
+  {
+    name: "usul_arahan_konten",
+    description: "Usulkan 3 pilihan arahan/sudut promosi AI untuk produk Bakafrawi (Maktaba POS, Ammu Online, Waseela). Kyai bisa memilih salah satu untuk langsung dibuatkan konten (poster atau video).",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["produk_slug", "jenis"],
+      properties: {
+        produk_slug: { type: "string", description: "slug produk Bakafrawi (mis. maktaba-pos, ammu-online, waseela)" },
+        jenis: { type: "string", enum: ["gambar", "video"] },
+      },
+    },
+  },
   {
     name: "buat_konten",
     description: "Pesan konten promosi baru ke Studio (poster 3 ukuran atau video Reels). Hasilnya dikirim ke chat ini dengan tombol persetujuan.",
@@ -167,6 +189,21 @@ const ALAT: Anthropic.Tool[] = [
 
 async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: Situs): Promise<string> {
   switch (nama) {
+    case "info_jam_tayang": {
+      const jamWIB = Number(
+        new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", hourCycle: "h23" }).format(new Date()),
+      );
+      const st = statusWaktuSekarang(jamWIB);
+      return JSON.stringify({ ok: true, statusSaatIni: st.label, saran: st.saran, jadwalOptimal: JADWAL_OPTIMAL });
+    }
+    case "usul_arahan_konten": {
+      const slug = String(isi.produk_slug);
+      if (slug === "lek-kopi") return "Saran arahan AI saat ini hanya tersedia untuk produk Bakafrawi (konten Lek Kopi belum didukung karena masih dalam penyempurnaan).";
+      const produk = situs.produk.find((p) => p.slug === slug);
+      if (!produk) return `Produk "${slug}" tidak ada. Pilihan: ${situs.produk.filter((p) => p.slug !== "lek-kopi").map((p) => p.slug).join(", ")}`;
+      const usulan = await usulkanArahan(produk, isi.jenis === "video" ? "video" : "gambar");
+      return JSON.stringify({ ok: true, produk: produk.nama, jenis: isi.jenis, usulan });
+    }
     case "buat_konten": {
       const slug = String(isi.produk_slug);
       const produk = situs.produk.find((p) => p.slug === slug);
@@ -198,6 +235,9 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
     case "ringkasan_aplikasi":
       return JSON.stringify((await ringkasanAplikasi()).map((a) => (a.ok ? { nama: a.nama, data: a.data, perhatian: a.penilaian?.catatan } : { nama: a.nama, tidak_tersedia: a.galat })));
     case "usul_ide_merek": {
+      if (isi.merek === "lekkopi") {
+        return "Saran ide AI untuk konten Lek Kopi saat ini dinonaktifkan karena hasil konten Lek Kopi masih belum siap. Gunakan usul_arahan_konten untuk produk Bakafrawi (mis. maktaba-pos).";
+      }
       const merek = (await daftarMerek()).find((m) => m.slug === String(isi.merek) && m.aktif);
       if (!merek) return `Merek "${isi.merek}" tidak ada atau belum aktif.`;
       const { ide, bankKosong } = await usulkanIde(merek, Math.min(5, Math.max(2, Number(isi.jumlah) || 4)));
@@ -265,9 +305,11 @@ Aturan:
 - Menayangkan ke Instagram hanya bila Kyai memintanya jelas. Kalau ragu konten mana yang dimaksud, lihat daftar_konten dulu lalu tanyakan.
 - Agenda: hitung sendiri tanggal dari kata seperti "besok", "Jumat depan", "ba'da Isya" (≈19.30) dari tanggal sekarang; semua jam WIB. Bila jam tidak disebut dan acara bukan seharian, tanyakan dulu. Sebelum ubah/hapus, cari id lewat lihat_agenda. Setelah menyimpan, sebutkan hari, tanggal, dan jamnya supaya Kyai bisa mengecek.
 - Merek lain selain Bakafrawi (mis. Lek Kopi, slug lekkopi): videonya dari bank foto/video kafe — pakai pesan_video_merek, bukan buat_konten.
+- Saran & ide konten AI: HANYA berikan saran/arahan untuk produk Bakafrawi (Maktaba POS, Ammu Online, Waseela) lewat alat usul_arahan_konten. Jangan tawarkan atau usulkan ide konten untuk Lek Kopi karena hasil kontennya masih belum siap / masih jelek. Bila Kyai minta ide konten tanpa menyebut nama produk, berikan saran untuk produk utama Bakafrawi (Maktaba POS).
 - Pertanyaan keadaan aplikasi/bisnis (toko & langganan Maktaba, omzet/stok/kas Lek Kopi hari ini, pengguna Ammu/Waseela) → ringkasan_aplikasi; sebut angkanya persis dari alat. Untuk Ammu & Waseela hanya ada angka teknis (data lembaga klien) — jangan menebak hal lain.
 - AWAS nama ganda: "Lek Kopi" = kedai/kafe (merek lekkopi: minuman, suasana, promo kafe → pesan_video_merek), sedangkan produk "lek-kopi" = aplikasi kasir Lek Kopi POS buatan Bakafrawi (buat_konten, rekaman aplikasi). Kalau Kyai bilang "video Lek Kopi" tanpa menyebut aplikasi/kasir, maksudnya kafe. Ragu → tanyakan. Naskahnya dikirim dulu untuk disetujui lewat tombol; revisi lewat revisi_naskah.
-- Ide konten: beri daftar bernomor yang singkat; Kyai bisa membalas "nomor 2 jadikan poster".
+- Ide konten: bila Kyai minta saran ide, gunakan usul_arahan_konten untuk produk Bakafrawi (default: maktaba-pos), beri daftar bernomor yang singkat; Kyai bisa membalas "nomor 2 jadikan poster".
+- Jam tayang & formula Reels viral: bila Kyai menanyakan jam tayang yang bagus, pakai alat info_jam_tayang (terutama Golden Prime Time 17.30-19.30 WIB dan Istirahat Siang 11.45-13.00 WIB). Bila bertanya rahasia Reels viral, jelaskan 4 pilar: Hook 3 detik pertama, pacing visual 2-4 detik, teks layar kontras, dan CTA konkret.
 - Jangan menyebut harga paket atau angka yang tidak kamu ketahui. Jangan membagikan token/kunci apa pun.`;
 }
 

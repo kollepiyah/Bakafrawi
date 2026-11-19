@@ -2,13 +2,33 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { CalendarClock, Check, Copy, Download, ImageIcon, Loader2, RefreshCw, Send, Sparkles, Trash2, Video, X } from "lucide-react";
+import {
+  CalendarClock,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Copy,
+  Download,
+  Flame,
+  ImageIcon,
+  Lightbulb,
+  Loader2,
+  RefreshCw,
+  Send,
+  Sparkles,
+  Trash2,
+  TrendingUp,
+  Video,
+  X,
+} from "lucide-react";
 import { Sambungan } from "./studio-sambungan";
 import type { Situs } from "@/content/skema";
 import { jalurGudang, muatKonten, supabase } from "@/lib/gudang-admin";
 import { situsBawaan } from "@/content/situs";
 import { teksNaskah, type Naskah } from "@/lib/lekkopi/konten-murni";
 import type { UsulanArahan } from "@/lib/usul-arahan-murni";
+import type { KonsepReelsViral, SlotWaktu } from "@/lib/riset-reels-murni";
 
 type Hasil = { jenis: "gambar" | "video"; rasio: string; url: string; durasi?: number };
 type Tugas = {
@@ -52,6 +72,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [situs, setSitus] = useState<Situs>(situsBawaan);
   const [merek, setMerek] = useState<{ slug: string; nama: string; aktif: boolean; profil: { bahan?: string[] } }[]>([]);
   const [pilihMerek, setPilihMerek] = useState("bakafrawi");
+  const [pilihProduk, setPilihProduk] = useState("maktaba-pos");
   const [daftar, setDaftar] = useState<Tugas[]>([]);
   const [pesan, setPesan] = useState("");
   const [sibuk, setSibuk] = useState(false);
@@ -59,6 +80,20 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [mengusulkan, setMengusulkan] = useState(false);
   const [galatUsulan, setGalatUsulan] = useState("");
   const kolomArahan = useRef<HTMLTextAreaElement>(null);
+
+  // Riset Reels Viral & Jam Tayang
+  const [konsepViral, setKonsepViral] = useState<KonsepReelsViral[]>([]);
+  const [merisetViral, setMerisetViral] = useState(false);
+  const [galatRiset, setGalatRiset] = useState("");
+  const [bukaRiset, setBukaRiset] = useState(false);
+  const [bukaJadwal, setBukaJadwal] = useState(false);
+  const [topikRiset, setTopikRiset] = useState("");
+  const [infoJadwal, setInfoJadwal] = useState<{
+    label: string;
+    saran: string;
+    slot: SlotWaktu;
+  } | null>(null);
+  const [daftarJadwal, setDaftarJadwal] = useState<SlotWaktu[]>([]);
 
   const muat = useCallback(async () => {
     const { data, error } = await supabase().from("studio_tugas").select("*").order("dibuat", { ascending: false }).limit(30);
@@ -81,6 +116,51 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     const t = setInterval(muat, 10000);
     return () => clearInterval(t);
   }, [masihJalan, muat]);
+
+  // Muat status jadwal tayang optimal saat halaman dibuka
+  useEffect(() => {
+    fetch("/api/studio/riset", { headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}` } })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.ok) {
+          if (j.statusJadwal) setInfoJadwal(j.statusJadwal);
+          if (j.jadwal) setDaftarJadwal(j.jadwal);
+        }
+      })
+      .catch(() => {});
+  }, [sesi]);
+
+  // Riset konsep Reels viral dari Claude
+  async function mintaRisetViral() {
+    setMerisetViral(true);
+    setGalatRiset("");
+    setKonsepViral([]);
+    try {
+      const res = await fetch("/api/studio/riset", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ produk: pilihProduk, topik: topikRiset }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (j.ok && Array.isArray(j.konsep)) {
+        setKonsepViral(j.konsep);
+        if (j.statusJadwal) setInfoJadwal(j.statusJadwal);
+        if (j.jadwal) setDaftarJadwal(j.jadwal);
+      } else {
+        setGalatRiset(j.pesan ?? "Gagal meriset konsep Reels.");
+      }
+    } catch (e) {
+      setGalatRiset(e instanceof Error ? e.message : "Terjadi kesalahan saat meriset.");
+    }
+    setMerisetViral(false);
+  }
+
+  function pakaiKonsepViral(arahan: string) {
+    if (!kolomArahan.current) return;
+    kolomArahan.current.value = arahan;
+    kolomArahan.current.focus();
+    setPesan("Konsep arahan viral berhasil disalin ke formulir!");
+  }
 
   // Usulan arahan dari Claude untuk produk & jenis yang sedang dipilih; diklik → mengisi kolom arahan.
   async function mintaUsulan(e: MouseEvent<HTMLButtonElement>) {
@@ -184,13 +264,191 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
           <p className="text-muted-foreground">Studio hanya tersedia bila panel admin tersambung ke Supabase.</p>
         ) : (
           <>
+            {/* ── Panel Riset Reels Viral & Jam Tayang Optimal ── */}
+            <div className="mb-6 rounded-2xl border border-border bg-card p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex size-9 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
+                    <Flame className="size-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-heading text-base font-semibold text-foreground flex items-center gap-1.5">
+                      Riset Reels Viral & Waktu Tayang
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      {infoJadwal?.label ?? "Jadwal prime time & formula konten Instagram Reels"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBukaJadwal((v) => !v)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition ${
+                      bukaJadwal
+                        ? "border-amber-400/50 bg-amber-500/10 text-amber-300"
+                        : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground"
+                    }`}
+                  >
+                    <Clock className="size-3.5" />
+                    <span>Jam Terbaik</span>
+                    {bukaJadwal ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBukaRiset((v) => !v)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition ${
+                      bukaRiset
+                        ? "border-emas/50 bg-emas/10 text-emas"
+                        : "border-emas/30 text-emas-muda hover:border-emas hover:bg-emas/5"
+                    }`}
+                  >
+                    <TrendingUp className="size-3.5" />
+                    <span>Riset Konsep Viral</span>
+                    {bukaRiset ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Saran Jam Tayang Singkat */}
+              {infoJadwal && !bukaJadwal && (
+                <p className="mt-3 text-xs text-zinc-400 border-t border-border/40 pt-2.5">
+                  💡 <b className="text-foreground">Saran waktu:</b> {infoJadwal.saran}
+                </p>
+              )}
+
+              {/* Detail Jadwal Tayang Terbaik */}
+              {bukaJadwal && (
+                <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-foreground">
+                      4 Slot Waktu Tayang Optimal Reels (WIB)
+                    </p>
+                    <span className="text-[11px] text-muted-foreground">
+                      Hari terbaik: Selasa, Rabu, Kamis, Minggu
+                    </span>
+                  </div>
+
+                  <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                    {(daftarJadwal.length > 0 ? daftarJadwal : [
+                      { slot: "sore", jam: "17.30 - 19.30 WIB", nama: "Golden Prime Time", alasan: "Trafik Instagram Indonesia tertinggi, jangkauan puncak ke Explore.", skor: 98 },
+                      { slot: "siang", jam: "11.45 - 13.00 WIB", nama: "Istirahat Siang", alasan: "Penonton fokus demo singkat 30s saat rehat makan siang.", skor: 88 },
+                      { slot: "malam", jam: "20.30 - 21.45 WIB", nama: "Santai Malam", alasan: "Waktu santai rebahan, cocok untuk storytelling & edukasi bisnis.", skor: 85 },
+                      { slot: "pagi", jam: "07.00 - 08.30 WIB", nama: "Commute Pagi", alasan: "Tips ringan & motivasi sebelum jam mulai kerja.", skor: 74 },
+                    ]).map((j) => (
+                      <div
+                        key={j.slot}
+                        className={`rounded-xl border p-3 text-xs ${
+                          j.slot === "sore"
+                            ? "border-amber-500/40 bg-amber-500/5 text-amber-200"
+                            : "border-border/70 bg-white/[0.01] text-muted-foreground"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="font-semibold text-foreground">{j.nama}</span>
+                          <span className="rounded-full bg-white/10 px-1.5 py-0.2 font-mono text-[10px] text-emas">
+                            {j.skor}%
+                          </span>
+                        </div>
+                        <p className="font-mono text-[11px] text-emas-muda">{j.jam}</p>
+                        <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-400">
+                          {j.alasan}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Panel Riset Konsep Viral */}
+              {bukaRiset && (
+                <div className="mt-4 space-y-4 border-t border-border/50 pt-4">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs space-y-2">
+                    <p className="font-semibold text-foreground flex items-center gap-1.5">
+                      <Lightbulb className="size-3.5 text-emas" /> 4 Pilar Rahasia Reels Viral:
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2 text-[11px] text-zinc-400">
+                      <div><b>1. Hook 3 Detik:</b> Sentil luka / rasa penasaran, jangan mulai dengan salam klise.</div>
+                      <div><b>2. Visual Rhythm:</b> Pacing cepat (ganti adegan tiap 2-4 dtk) + perbesaran layar UI.</div>
+                      <div><b>3. Teks Layar Kontras:</b> Teks stabilo tebal karena 80% audiens menonton tanpa suara.</div>
+                      <div><b>4. CTA Konkret:</b> Ajakan simpel (mis. coba demo di link bio atau WhatsApp).</div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={topikRiset}
+                      onChange={(e) => setTopikRiset(e.target.value)}
+                      placeholder={`Topik/sudut khusus untuk ${namaProduk(pilihProduk)} (opsional, mis. nota WhatsApp, kasir lemot)`}
+                      className="h-10 flex-1 rounded-lg border border-input bg-transparent px-3 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={mintaRisetViral}
+                      disabled={merisetViral}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emas px-4 py-2 text-xs font-semibold text-background hover:bg-emas/90 disabled:opacity-60"
+                    >
+                      {merisetViral ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                      Riset 3 Konsep Viral
+                    </button>
+                  </div>
+
+                  {galatRiset && <p className="text-xs text-red-300">{galatRiset}</p>}
+
+                  {konsepViral.length > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {konsepViral.map((k, idx) => (
+                        <div
+                          key={k.judul + idx}
+                          className="flex flex-col justify-between rounded-xl border border-border/80 bg-white/[0.02] p-3.5 text-xs hover:border-emas/50 transition"
+                        >
+                          <div className="space-y-2">
+                            <span className="inline-block rounded-md bg-emas/15 px-2 py-0.5 font-semibold text-emas-muda text-[11px]">
+                              {k.judul}
+                            </span>
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Hook 3 Detik</p>
+                              <p className="text-xs font-medium text-foreground italic mt-0.5">
+                                "{k.hook}"
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Teks Layar & Visual</p>
+                              <p className="text-[11px] text-zinc-400 mt-0.5">
+                                <b className="text-zinc-200">[{k.teksLayarKunci}]</b> · {k.alurVisual}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">CTA</p>
+                              <p className="text-[11px] text-zinc-400 mt-0.5">{k.ajakanCta}</p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => pakaiKonsepViral(k.arahanStudio)}
+                            className="mt-3.5 w-full rounded-lg border border-emas/40 bg-emas/10 py-1.5 text-center text-xs font-medium text-emas hover:bg-emas hover:text-background transition"
+                          >
+                            Gunakan Konsep Ini →
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <form onSubmit={buat} className="mb-8 grid gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6">
               <h2 className="flex items-center gap-2 font-heading text-lg"><Sparkles className="size-5 text-emas" /> Buat konten promosi</h2>
               {/* Pilihan merek muncul bila lebih dari satu merek aktif (aktifkan di Sambungan). */}
               {merekAktif.length > 1 ? (
                 <label className="grid gap-1.5 sm:w-1/2">
                   <span className="text-xs font-medium text-muted-foreground">Merek</span>
-                  <select name="merek" value={pilihMerek} onChange={(e) => setPilihMerek(e.target.value)} className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
+                  <select name="merek" value={pilihMerek} onChange={(e) => { setPilihMerek(e.target.value); setUsulan([]); setGalatUsulan(""); }} className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
                     {merekAktif.map((m) => <option key={m.slug} value={m.slug} className="bg-card">{m.nama}</option>)}
                   </select>
                 </label>
@@ -203,7 +461,16 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
               <div hidden={merekBank} className="grid gap-4 sm:grid-cols-2">
                 <label className="grid gap-1.5">
                   <span className="text-xs font-medium text-muted-foreground">Produk</span>
-                  <select name="produk" className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
+                  <select
+                    name="produk"
+                    value={pilihProduk}
+                    onChange={(e) => {
+                      setPilihProduk(e.target.value);
+                      setUsulan([]);
+                      setGalatUsulan("");
+                    }}
+                    className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+                  >
                     {situs.produk.map((p) => (
                       <option key={p.slug} value={p.slug} className="bg-card">{p.nama}</option>
                     ))}
@@ -226,11 +493,13 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
               <div className="grid gap-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <label htmlFor="studio-arahan" className="text-xs font-medium text-muted-foreground">{merekBank ? "Ide video" : "Arahan untuk AI (opsional)"}</label>
-                  {!merekBank && (
+                  {!merekBank && pilihMerek === "bakafrawi" && pilihProduk !== "lek-kopi" ? (
                     <button type="button" onClick={mintaUsulan} disabled={mengusulkan} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-xs hover:border-emas hover:text-emas disabled:opacity-60">
                       {mengusulkan ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} Usulkan arahan
                     </button>
-                  )}
+                  ) : !merekBank && pilihProduk === "lek-kopi" ? (
+                    <span className="text-[11px] text-muted-foreground italic">Saran AI hanya untuk produk Bakafrawi</span>
+                  ) : null}
                 </div>
                 <textarea
                   id="studio-arahan"

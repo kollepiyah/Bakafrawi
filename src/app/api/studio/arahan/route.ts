@@ -9,6 +9,9 @@ export async function POST(req: Request) {
   if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
   const isi = (await req.json().catch(() => ({}))) as { produk?: string; jenis?: string };
   try {
+    if (isi.produk === "lek-kopi") {
+      return Response.json({ ok: false, pesan: "Saran arahan AI hanya tersedia untuk konten produk Bakafrawi (konten Lek Kopi belum didukung)." }, { status: 400 });
+    }
     const produk = (await ambilKonten()).produk.find((p) => p.slug === isi.produk);
     if (!produk) return Response.json({ ok: false, pesan: "Produk tidak ditemukan." }, { status: 400 });
     const usulan = await usulkanArahan(produk, isi.jenis === "gambar" ? "gambar" : "video");
