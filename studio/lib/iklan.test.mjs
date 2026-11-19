@@ -78,3 +78,9 @@ test('pilihMusik: hanya berkas audio, acak tapi pasti salah satu', async () => {
   assert.equal(pilihMusik(['b.mp3', 'a.m4a', 'x.txt'], () => 0), 'a.m4a');
   assert.equal(pilihMusik(['b.mp3', 'a.m4a'], () => 0.99), 'b.mp3');
 });
+
+test('pilihMaskot: JPG diterima paling akhir, huruf besar/kecil diabaikan', async () => {
+  const { pilihMaskot } = await import('./video.mjs');
+  assert.equal(pilihMaskot(['Bakafrawi.JPG'], 'maktaba-pos'), 'Bakafrawi.JPG');
+  assert.equal(pilihMaskot(['bakafrawi.jpg', 'bakafrawi.png'], 'x'), 'bakafrawi.png');
+});

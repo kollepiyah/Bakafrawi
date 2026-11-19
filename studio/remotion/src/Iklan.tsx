@@ -93,7 +93,7 @@ export const Iklan: React.FC<Naskah> = (naskah) => {
             kata={suara?.[i]?.kata ?? kataRata(a.narasi, waktu[i].durasi / FPS - JEDA_AWAL - 0.4)}
             mulaiDetik={JEDA_AWAL}
             kunci={a.kunci}
-            y={a.jenis === 'penutup' ? 1520 : letak.caption}
+            y={a.jenis === 'penutup' && !maskot ? 1520 : letak.caption}
             utama={merek.utama}
             kedua={merek.kedua}
             tinta={merek.tinta}

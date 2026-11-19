@@ -1,6 +1,7 @@
 // Video iklan produk lewat Remotion (studio/remotion), dipilih Kyai 19 Nov 2026: naskah Claude
 // (adegan datar) dirapikan jadi props `Naskah`, narasi edge-tts + waktu tiap kata dibuat per adegan,
 // aset disalin ke folder publik tugas, lalu `remotion render` dijalankan dengan --public-dir.
+import { spawn } from 'node:child_process';
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,15 +38,36 @@ export function pilihMusik(berkasAda, acak = Math.random) {
 }
 
 /**
- * Berkas maskot merek: aset/maskot/<slug merek>.(webm|mov|mp4|png|webp), cadangan bakafrawi.*.
- * Urutan ekstensi = yang bergerak didahulukan. Murni terhadap daftar berkas yang ada.
+ * Berkas maskot merek: aset/maskot/<slug merek>.(webm|mov|mp4|png|webp|jpg|jpeg), cadangan
+ * bakafrawi.*. Yang bergerak didahulukan, lalu yang sudah transparan, JPG terakhir. Huruf besar/kecil
+ * nama berkas diabaikan (unggahan HP sering ".JPG"). Murni terhadap daftar berkas yang ada.
  */
 export function pilihMaskot(berkasAda, slug) {
-  const ext = ['webm', 'mov', 'mp4', 'png', 'webp'];
+  const ext = ['webm', 'mov', 'mp4', 'png', 'webp', 'jpg', 'jpeg'];
   for (const nama of [slug, 'bakafrawi'].filter(Boolean)) {
-    for (const e of ext) if (berkasAda.includes(`${nama}.${e}`)) return `${nama}.${e}`;
+    for (const e of ext) {
+      const ada = berkasAda.find((b) => b.toLowerCase() === `${nama}.${e}`.toLowerCase());
+      if (ada) return ada;
+    }
   }
   return null;
+}
+
+/**
+ * JPG tak punya latar transparan: latar polos (warna diambil dari piksel pojok kiri atas) dibuang
+ * dengan colorkey ffmpeg → PNG transparan. Cocok untuk karakter di latar polos/putih.
+ */
+export async function jpgKePng(masuk, keluar) {
+  const piksel = await new Promise((ok, gagal) => {
+    const p = spawn(process.env.STUDIO_FFMPEG || 'ffmpeg', ['-v', 'error', '-i', masuk, '-vf', 'crop=4:4:0:0,scale=1:1', '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-']);
+    const buf = [];
+    p.stdout.on('data', (d) => buf.push(d));
+    p.on('error', gagal);
+    p.on('close', (k) => (k === 0 ? ok(Buffer.concat(buf)) : gagal(new Error(`ffmpeg gagal membaca warna latar maskot (${k})`))));
+  });
+  const warna = `0x${[...piksel.subarray(0, 3)].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+  await ffmpeg(['-y', '-i', masuk, '-vf', `format=rgba,colorkey=${warna}:0.16:0.08`, keluar]);
+  return keluar;
 }
 
 export const WARNA = { utama: '#0F2A5F', kedua: '#F5B800', latar: '#FAFAFA', kisi: '#EAEAEA', tinta: '#0B0B0F' };
@@ -139,8 +161,13 @@ export async function renderIklan({ naskah, aset, folder, musik = null, keluar, 
   n.musik = musik ? `musik${path.extname(musik)}` : 'musik.mp3';
   // Maskot (karakter 3D) di 40% bawah layar; tanpa berkas → tata letak tanpa maskot.
   if (aset.maskot) {
-    n.maskot = `maskot${path.extname(aset.maskot)}`;
-    await copyFile(aset.maskot, path.join(publik, n.maskot));
+    if (/\.jpe?g$/i.test(aset.maskot)) {
+      n.maskot = 'maskot.png';
+      await jpgKePng(aset.maskot, path.join(publik, n.maskot));
+    } else {
+      n.maskot = `maskot${path.extname(aset.maskot).toLowerCase()}`;
+      await copyFile(aset.maskot, path.join(publik, n.maskot));
+    }
   }
 
   const props = path.join(folder, 'props.json');
