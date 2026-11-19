@@ -1,22 +1,22 @@
-// Adegan Stok — diagram simpul: Maktaba POS di tengah tersambung garis beranimasi ke 3 kartu, angka
-// stok berkurang tiap penjualan, lalu notifikasi kuning "stok menipis" muncul.
+// Adegan Alur — diagram simpul: produk di tengah tersambung garis beranimasi ke 3 kartu, penghitung
+// opsional di kartu pertama (mis. stok berkurang tiap penjualan), lalu notifikasi kuning muncul.
 import React from 'react';
 import { Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { bayangan, Ikon, Kartu, SANS } from '../components/dasar';
 import type { Adegan, Naskah } from '../data/script';
 
-type P = { a: Extract<Adegan, { jenis: 'stok' }>; merek: Naskah['merek']; durasi: number };
+type P = { a: Extract<Adegan, { jenis: 'alur' }>; merek: Naskah['merek']; durasi: number };
 const IKON = ['kotak', 'lonceng', 'grafik'] as const;
 // Posisi kartu relatif pusat diagram (480, 380).
 const POS = [{ x: 170, y: 120 }, { x: 790, y: 120 }, { x: 480, y: 660 }];
 
-export const Stok: React.FC<P> = ({ a, merek, durasi }) => {
+export const Alur: React.FC<P> = ({ a, merek, durasi }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = (f: number) => Math.round(durasi * f);
   const pg = (m: number, o = {}) => spring({ frame: frame - m, fps, config: { damping: 15, stiffness: 150, ...o } });
   const pusat = pg(0, { damping: 12 });
-  const stok = Math.round(interpolate(frame, [t(0.15), t(0.5)], [12, 5], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }));
+  const hitung = a.hitung ? Math.round(interpolate(frame, [t(0.15), t(0.5)], [a.hitung.dari, a.hitung.ke], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })) : null;
   const notif = pg(t(0.55), { damping: 11, stiffness: 180 });
   const getar = frame > t(0.55) && frame < t(0.55) + 14 ? Math.sin(frame * 2.2) * 4 : 0;
   return (
@@ -40,12 +40,12 @@ export const Stok: React.FC<P> = ({ a, merek, durasi }) => {
         {merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 90, height: 90, borderRadius: 22 }} /> : null}
         <div style={{ fontWeight: 800, fontSize: 34 }}>{merek.nama}</div>
       </div>
-      {a.simpul.map((s, i) => {
+      {a.simpul.slice(0, 3).map((s, i) => {
         const p = pg(t(0.14 + i * 0.07));
         return (
           <Kartu key={s} style={{ position: 'absolute', left: POS[i].x - 150, top: POS[i].y - 70, width: 300, height: 140, display: 'flex', alignItems: 'center', gap: 16, padding: '0 22px', opacity: p, transform: `scale(${0.7 + 0.3 * p})` }}>
             <div style={{ width: 70, height: 70, borderRadius: 20, background: '#EEF2FF', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Ikon nama={IKON[i]} ukuran={42} warna={merek.utama} /></div>
-            <div style={{ fontWeight: 800, fontSize: 27, lineHeight: 1.15, color: '#18181B' }}>{s}{i === 0 ? <div style={{ fontSize: 22, color: '#71717A', fontWeight: 700 }}>Kopi Arabika: {stok}</div> : null}</div>
+            <div style={{ fontWeight: 800, fontSize: 27, lineHeight: 1.15, color: '#18181B' }}>{s}{i === 0 && a.hitung ? <div style={{ fontSize: 22, color: '#71717A', fontWeight: 700 }}>{a.hitung.label}: {hitung}</div> : null}</div>
           </Kartu>
         );
       })}

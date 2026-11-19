@@ -6,12 +6,13 @@ import { Latar, Lencana, Merek, Progres } from './components/Bingkai';
 import { Caption } from './components/Caption';
 import { tataLetak, useKeluar } from './components/dasar';
 import { MascotOverlay } from './components/Maskot';
-import { FPS, hitungWaktu, JEDA_AWAL, type Adegan, type Kata, type Naskah } from './data/script';
+import { FPS, hitungWaktu, JEDA_AWAL, type Adegan, type Kata, type Layar as LayarT, type Naskah } from './data/script';
+import { Alur } from './scenes/Alur';
+import { Daftar } from './scenes/Daftar';
 import { Hook } from './scenes/Hook';
 import { Kasir } from './scenes/Kasir';
-import { Laporan } from './scenes/Laporan';
+import { Layar } from './scenes/Layar';
 import { Penutup } from './scenes/Penutup';
-import { Stok } from './scenes/Stok';
 
 /** Tanpa berkas suara (pratinjau naskah): waktu kata dibagi menurut panjang kata. Murni. */
 export function kataRata(narasi: string, detik: number): Kata[] {
@@ -26,25 +27,29 @@ export function kataRata(narasi: string, detik: number): Kata[] {
   });
 }
 
-const Isi: React.FC<{ a: Adegan; merek: Naskah['merek']; durasi: number; atas: number; jumlah: number }> = ({ a, merek, durasi, atas, jumlah }) => {
+type PIsi = { a: Adegan; merek: Naskah['merek']; durasi: number; atas: number; jumlah: number; layar: LayarT[] };
+
+const Isi: React.FC<PIsi> = ({ a, merek, durasi, atas, jumlah, layar }) => {
   switch (a.jenis) {
     case 'hook': return <Hook a={a} merek={merek} jumlah={jumlah} />;
+    case 'layar': return <Layar a={a} merek={merek} durasi={durasi} layar={layar} />;
     case 'kasir': return <Kasir a={a} merek={merek} durasi={durasi} />;
-    case 'stok': return <Stok a={a} merek={merek} durasi={durasi} />;
-    case 'laporan': return <Laporan a={a} merek={merek} durasi={durasi} />;
+    case 'alur': return <Alur a={a} merek={merek} durasi={durasi} />;
+    case 'daftar': return <Daftar a={a} merek={merek} durasi={durasi} />;
     default: return <Penutup a={a} merek={merek} atas={atas} />;
   }
 };
 
 /** Area visual: isi adegan diletakkan di tengah area dan diskalakan agar muat, lalu memudar di akhir. */
-const Panggung: React.FC<{ a: Adegan; merek: Naskah['merek']; durasi: number; atas: number; bawah: number; jumlah: number }> = ({ a, merek, durasi, atas, bawah, jumlah }) => {
-  const keluar = useKeluar(durasi);
-  if (a.jenis === 'penutup') return <Isi a={a} merek={merek} durasi={durasi} atas={atas} jumlah={jumlah} />;
-  // Tak pernah membesar di atas 1: konten dirancang ≤ 960 px supaya tak menyentuh bilah progres/tepi.
-  const skala = Math.min(1, (bawah - atas) / 820);
+const Panggung: React.FC<PIsi & { bawah: number }> = (p) => {
+  const keluar = useKeluar(p.durasi);
+  if (p.a.jenis === 'penutup') return <Isi {...p} />;
+  // Tak pernah membesar di atas 1: konten dirancang ≤ 960 px lebar supaya tak menyentuh bilah progres.
+  const tinggi = p.a.jenis === 'layar' ? 900 : 820;
+  const skala = Math.min(1, (p.bawah - p.atas) / tinggi);
   return (
-    <div style={{ position: 'absolute', left: 0, right: 0, top: atas, height: bawah - atas, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: keluar, transform: `scale(${(0.96 + 0.04 * keluar) * skala})` }}>
-      <Isi a={a} merek={merek} durasi={durasi} atas={atas} jumlah={jumlah} />
+    <div style={{ position: 'absolute', left: 0, right: 0, top: p.atas, height: p.bawah - p.atas, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: keluar, transform: `scale(${(0.96 + 0.04 * keluar) * skala})` }}>
+      <Isi {...p} />
     </div>
   );
 };
@@ -73,7 +78,7 @@ export const Iklan: React.FC<Naskah> = (naskah) => {
       <Latar merek={merek} />
       {adegan.map((a, i) => (
         <Sequence key={i} from={waktu[i].mulai} durationInFrames={waktu[i].durasi} name={`${i + 1}. ${a.jenis}`}>
-          <Panggung a={a} merek={merek} durasi={waktu[i].durasi} atas={letak.visualAtas} bawah={letak.visualBawah} jumlah={adegan.length} />
+          <Panggung a={a} merek={merek} durasi={waktu[i].durasi} atas={letak.visualAtas} bawah={letak.visualBawah} jumlah={adegan.length} layar={naskah.layar ?? []} />
           {suara?.[i] ? (
             <Sequence from={Math.round(JEDA_AWAL * FPS)} layout="none">
               <Audio src={staticFile(suara[i].berkas)} />

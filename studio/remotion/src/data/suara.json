@@ -290,6 +290,57 @@
     },
     {
       "berkas": "narasi/adegan-4.mp3",
+      "durasi": 3.696,
+      "kata": [
+        {
+          "teks": "Omzet",
+          "mulai": 0.098,
+          "selesai": 0.445
+        },
+        {
+          "teks": "hari",
+          "mulai": 0.445,
+          "selesai": 0.596
+        },
+        {
+          "teks": "ini",
+          "mulai": 0.596,
+          "selesai": 0.85
+        },
+        {
+          "teks": "langsung",
+          "mulai": 0.85,
+          "selesai": 1.14
+        },
+        {
+          "teks": "kelihatan",
+          "mulai": 1.14,
+          "selesai": 1.522
+        },
+        {
+          "teks": "begitu",
+          "mulai": 1.522,
+          "selesai": 1.823
+        },
+        {
+          "teks": "kamu",
+          "mulai": 1.823,
+          "selesai": 2.066
+        },
+        {
+          "teks": "buka",
+          "mulai": 2.066,
+          "selesai": 2.263
+        },
+        {
+          "teks": "aplikasi",
+          "mulai": 2.263,
+          "selesai": 2.922
+        }
+      ]
+    },
+    {
+      "berkas": "narasi/adegan-5.mp3",
       "durasi": 8.4,
       "kata": [
         {
@@ -410,7 +461,7 @@
       ]
     },
     {
-      "berkas": "narasi/adegan-5.mp3",
+      "berkas": "narasi/adegan-6.mp3",
       "durasi": 7.176,
       "kata": [
         {

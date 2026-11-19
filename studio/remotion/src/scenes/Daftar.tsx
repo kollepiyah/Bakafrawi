@@ -1,22 +1,23 @@
-// Adegan Laporan — kartu dasbor: angka omzet menghitung naik, grafik batang tumbuh, garis tren
-// tergambar, lalu daftar centang muncul berurutan.
+// Adegan Daftar — kartu angka besar yang menghitung naik (bila berupa angka), grafik batang tumbuh,
+// garis tren tergambar, lalu daftar centang muncul berurutan.
 import React from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Ikon, Kartu, SANS } from '../components/dasar';
 import type { Adegan, Naskah } from '../data/script';
 
-type P = { a: Extract<Adegan, { jenis: 'laporan' }>; merek: Naskah['merek']; durasi: number };
+type P = { a: Extract<Adegan, { jenis: 'daftar' }>; merek: Naskah['merek']; durasi: number };
 const BATANG = [0.35, 0.5, 0.42, 0.62, 0.55, 0.78, 0.95];
 const rupiah = (n: number) => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
 
-export const Laporan: React.FC<P> = ({ a, merek, durasi }) => {
+export const Daftar: React.FC<P> = ({ a, merek, durasi }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = (f: number) => Math.round(durasi * f);
   const pg = (m: number, o = {}) => spring({ frame: frame - m, fps, config: { damping: 15, stiffness: 150, ...o } });
   const kartu = pg(0, { damping: 18 });
-  const target = Number(a.omzet.replace(/\D/g, '')) || 0;
-  const hitung = interpolate(frame, [t(0.04), t(0.32)], [0, target], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: (x) => 1 - Math.pow(1 - x, 3) });
+  // Angka berawalan Rp dihitung naik; teks lain (mis. "1.248 santri") tampil apa adanya.
+  const target = /^Rp\s?[\d.]+$/.test(a.angka.trim()) ? Number(a.angka.replace(/\D/g, '')) : null;
+  const hitung = interpolate(frame, [t(0.04), t(0.32)], [0, target ?? 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp', easing: (x) => 1 - Math.pow(1 - x, 3) });
   const tren = interpolate(frame, [t(0.2), t(0.4)], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const titik = BATANG.map((b, i) => `${40 + i * 120},${300 - b * 260}`).join(' ');
   return (
@@ -24,10 +25,10 @@ export const Laporan: React.FC<P> = ({ a, merek, durasi }) => {
       <Kartu style={{ padding: 34, opacity: kartu, transform: `translateY(${(1 - kartu) * 80}px)` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 28, color: '#71717A' }}>Omzet hari ini</div>
-            <div style={{ fontWeight: 800, fontSize: 72, letterSpacing: -2, color: merek.utama }}>{rupiah(hitung)}</div>
+            <div style={{ fontWeight: 700, fontSize: 28, color: '#71717A' }}>{a.labelAngka}</div>
+            <div style={{ fontWeight: 800, fontSize: 72, letterSpacing: -2, color: merek.utama }}>{target === null ? a.angka : rupiah(hitung)}</div>
           </div>
-          <div style={{ background: '#DCFCE7', color: '#166534', borderRadius: 999, padding: '10px 20px', fontWeight: 800, fontSize: 26, opacity: tren }}>▲ 18%</div>
+          {a.catatan ? <div style={{ background: '#DCFCE7', color: '#166534', borderRadius: 999, padding: '10px 20px', fontWeight: 800, fontSize: 26, opacity: tren }}>{a.catatan}</div> : null}
         </div>
         <svg width="872" height="320" viewBox="0 0 800 320" style={{ marginTop: 12 }}>
           {BATANG.map((b, i) => {
@@ -39,7 +40,7 @@ export const Laporan: React.FC<P> = ({ a, merek, durasi }) => {
         </svg>
       </Kartu>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {a.daftar.map((d, i) => {
+        {a.daftar.slice(0, 3).map((d, i) => {
           const p = pg(t(0.42 + i * 0.12));
           const c = interpolate(frame, [t(0.42 + i * 0.12) + 4, t(0.42 + i * 0.12) + 14], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
           return (

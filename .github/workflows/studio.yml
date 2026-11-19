@@ -71,7 +71,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: studio/package-lock.json
+          cache-dependency-path: |
+            studio/package-lock.json
+            studio/remotion/package-lock.json
 
       # Cermin apt Ubuntu kadang lambat (18 Nov: 8,5 menit). Paket .deb disimpan di cache per versi
       # image runner, jadi umumnya dipasang dari cache dalam hitungan detik.
@@ -109,9 +111,12 @@ jobs:
       - name: Pasang paket Node
         if: steps.cek.outputs.kerja == 'true'
         working-directory: studio
+        # Video iklan produk dirender Remotion (studio/remotion) dengan Chrome Headless Shell miliknya
+        # sendiri; Chrome sistem tetap dipakai Playwright untuk tangkapan layar & poster.
         run: |
           npm ci
-          npx playwright-core install ffmpeg
+          npm ci --prefix remotion
+          (cd remotion && npx remotion browser ensure)
 
       - name: Jalankan satu putaran Studio
         if: steps.cek.outputs.kerja == 'true'

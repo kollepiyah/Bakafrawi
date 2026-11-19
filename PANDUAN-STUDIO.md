@@ -55,9 +55,14 @@ Mesinnya berjalan di **GitHub Actions** (repo `kollepiyah/Bakafrawi`, workflow *
 tidak perlu menyala. Repo publik → menit Actions gratis.
 
 - **Poster:** 3 ukuran (1:1 feed, 4:5 potret, 9:16 story) dengan tangkapan layar produk dalam bingkai HP.
-- **Video:** robot membuka aplikasi di layar HP, menjalankan *Skenario rekaman* produk itu sambil
-  merekam, lalu dirakit jadi video 9:16: kartu pembuka → rekaman dalam bingkai HP + subtitle →
-  kartu penutup (WA & bakafrawi.com), dengan narasi suara AI (edge-tts, id-ID).
+- **Video (Remotion, sejak 19 Nov 2026):** robot membuka aplikasi di layar HP mengikuti *Skenario
+  rekaman* dan memotret tiap layar dengan tajam (plus gambar *layar HP* di konten produk). Claude
+  **melihat** tangkapan itu lalu menulis 5–6 adegan: pembuka gaya karosel (judul besar, kata di kotak
+  warna, coretan tangan) → langkah 1-2-3 (tampilan **asli** aplikasi di HP + kotak perbesaran, mockup
+  kasir untuk aplikasi kasir, diagram alur, daftar centang) → penutup (kontak dari situs). Narasi
+  edge-tts id-ID dengan waktu tiap kata → subtitle kata-per-kata yang sinkron. Dirender Remotion di
+  `studio/remotion` (kode adegan & warna di sana; contoh naskah di `src/data/script.ts`).
+  Musik: `STUDIO_MUSIK` (berkas) atau musik contoh buatan ffmpeg. Slot maskot sudah ada, belum diisi.
 - **Naskah & caption** ditulis Claude (`claude-sonnet-5-5`, effort medium — sama dengan konten Lek Kopi). Tanpa kunci API, Studio memakai naskah
   templat dari data produk — tetap jadi, hanya kurang luwes.
 
@@ -90,11 +95,12 @@ utama produk lalu menggulir pelan.
 ```
 cd studio
 npm install
-npx playwright-core install ffmpeg
-node studio.mjs --lokal contoh-tugas.json
+npm install --prefix remotion
+node studio.mjs --lokal contoh-tugas-video.json
 ```
-Berkas `contoh-tugas.json` berisi `{ "tugas": {jenis, produk_slug, arahan}, "situs": <isi konten> }`;
-hasil ada di `studio/keluaran/`.
+Berkas `contoh-tugas*.json` berisi `{ "tugas": {jenis, produk_slug, arahan}, "situs": <isi konten> }`;
+hasil ada di `studio/keluaran/`. Mengutak-atik tampilan video: `cd studio/remotion`, `npm run siapkan`
+(narasi contoh), lalu `npm run studio` (Remotion Studio di peramban) atau `npm run render`.
 
 ## Tayang ke Instagram & bot Telegram (gelombang 2)
 

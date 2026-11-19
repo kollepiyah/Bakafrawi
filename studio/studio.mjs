@@ -13,7 +13,7 @@ import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } fr
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { ffmpeg, probe } from './lib/bank/alat.mjs';
-import { rencanaAdegan, susunIklan } from './lib/iklan.mjs';
+import { keNaskah, renderIklan, WARNA } from './lib/video.mjs';
 import { buatNaskah, buatNaskahVideo } from './lib/naskah.mjs';
 import { bukaPeramban, potret, potretLayar } from './lib/peramban.mjs';
 import { adaTelegram, kirimHasil, kirimTeks } from './lib/telegram.mjs';
@@ -26,6 +26,21 @@ const RASIO_AI = { feed: '1:1', potret: '4:5', story: '9:16' };
 
 const mutlak = (src, situs) => (/^https?:\/\//.test(src) ? src : `${situs.urlSitus.replace(/\/$/, '')}${src}`);
 const berkasUrl = (b) => pathToFileURL(b).href;
+
+/** Gambar (URL file:// atau http) → berkas lokal; gagal → null (video tetap jadi tanpa logo). */
+async function ambilLokal(src, dasar) {
+  if (!src) return null;
+  try {
+    if (src.startsWith('file:')) return fileURLToPath(src);
+    const r = await fetch(src);
+    if (!r.ok) return null;
+    const b = `${dasar}${path.extname(new URL(src).pathname) || '.png'}`;
+    await writeFile(b, Buffer.from(await r.arrayBuffer()));
+    return b;
+  } catch {
+    return null;
+  }
+}
 
 /** Skenario layar: dari produk.demo bila ada; bila tidak, buka tautan utama lalu gulir. */
 function skenario(produk) {
@@ -159,20 +174,19 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       hasil.push({ jenis: 'gambar', rasio, url: await simpan(keluar, 'image/jpeg') });
     }
   } else {
-    // Foto orang AI di separuh bawah (pengganti wajah pembicara, maks 2); gagal → separuh bawah polos.
-    const foto = [];
-    for (const [i, a] of naskah.adegan.entries()) {
-      if (!a.foto?.trim() || foto.filter(Boolean).length >= 2) continue;
-      const u = await fotoAi(a.foto, '9:16', berkas(`foto-${i}.png`), catatan);
-      foto[i] = u ? fileURLToPath(u) : null;
-    }
-    const rencana = rencanaAdegan(naskah.adegan, { layar: layarApp, foto, hook: naskah.hook });
-    const logoKartu = produk.logo?.src ? mutlak(produk.logo.src, situs) : logo;
-    const r = await susunIklan({
-      folder, rencana, peramban, keluar: berkas('video.mp4'), musik: process.env.STUDIO_MUSIK || null,
-      kartu: { tema, produk, logo: logoKartu, ajakan: naskah.ajakan, kontak },
+    // Video iklan Remotion (pilihan Kyai 19 Nov 2026). Logo = logo produk, cadangannya logo merek.
+    const logoVideo = await ambilLokal(produk.logo?.src ? mutlak(produk.logo.src, situs) : logo, berkas('logo-sumber'));
+    const props = keNaskah(naskah, {
+      nama: produk.nama,
+      logo: 'logo',
+      utama: merek?.profil?.warna_utama || WARNA.utama,
+      kedua: tema.aksen,
+      layar: layarApp,
+      info: [tema.situs, kontak.whatsappTampil && `WA ${kontak.whatsappTampil}`].filter(Boolean).join(' · '),
+      fitur: produk.fitur.map((f) => f.judul),
     });
-    hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.total), url: await simpan(r.berkas, 'video/mp4') });
+    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp }, folder, musik: process.env.STUDIO_MUSIK || null, keluar: berkas('video.mp4') });
+    hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') });
     hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   }
   if (catatan.length) naskah.catatan = catatan;

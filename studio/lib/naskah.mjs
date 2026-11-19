@@ -65,46 +65,65 @@ export async function buatNaskah(produk, situs, arahan, jenis, merek = null) {
   }
 }
 
-// ------------------------------------------------------------ naskah video gaya Reels (19 Nov 2026)
+// ------------------------------------------------------------ naskah video Remotion (19 Nov 2026)
 
-const ATAS = ['judul', 'hp', 'layar', 'cta'];
+// Adegan datar: satu objek berisi kolom semua jenis (yang tak terpakai dikosongkan). Lebih andal untuk
+// keluaran terstruktur daripada union; video.mjs `keNaskah` merapikannya jadi props Remotion.
+const JENIS = ['hook', 'layar', 'kasir', 'alur', 'daftar', 'penutup'];
 export const SkemaVideo = z.object({
-  hook: z.object({
-    judul: z.string().describe('Judul besar kartu pembuka, 3-7 kata, memancing penasaran (mis. "Jangan buka toko tanpa aplikasi ini")'),
-    sorot: z.string().describe('1-2 kata dari judul itu (persis sama) yang disorot kotak warna'),
-    coretan: z.string().describe('Coretan tulisan tangan berpanah, 2-5 kata santai (mis. "serius, gratis!")'),
-  }),
   adegan: z
     .array(
       z.object({
-        teks: z.string().describe('Satu kalimat narasi lisan untuk adegan ini, 3-10 kata, santai & kekinian'),
-        atas: z.enum(ATAS).describe('Isi separuh atas layar: judul = kartu judul besar (hanya adegan 1); hp = kolase HP aplikasi; layar = potongan layar aplikasi yang dizoom; cta = kartu ajakan penutup'),
-        layar: z.number().int().describe('Nomor layar aplikasi yang dipakai (untuk hp/layar), 0 bila tidak dipakai'),
-        fokus_x: z.number().describe('Untuk atas=layar: posisi mendatar bagian yang disorot, 0 (kiri) sampai 1 (kanan) dari gambar layar itu'),
-        fokus_y: z.number().describe('Untuk atas=layar: posisi tegak bagian yang disorot, 0 (atas) sampai 1 (bawah) dari gambar layar itu'),
-        zoom: z.number().describe('Untuk atas=layar: 1 (selebar layar, biasanya terbaik) sampai 1.15; kartu sudah memotong pita setinggi bagian itu'),
-        sorot: z.array(z.string()).describe('1-2 kata penting dari teks (angka, nama, hasil) yang ditulis huruf serif miring di subtitle'),
-        foto: z.string().describe('Bila separuh bawah perlu foto orang baru mulai adegan ini: deskripsi foto dalam bahasa Inggris. Kosongkan untuk tetap memakai foto sebelumnya.'),
+        jenis: z.enum(JENIS).describe('hook = pembuka judul besar (selalu adegan 1); layar = tangkapan layar asli di HP + kotak perbesaran; kasir = mockup transaksi kasir (HANYA aplikasi kasir/POS); alur = diagram 3 simpul + notifikasi; daftar = angka besar + daftar centang; penutup = ajakan (selalu terakhir)'),
+        narasi: z.string().describe('Narasi lisan adegan ini, 1-2 kalimat pendek, santai & kekinian, bukan bahasa brosur'),
+        kunci: z.array(z.string()).describe('1-3 kata penting dari narasi yang disorot stabilo di subtitle'),
+        badge: z.string().describe('Nama langkah 2-3 kata di lencana kiri atas (layar/kasir/alur/daftar), mis. "Kasir Kilat"; kosong untuk hook/penutup'),
+        label: z.string().describe('hook: label pil hitam kecil, 3-6 kata, mis. "Sebelum tutup toko hari ini"'),
+        judul: z.string().describe('hook: judul besar 4-8 kata yang menyentil (mis. "Jangan rekap manual lagi, pakai Maktaba POS"); penutup: judul ajakan 3-6 kata'),
+        tekan: z.string().describe('hook: 1-3 kata dari judul (persis sama) yang masuk kotak warna, biasanya nama produk'),
+        sub: z.string().describe('hook: kalimat pendukung ≤ 10 kata'),
+        coretan: z.string().describe('hook: coretan tulisan tangan 2-5 kata, mis. "beneran gratis dicoba!"'),
+        dari: z.string().describe('hook: cara lama/masalah 1-3 kata, mis. "Buku catatan"'),
+        ke: z.string().describe('hook: solusi 1-3 kata, biasanya nama produk'),
+        layar: z.number().int().describe('layar: nomor tangkapan layar yang dipakai'),
+        fokus_x: z.number().describe('layar: posisi mendatar bagian yang disorot, 0 kiri - 1 kanan'),
+        fokus_y: z.number().describe('layar: posisi tegak bagian yang disorot, 0 atas - 1 bawah (dari gambar layar utuh)'),
+        sorotan: z.string().describe('layar: label 2-4 kata di atas kotak perbesaran, mis. "Omzet hari ini"'),
+        produk: z.array(z.object({ nama: z.string(), harga: z.string() })).describe('kasir: 3 barang contoh yang wajar untuk sasaran produk, harga format "Rp 18.000"'),
+        total: z.string().describe('kasir: jumlah harga barang di atas, format "Rp 104.500"'),
+        lencana: z.string().describe('kasir: lencana kecil, mis. "Scan Barcode ✓"'),
+        struk: z.string().describe('kasir: keterangan struk, mis. "Lunas · terkirim ke WhatsApp"'),
+        simpul: z.array(z.string()).describe('alur: tepat 3 kartu 2-3 kata yang tersambung ke produk'),
+        notifikasi: z.string().describe('alur: notifikasi kuning ≤ 6 kata'),
+        hitung_label: z.string().describe('alur: label penghitung di kartu pertama (mis. "Kopi Arabika"), kosong bila tak perlu'),
+        hitung_dari: z.number().describe('alur: angka awal penghitung'),
+        hitung_ke: z.number().describe('alur: angka akhir penghitung'),
+        label_angka: z.string().describe('daftar: label angka besar, mis. "Omzet hari ini" / "Santri tercatat"'),
+        angka: z.string().describe('daftar: angka besar, mis. "Rp 2.885.500" — hanya angka yang terlihat di layar aplikasi'),
+        catatan: z.string().describe('daftar: lencana kecil di samping angka (mis. "▲ 18%"), kosong bila tak ada datanya'),
+        daftar: z.array(z.string()).describe('daftar: 3 manfaat masing-masing ≤ 7 kata'),
+        tombol: z.string().describe('penutup: teks tombol ≤ 5 kata'),
       }),
     )
-    .describe('5-7 adegan berurutan, total dibaca 18-28 detik'),
-  ajakan: z.string().describe('Teks tombol ajakan, maksimal 4 kata'),
+    .describe('5-6 adegan berurutan, total narasi dibaca 30-45 detik'),
+  ajakan: z.string().describe('Ajakan bertindak singkat untuk caption, maksimal 5 kata'),
   caption: z.string().describe('Caption media sosial 2-4 kalimat, tanpa hashtag'),
   hashtag: z.array(z.string()).describe('5-8 hashtag tanpa tanda #'),
 });
 
-const ATURAN_VIDEO = `Bentuk video: Reels/TikTok iklan 9:16 gaya Reels teknologi yang sedang ramai — layar dibagi dua:
-separuh atas kartu (judul besar / potongan layar aplikasi / kolase HP), subtitle 1-2 kata di tengah, separuh
-bawah foto orang (pengganti wajah pembicara). Satu kalimat per adegan, cepat.
-- Adegan 1 (hook, ≤ 2 detik): atas "judul". Kalimatnya langsung menyentil masalah/rasa penasaran penonton. Isi foto: orang Indonesia sasaran produk yang sedang mengalami masalah itu, menatap kamera atau sibuk (seperti pembicara konten).
-- Adegan 2: perkenalkan produk, atas "hp".
-- Adegan tengah: satu manfaat per adegan, atas "layar" yang menyorot bagian layar aplikasi yang membuktikan manfaat itu (pilih nomor layar dan titik fokus dari gambar; fokus pada angka/tombol/daftar yang relevan). Boleh satu foto baru di tengah untuk suasana hasil (orang yang sama lega/tersenyum).
-- Adegan terakhir: atas "cta", ajak mencoba/menghubungi.
-- Maksimal 2 foto di seluruh video. Kalimat pendek, bahasa lisan sehari-hari, bukan bahasa brosur. Jangan menyebut angka yang tidak terlihat di layar.`;
+const ATURAN_VIDEO = `Bentuk video: Reels/TikTok iklan 9:16 gaya motion-graphic UI yang sedang ramai (latar putih berkisi,
+kartu UI beranimasi, lencana langkah 1-2-3, subtitle kata-per-kata). Urutan:
+- Adegan 1 "hook": langsung menyentil masalah/rasa penasaran penonton; judul besar bergaya karosel IG.
+- 3-4 adegan langkah, satu manfaat per adegan. Utamakan "layar" (tampilan ASLI aplikasi) untuk tiap gambar layar yang
+  relevan — pilih nomor layar & titik fokus pada angka/tombol/daftar yang membuktikan manfaat itu. "kasir" hanya untuk
+  aplikasi kasir/POS. "alur" untuk otomatisasi/integrasi, "daftar" untuk ringkasan manfaat.
+- Adegan terakhir "penutup": ajak mencoba/menghubungi (kontak diisi sistem, jangan menulis nomor/alamat).
+- Narasi bahasa lisan sehari-hari, kalimat pendek. Jangan mengarang angka atau fitur yang tidak ada di data/layar.`;
 
 /**
- * Naskah video iklan. layar: [{ berkas, keterangan? }] tangkapan layar aplikasi — dikirim ke Claude
- * sebagai gambar (diperkecil) supaya ia memilih bagian yang disorot. Tanpa kunci / gagal → templat.
+ * Naskah video iklan Remotion. layar: [{ berkas, keterangan? }] tangkapan layar aplikasi — dikirim ke
+ * Claude sebagai gambar (diperkecil) supaya ia memilih bagian yang disorot. Tanpa kunci / gagal →
+ * templat. Hasil: keluaran mentah (dirapikan video.mjs keNaskah) + narasi/judul untuk tampilan lama.
  */
 export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar = [], kecilkan = null) {
   const templat = () => naskahVideoTemplat(produk, situs, merek, layar.length);
@@ -127,7 +146,7 @@ export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar
         role: 'user',
         content: [
           ...gambar,
-          { type: 'text', text: `${ATURAN_VIDEO}\n\nAda ${layar.length} layar aplikasi di atas (nomor 0-${Math.max(0, layar.length - 1)}).${layar.length ? '' : ' Tidak ada layar: jangan pakai atas hp/layar.'}\n\n${ringkasProduk(produk, situs)}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}` },
+          { type: 'text', text: `${ATURAN_VIDEO}\n\nAda ${layar.length} layar aplikasi di atas (nomor 0-${Math.max(0, layar.length - 1)}).${layar.length ? '' : ' Tidak ada layar: jangan pakai jenis "layar".'}\n\n${ringkasProduk(produk, situs)}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}` },
         ],
       }],
     });
@@ -140,25 +159,25 @@ export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar
 }
 
 // narasi & judul ikut disimpan supaya tampilan lama (admin, Telegram) tetap terbaca.
-const lengkapiVideo = (n, sumber) => ({ ...n, judul: n.hook.judul, narasi: n.adegan.map((a) => a.teks), sumber });
+const lengkapiVideo = (n, sumber) => ({ ...n, judul: n.adegan.find((a) => a.jenis === 'hook')?.judul ?? '', narasi: n.adegan.map((a) => a.narasi), sumber });
 
 export function naskahVideoTemplat(produk, situs, merek = null, jumlahLayar = 0) {
   const lama = naskahTemplat(produk, situs, merek);
-  const kosong = { layar: 0, fokus_x: 0.5, fokus_y: 0.35, zoom: 1.6, sorot: [], foto: '' };
-  const fitur = produk.fitur.slice(0, Math.min(3, Math.max(1, jumlahLayar)));
+  const fitur = produk.fitur.slice(0, 3);
   return lengkapiVideo({
-    hook: { judul: lama.judul, sorot: produk.nama, coretan: 'cek sampai habis!' },
     adegan: [
-      { ...kosong, teks: produk.kategori === 'pesanan' ? `Butuh aplikasi seperti ${produk.nama}?` : 'Masih ribet ngurus semuanya manual?', atas: 'judul', foto: lama.adegan[0] },
-      { ...kosong, teks: `Kenalin, ${produk.nama}.`, atas: 'hp' },
-      ...fitur.map((f, i) => ({ ...kosong, teks: `${f.judul}, beres.`, atas: 'layar', layar: i, sorot: [f.judul] })),
-      { ...kosong, teks: `${lama.ajakan}. Hubungi kami sekarang!`, atas: 'cta' },
+      { jenis: 'hook', narasi: produk.kategori === 'pesanan' ? `Butuh aplikasi seperti ${produk.nama}? Ini contohnya.` : `Masih ribet ngurus semuanya manual? Ada ${produk.nama}.`, kunci: [produk.nama], label: produk.label || produk.nama, judul: produk.kategori === 'pesanan' ? `Butuh aplikasi seperti ${produk.nama}?` : `Saatnya pakai ${produk.nama}`, tekan: produk.nama, sub: produk.judul, coretan: 'cek sampai habis!', dari: 'Cara lama', ke: produk.nama },
+      ...fitur.map((f, i) => (jumlahLayar
+        ? { jenis: 'layar', narasi: `${f.judul}: ${f.isi}`, kunci: [f.judul], badge: f.judul, layar: i % jumlahLayar, fokus_x: 0.5, fokus_y: 0.3, sorotan: f.judul }
+        : { jenis: 'daftar', narasi: `${f.judul}: ${f.isi}`, kunci: [f.judul], badge: f.judul, label_angka: '', angka: produk.nama, catatan: '', daftar: [f.judul] })),
+      { jenis: 'penutup', narasi: `${lama.ajakan}. Hubungi kami lewat link di bio!`, kunci: [produk.nama], judul: lama.ajakan, tombol: lama.ajakan },
     ],
     ajakan: lama.ajakan,
     caption: lama.caption,
     hashtag: lama.hashtag,
   }, 'templat');
 }
+
 
 export function naskahTemplat(produk, situs, merek = null) {
   const poin = produk.fitur.slice(0, 4).map((f) => f.judul);

@@ -1,5 +1,24 @@
 # CHANGELOG — bakafrawi.com
 
+## Mesin Studio memakai Remotion untuk video iklan produk (19 Nov, gelombang 2, belum tayang)
+
+- Pilihan Kyai: gaya Remotion. Mesin (`studio.mjs`) kini: tangkapan layar tajam → **Claude melihat
+  layar** dan menulis 5–6 adegan datar (`SkemaVideo` di `naskah.mjs`) → `studio/lib/video.mjs`
+  `keNaskah` merapikan jadi props Remotion (adegan berdata kurang diganti daftar fitur; penutup selalu
+  ada dengan kontak dari situs, tak pernah dikarang) → narasi edge-tts + waktu kata → `remotion render`
+  dengan `--public-dir` folder tugas → video + sampul.
+- Adegan Remotion diumumkan untuk semua produk: **layar** (baru — tampilan asli aplikasi di HP, layar
+  bergulir ke titik sorot, cincin berdenyut, kotak perbesaran berlabel), **kasir** (khusus aplikasi
+  kasir), **alur** (dulu "stok"; penghitung opsional), **daftar** (dulu "laporan"; angka & lencana dari
+  naskah, "▲ 18%" karangan dihapus). Pembuka gaya karosel #claudecode; subtitle dipotong per kalimat.
+- Jalur ffmpeg gaya layar terbagi (kartu HTML, subtitle ASS, zoompan, `uji-iklan.mjs`) dihapus —
+  satu jalur video saja. `iklan.mjs` tinggal narasi berwaktu kata + musik contoh.
+- Workflow: `npm ci --prefix remotion` + `remotion browser ensure`; perekam ffmpeg Playwright tak
+  dipakai lagi.
+- Diuji: tes 6/6, tipe Remotion, `studio.mjs --lokal contoh-tugas-video.json` sampai video jadi (naskah
+  templat — kunci Claude tak ada di laptop; layar dari maktabapos.web.app halaman depan). **Belum**:
+  putaran sungguhan di GitHub Actions (naskah Claude dengan gambar, unduh Chrome Remotion di runner).
+
 ## Video iklan Studio gaya Reels + Remotion; footer HP; Umami dilepas; ikon APK (19 Nov, belum tayang)
 
 - **Keluhan Kyai**: video Studio monoton, subtitle tak sinkron, "bukan seperti video iklan pada
