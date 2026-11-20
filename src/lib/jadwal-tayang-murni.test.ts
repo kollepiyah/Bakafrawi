@@ -100,3 +100,17 @@ test("normalisasiSasaran", () => {
   assert.equal(normalisasiSasaran("tidak-dikenal"), "otomatis");
   assert.equal(normalisasiSasaran(null), "otomatis");
 });
+
+test("jamBukaBerikutnya tetap aktif bila aiAktif=true meskipun daftar video statis kosong", () => {
+  const jadwal = normalisasiJadwalRutin({
+    aktif: true,
+    jam: "14:00",
+    hari: [1, 2, 3, 4, 5, 6],
+    aiAktif: true,
+    aiFormat: "video-animasi",
+    aiGaya: "hangat-kafe",
+    video: [],
+  });
+  const jumatPagi = new Date("2026-11-20T03:00:00.000Z"); // 10:00 WIB
+  assert.equal(jamBukaBerikutnya(jadwal, jumatPagi)?.toISOString(), "2026-11-20T07:00:00.000Z"); // 14:00 WIB
+});

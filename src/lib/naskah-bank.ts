@@ -23,6 +23,25 @@ async function dataPintuLekKopi(): Promise<DataPintu> {
   return j.data as DataPintu;
 }
 
+export type MenuAsliMerek = { nama: string; harga: number; kategori?: string; foto?: string | null };
+
+/** Ambil daftar menu asli & foto produk dari pintu-bakafrawi Lek Kopi (aman mengembalikan [] bila pintu belum siap). */
+export async function ambilMenuLekKopi(): Promise<MenuAsliMerek[]> {
+  try {
+    const data = await dataPintuLekKopi();
+    return (data.menu ?? [])
+      .filter((m) => m && m.nama)
+      .map((m) => ({
+        nama: String(m.nama).trim(),
+        harga: Number(m.harga) || 0,
+        kategori: m.kategori ? String(m.kategori).trim() : undefined,
+        foto: String(m.foto || m.gambar || m.image_url || "").trim() || null,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 const KOSONG: DataPintu = { periode: "-", terlaris: [], turun: [], jamSepi: [], menu: [], promo: [] };
 
 /** Bahan prompt untuk satu merek: data kedai (bila merek punya pintu) + isi bank + gaya + judul terakhir. */

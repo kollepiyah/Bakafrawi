@@ -1094,7 +1094,8 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                             dateStyle: "full",
                             timeStyle: "short",
                           })}{" "}
-                          WIB ({jadwalRutin.video.filter((v) => v.aktif).length} video siap tayang)
+                          WIB ({jadwalRutin.video.filter((v) => v.aktif).length + (jadwalRutin.aiAktif ? 1 : 0)} konten siap tayang
+                          {jadwalRutin.aiAktif ? ` · termasuk AI ${jadwalRutin.aiFormat === "poster" ? "Poster" : "Animasi"}` : ""})
                         </>
                       ) : (
                         <span className="text-zinc-400">
@@ -1104,7 +1105,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     </div>
                     <button
                       type="button"
-                      disabled={menyimpanRutin || jadwalRutin.video.filter((v) => v.aktif).length === 0}
+                      disabled={menyimpanRutin || (!jadwalRutin.aiAktif && jadwalRutin.video.filter((v) => v.aktif).length === 0)}
                       onClick={tayangkanStoryBukaSekarang}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-200 hover:bg-emerald-500 hover:text-background disabled:opacity-50"
                     >
@@ -1192,6 +1193,78 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                         <option value="wajib+bergilir" className="bg-card">Video wajib + 1 video pendamping bergilir/hari</option>
                       </select>
                     </div>
+                  </div>
+
+                  {/* Konten Jam Buka Generated AI (Selalu Baru Tiap Hari — Animasi Remotion / Poster AI) */}
+                  <div className="rounded-xl border border-emas/30 bg-emas/[0.04] p-3.5 text-xs space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(jadwalRutin.aiAktif)}
+                          onChange={(e) => setJadwalRutin((j) => ({ ...j, aiAktif: e.target.checked }))}
+                          className="size-4 accent-[#c9a24b]"
+                        />
+                        <span className="font-semibold text-foreground flex items-center gap-1.5">
+                          <Sparkles className="size-3.5 text-emas" />
+                          Buat Konten Opening Baru oleh AI Setiap Jam Buka (Tanpa Bank Video)
+                        </span>
+                      </label>
+                      <span className="rounded-full bg-emas/15 px-2 py-0.5 text-[10px] font-medium text-emas-muda">
+                        Latar Foto AI Gratis + Animasi ala Bakafrawi
+                      </span>
+                    </div>
+
+                    {jadwalRutin.aiAktif && (
+                      <div className="grid gap-3 sm:grid-cols-3 pt-1">
+                        <label className="grid gap-1">
+                          <span className="text-[11px] text-muted-foreground">Format Konten AI</span>
+                          <select
+                            value={jadwalRutin.aiFormat ?? "video-animasi"}
+                            onChange={(e) =>
+                              setJadwalRutin((j) => ({
+                                ...j,
+                                aiFormat: e.target.value as JadwalRutin["aiFormat"],
+                              }))
+                            }
+                            className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
+                          >
+                            <option value="video-animasi" className="bg-card">🎬 Video Animasi Simpel (Remotion 8 dtk)</option>
+                            <option value="poster" className="bg-card">🖼 Poster Story AI (9:16, cepat & ringan)</option>
+                          </select>
+                        </label>
+
+                        <label className="grid gap-1">
+                          <span className="text-[11px] text-muted-foreground">Tema Visual</span>
+                          <select
+                            value={jadwalRutin.aiGaya ?? "otomatis"}
+                            onChange={(e) =>
+                              setJadwalRutin((j) => ({
+                                ...j,
+                                aiGaya: e.target.value as JadwalRutin["aiGaya"],
+                              }))
+                            }
+                            className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
+                          >
+                            <option value="otomatis" className="bg-card">Otomatis berganti tiap hari</option>
+                            <option value="hangat-kafe" className="bg-card">Hangat Kafe (Cokelat Emas)</option>
+                            <option value="terang-modern" className="bg-card">Terang Modern (Krem Bersih)</option>
+                            <option value="minimalis-gelap" className="bg-card">Minimalis Gelap (Teal Elegan)</option>
+                          </select>
+                        </label>
+
+                        <label className="grid gap-1">
+                          <span className="text-[11px] text-muted-foreground">Arahan AI (opsional)</span>
+                          <input
+                            type="text"
+                            value={jadwalRutin.aiArahan ?? ""}
+                            onChange={(e) => setJadwalRutin((j) => ({ ...j, aiArahan: e.target.value }))}
+                            placeholder="Kosongkan agar AI pilih menu tiap hari"
+                            className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
+                          />
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   {/* Daftar Video Jam Buka */}

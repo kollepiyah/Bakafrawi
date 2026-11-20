@@ -10,6 +10,7 @@ import {
   type JadwalRutin,
   type SasaranTayang,
 } from "./jadwal-tayang-murni";
+import { ambilMenuLekKopi } from "./naskah-bank";
 
 // Aksi Studio di sisi server, dipakai bersama oleh panel admin (/api/studio/*) dan bot Telegram
 // (/api/telegram) — satu tempat supaya aturan tayang/jadwal tak berbeda antara keduanya.
@@ -344,7 +345,30 @@ export async function sinkronTugasJadwalRutin(
   }
 
   const dipilih = pilihVideoBuka(jadwal, berikutnya);
-  if (!dipilih.length) return null;
+  if (!jadwal.aiAktif && !dipilih.length) return null;
+
+  const daftarMenu = jadwal.aiAktif && merek.slug === "lekkopi" ? await ambilMenuLekKopi() : [];
+  if (daftarMenu.length > 0) {
+    // Simpan salinan menu asli ke profil merek agar mesin GitHub Actions selalu punya daftar menu & foto asli terbaru.
+    await rest(`studio_merek?slug=eq.${encodeURIComponent(merek.slug)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ profil: { ...merek.profil, menu_asli: daftarMenu.slice(0, 40) }, diubah: new Date().toISOString() }),
+    }).catch(() => {});
+  }
+  const menuFinal = daftarMenu.length > 0
+    ? daftarMenu
+    : (Array.isArray(merek.profil?.menu_asli) ? (merek.profil.menu_asli as typeof daftarMenu) : []);
+  const aiRutin = jadwal.aiAktif
+    ? {
+        aktif: true,
+        format: jadwal.aiFormat === "poster" ? "poster" : "video-animasi",
+        gaya: jadwal.aiGaya ?? "otomatis",
+        arahan: jadwal.aiArahan ?? "",
+        jamBuka: jadwal.jam,
+        daftarMenu: menuFinal.slice(0, 40),
+      }
+    : null;
 
   const hasil = dipilih.map((v) => ({
     jenis: v.jenis,
@@ -356,11 +380,12 @@ export async function sinkronTugasJadwalRutin(
     caption: v.caption ?? "",
   }));
 
+  const jmlTotal = dipilih.length + (aiRutin ? 1 : 0);
   const isiTugas = {
     merek: merek.slug,
-    jenis: "video",
+    jenis: aiRutin?.format === "poster" && !dipilih.length ? "gambar" : "video",
     produk_slug: "rutin-buka",
-    arahan: `Jadwal otomatis jam buka (${jadwal.jam} WIB · ${dipilih.length} video)`,
+    arahan: `Jadwal otomatis jam buka (${jadwal.jam} WIB · ${jmlTotal} konten${aiRutin ? ` + AI ${aiRutin.format}` : ""})`,
     latar: "polos",
     status: "selesai",
     selesai: new Date().toISOString(),
@@ -368,10 +393,11 @@ export async function sinkronTugasJadwalRutin(
     jadwal_tayang: berikutnya.toISOString(),
     caption: dipilih[0]?.caption || `We are OPEN! ${merek.nama} ☕`,
     naskah: {
-      sumber: "jadwal-rutin",
+      sumber: aiRutin ? "jadwal-rutin-ai" : "jadwal-rutin",
       judul: `Story Jam Buka (${jadwal.jam} WIB)`,
       sasaran: "story",
       rutin: true,
+      ...(aiRutin ? { aiRutin } : {}),
     },
     tayang: { sasaran: "story", rutin: true },
     hasil,
@@ -434,7 +460,21 @@ export async function tayangkanRutinSekarang(slugMerek = "lekkopi", originSitus 
   if (!m) throw new Error(`Merek "${slugMerek}" tidak ditemukan.`);
   const jadwal = normalisasiJadwalRutin(m.profil?.jadwal_rutin, m.slug);
   const dipilih = pilihVideoBuka(jadwal, new Date());
-  if (!dipilih.length) throw new Error("Belum ada video aktif di daftar jadwal buka.");
+  if (!jadwal.aiAktif && !dipilih.length) {
+    throw new Error("Belum ada video aktif atau konten AI yang diaktifkan di jadwal buka.");
+  }
+
+  const daftarMenu = jadwal.aiAktif && m.slug === "lekkopi" ? await ambilMenuLekKopi() : [];
+  const aiRutin = jadwal.aiAktif
+    ? {
+        aktif: true,
+        format: jadwal.aiFormat === "poster" ? "poster" : "video-animasi",
+        gaya: jadwal.aiGaya ?? "otomatis",
+        arahan: jadwal.aiArahan ?? "",
+        jamBuka: jadwal.jam,
+        daftarMenu: daftarMenu.slice(0, 30),
+      }
+    : null;
 
   const hasil = dipilih.map((v) => ({
     jenis: v.jenis,
@@ -446,14 +486,15 @@ export async function tayangkanRutinSekarang(slugMerek = "lekkopi", originSitus 
     caption: v.caption ?? "",
   }));
 
+  const jmlTotal = dipilih.length + (aiRutin ? 1 : 0);
   const [tugas] = (await rest("studio_tugas", {
     method: "POST",
     headers: { Prefer: "return=representation" },
     body: JSON.stringify({
       merek: m.slug,
-      jenis: "video",
+      jenis: aiRutin?.format === "poster" && !dipilih.length ? "gambar" : "video",
       produk_slug: "rutin-buka",
-      arahan: `Tayang langsung Story Jam Buka (${dipilih.length} video)`,
+      arahan: `Tayang langsung Story Jam Buka (${jmlTotal} konten${aiRutin ? ` · termasuk AI ${aiRutin.format}` : ""})`,
       latar: "polos",
       status: "selesai",
       selesai: new Date().toISOString(),
@@ -461,17 +502,18 @@ export async function tayangkanRutinSekarang(slugMerek = "lekkopi", originSitus 
       jadwal_tayang: null,
       caption: dipilih[0]?.caption || `We are OPEN! ${m.nama} ☕`,
       naskah: {
-        sumber: "jadwal-rutin",
+        sumber: aiRutin ? "jadwal-rutin-ai" : "jadwal-rutin",
         judul: `Story Jam Buka (${m.nama})`,
         sasaran: "story",
         rutin: true,
+        ...(aiRutin ? { aiRutin } : {}),
       },
       tayang: { sasaran: "story", rutin: true },
       hasil,
     }),
   })) as RingkasTugas[];
   const dipicu = await picuStudio();
-  return { tugas, dipicu, jumlahVideo: dipilih.length };
+  return { tugas, dipicu, jumlahVideo: jmlTotal };
 }
 
 /** Dipanggil oleh detak 5 menit untuk memastikan semua merek yang jadwal rutinnya aktif selalu memiliki antrean berikutnya. */

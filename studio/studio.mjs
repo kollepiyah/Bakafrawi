@@ -15,6 +15,7 @@ import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } 
 import { ffmpeg, probe } from './lib/bank/alat.mjs';
 import { ASET_LOKAL, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihMusik, renderIklan, salinAsetDrive, suaraKarakter, WARNA } from './lib/video.mjs';
 import { buatNaskah, buatNaskahVideo } from './lib/naskah.mjs';
+import { renderOpeningAI } from './lib/opening-ai.mjs';
 import { bukaPeramban, potret, potretLayar } from './lib/peramban.mjs';
 import { adaTelegram, kirimHasil, kirimTeks } from './lib/telegram.mjs';
 import { htmlPoster, temaMerek, UKURAN } from './lib/templat.mjs';
@@ -240,9 +241,43 @@ async function tayangkan(tugas, k) {
   const sasaran = tugas.tayang?.sasaran || tugas.naskah?.sasaran || 'otomatis';
   const adalahRutin = tugas.produk_slug === 'rutin-buka' || Boolean(tugas.naskah?.rutin);
 
-  // Jadwal rutin jam buka (bisa berisi 1 atau beberapa video/gambar opening sekaligus)
+  // Jadwal rutin jam buka (bisa berisi video statis, konten generated AI baru tiap hari, atau keduanya)
   if (adalahRutin) {
-    const daftarMedia = (tugas.hasil ?? []).filter((h) => h.rasio !== 'sampul' && h.url);
+    const daftarMedia = [...(tugas.hasil ?? []).filter((h) => h.rasio !== 'sampul' && h.url)];
+    const aiRutin = tugas.naskah?.aiRutin;
+    let hasilBaru = null;
+
+    if (aiRutin?.aktif) {
+      const folderAi = path.join(DIR, 'kerja', `opening-ai-${tugas.id}`);
+      try {
+        const merekInfo = await bacaMerek(tugas.merek ?? 'lekkopi');
+        console.log(`✨ Membuat Story Opening AI (${aiRutin.format ?? 'video-animasi'}) untuk ${merekInfo?.nama ?? tugas.merek}…`);
+        const r = await renderOpeningAI({
+          merek: merekInfo,
+          format: aiRutin.format === 'poster' ? 'poster' : 'video-animasi',
+          gaya: aiRutin.gaya || 'otomatis',
+          arahan: aiRutin.arahan || '',
+          jamBuka: aiRutin.jamBuka || '09:00',
+          daftarMenu: Array.isArray(aiRutin.daftarMenu) ? aiRutin.daftarMenu : [],
+          folder: folderAi,
+        });
+        const urlAi = await unggah(`rutin/${tugas.id}-${path.basename(r.berkas)}`, await readFile(r.berkas), r.mime);
+        const itemAi = {
+          jenis: r.jenis,
+          rasio: 'story',
+          url: urlAi,
+          ...(r.durasi ? { durasi: r.durasi } : {}),
+          judul: `Opening AI: ${r.konsep.menuNama}`,
+          sasaran: 'story',
+          caption: `${r.konsep.judul.replace(/\n/g, ' ')} — ${r.konsep.menuNama} ${r.konsep.menuHarga}`,
+        };
+        daftarMedia.push(itemAi);
+        hasilBaru = [...(tugas.hasil ?? []), itemAi];
+      } finally {
+        await rm(folderAi, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+
     if (!daftarMedia.length) throw new Error('Daftar video jadwal buka kosong.');
     const stories = [];
     const daftarReels = [];
@@ -260,6 +295,7 @@ async function tayangkan(tugas, k) {
     return {
       sasaran: 'story',
       rutin: true,
+      ...(hasilBaru ? { _hasilBaru: hasilBaru } : {}),
       instagram: {
         story: stories[0] ?? null,
         stories,
@@ -316,7 +352,7 @@ function hitungJamBukaBerikutnya(jadwal, sekarang = new Date()) {
   if (!jadwal?.aktif) return null;
   const hariAktif = Array.isArray(jadwal.hari) ? jadwal.hari.map(Number) : [1, 2, 3, 4, 5, 6];
   const videoAktif = (jadwal.video ?? []).filter((v) => v && v.aktif && v.url);
-  if (!hariAktif.length || !videoAktif.length) return null;
+  if (!hariAktif.length || (!jadwal.aiAktif && !videoAktif.length)) return null;
   const cocok = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(jadwal.jam ?? '09:00').trim());
   const [jamNum, menitNum] = cocok ? [Number(cocok[1]), Number(cocok[2])] : [9, 0];
   const wib = new Date(sekarang.getTime() + ZONA_WIB_MS);
@@ -366,12 +402,22 @@ async function pastikanJadwalRutin(merekBaruTayang = new Set()) {
       const berikutnya = hitungJamBukaBerikutnya(jadwal, new Date());
       if (!berikutnya) continue;
       const dipilih = pilihVideoBukaMurni(jadwal, berikutnya);
-      if (!dipilih.length) continue;
+      if (!jadwal.aiAktif && !dipilih.length) continue;
+      const aiRutin = jadwal.aiAktif
+        ? {
+            aktif: true,
+            format: jadwal.aiFormat === 'poster' ? 'poster' : 'video-animasi',
+            gaya: jadwal.aiGaya || 'otomatis',
+            arahan: jadwal.aiArahan || '',
+            jamBuka: jadwal.jam || '09:00',
+            daftarMenu: Array.isArray(m.profil?.menu_asli) ? m.profil.menu_asli : [],
+          }
+        : null;
       await buatTugasRutin({
         merek: m.slug,
-        jenis: 'video',
+        jenis: aiRutin?.format === 'poster' && !dipilih.length ? 'gambar' : 'video',
         produk_slug: 'rutin-buka',
-        arahan: `Jadwal otomatis jam buka (${jadwal.jam} WIB)`,
+        arahan: `Jadwal otomatis jam buka (${jadwal.jam} WIB${aiRutin ? ' + AI' : ''})`,
         latar: 'polos',
         status: 'selesai',
         selesai: new Date().toISOString(),
@@ -379,10 +425,11 @@ async function pastikanJadwalRutin(merekBaruTayang = new Set()) {
         jadwal_tayang: berikutnya.toISOString(),
         caption: dipilih[0]?.caption || `We are OPEN! ${m.nama} ☕`,
         naskah: {
-          sumber: 'jadwal-rutin',
+          sumber: aiRutin ? 'jadwal-rutin-ai' : 'jadwal-rutin',
           judul: `Story Jam Buka (${jadwal.jam} WIB)`,
           sasaran: 'story',
           rutin: true,
+          ...(aiRutin ? { aiRutin } : {}),
         },
         tayang: { sasaran: 'story', rutin: true },
         hasil: dipilih.map((v) => ({
@@ -461,17 +508,19 @@ async function putaranTayang(kabar) {
     console.log(`📤 Tayang ${tugas.id}`);
     try {
       const tayang = await tayangkan(tugas, k);
+      const hasilBaru = tayang._hasilBaru;
+      if (hasilBaru) delete tayang._hasilBaru;
       // TikTok pelengkap: gagal di sini tak membatalkan Instagram yang sudah tayang.
       const tt = await drafTiktokTugas(tugas, tayang).catch((e) => ({ galat: String(e.message ?? e).slice(0, 300) }));
       if (tt) tayang.tiktok = tt;
-      await perbaruiTugas(tugas.id, { status_tayang: 'tayang', tayang, galat: null });
+      await perbaruiTugas(tugas.id, { status_tayang: 'tayang', tayang, ...(hasilBaru ? { hasil: hasilBaru } : {}), galat: null });
       if (tugas.produk_slug === 'rutin-buka' || tugas.naskah?.rutin) {
         merekRutinTayang.add(tugas.merek ?? 'lekkopi');
       }
       const tautan = tayang.instagram.reels?.permalink ?? tayang.instagram.feed?.permalink ?? '';
       const jmlStory = tayang.instagram.stories?.length ?? (tayang.instagram.story?.id ? 1 : 0);
       const labelTayang = tayang.rutin
-        ? `Story Jam Buka (${jmlStory} video)`
+        ? `Story Jam Buka (${jmlStory} konten${hasilBaru ? ' · termasuk Generated AI' : ''})`
         : tayang.sasaran === 'story'
         ? 'Story Instagram'
         : 'Instagram';

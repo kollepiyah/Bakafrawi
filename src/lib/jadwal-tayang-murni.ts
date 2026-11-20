@@ -39,6 +39,9 @@ export type VideoRutin = {
   caption?: string;
 };
 
+export type FormatOpeningAI = "video-animasi" | "poster";
+export type GayaOpeningAI = "otomatis" | "hangat-kafe" | "terang-modern" | "minimalis-gelap";
+
 export type JadwalRutin = {
   aktif: boolean;
   /** Jam buka dalam format HH:MM WIB (mis. "09:00" atau "14:00"). */
@@ -50,6 +53,14 @@ export type JadwalRutin = {
    * "wajib+bergilir" = upload semua video wajib + 1 video pendamping secara bergilir tiap hari.
    */
   mode: "semua" | "wajib+bergilir";
+  /** Sertakan 1 konten opening baru hasil generate AI setiap jam buka (tanpa perlu bank video). */
+  aiAktif?: boolean;
+  /** Format konten AI jam buka: "video-animasi" (Remotion 8 dtk ala Bakafrawi) atau "poster" (Story 9:16). */
+  aiFormat?: FormatOpeningAI;
+  /** Gaya visual konten AI jam buka. */
+  aiGaya?: GayaOpeningAI;
+  /** Arahan opsional untuk AI (mis. tonjolkan menu/promo tertentu; kosong = AI pilih otomatis). */
+  aiArahan?: string;
   terakhirTayang?: string | null;
   video: VideoRutin[];
 };
@@ -77,6 +88,10 @@ export function jadwalRutinBawaan(merek = "lekkopi"): JadwalRutin {
       jam: "09:00",
       hari: [1, 2, 3, 4, 5, 6], // Senin - Sabtu
       mode: "semua",
+      aiAktif: false,
+      aiFormat: "video-animasi",
+      aiGaya: "otomatis",
+      aiArahan: "",
       terakhirTayang: null,
       video: [{ ...VIDEO_OPENING_BAWAAN_LEKKOPI }],
     };
@@ -86,6 +101,10 @@ export function jadwalRutinBawaan(merek = "lekkopi"): JadwalRutin {
     jam: "09:00",
     hari: [1, 2, 3, 4, 5, 6],
     mode: "semua",
+    aiAktif: false,
+    aiFormat: "video-animasi",
+    aiGaya: "otomatis",
+    aiArahan: "",
     terakhirTayang: null,
     video: [],
   };
@@ -132,11 +151,19 @@ export function normalisasiJadwalRutin(mentah: unknown, merek = "lekkopi"): Jadw
     video = bawaan.video;
   }
 
+  const aiFormat: FormatOpeningAI = m.aiFormat === "poster" ? "poster" : "video-animasi";
+  const aiGaya: GayaOpeningAI =
+    m.aiGaya === "hangat-kafe" || m.aiGaya === "terang-modern" || m.aiGaya === "minimalis-gelap" ? m.aiGaya : "otomatis";
+
   return {
     aktif: Boolean(m.aktif),
     jam,
     hari: hariValid,
     mode,
+    aiAktif: Boolean(m.aiAktif),
+    aiFormat,
+    aiGaya,
+    aiArahan: typeof m.aiArahan === "string" ? m.aiArahan.trim().slice(0, 300) : "",
     terakhirTayang: typeof m.terakhirTayang === "string" ? m.terakhirTayang : null,
     video,
   };
@@ -239,7 +266,8 @@ export function daftarSlotCepatWIB(sekarang = new Date()): SlotCepatJadwal[] {
  */
 export function jamBukaBerikutnya(jadwal: JadwalRutin, sekarang = new Date()): Date | null {
   const j = normalisasiJadwalRutin(jadwal);
-  if (!j.aktif || !j.hari.length || !j.video.some((v) => v.aktif)) return null;
+  const punyaKonten = j.aiAktif || j.video.some((v) => v.aktif);
+  if (!j.aktif || !j.hari.length || !punyaKonten) return null;
 
   const [jamNum, menitNum] = j.jam.split(":").map(Number);
   const wibSekarang = new Date(sekarang.getTime() + ZONA_WIB_MS);

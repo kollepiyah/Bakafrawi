@@ -19,7 +19,14 @@
   penjadwalan tidak lagi terkunci di pukul 19.00 WIB — bisa memilih tanggal & jam WIB bebas,
   tombol slot cepat (`09.00`, `12.00`, `14.00`, `19.00`, `20.30`), serta sasaran tayang (`Reels`,
   `Story saja`, `Reels + Story`, `Feed + Story`, `Feed saja`).
-- Diuji: 31/31 unit test murni (`npm run uji`), pemeriksaan tipe TypeScript (`tsc --noEmit`).
+- **Konten Jam Buka Generated AI (Otomatis Baru Tiap Hari — Tanpa Bank Video):** di panel **Story Jam Buka**,
+  kini ada opsi **Buat Konten Opening Baru oleh AI Setiap Jam Buka** dengan 2 pilihan format simpel:
+  1) **Video Animasi Simpel (Remotion 8 dtk ala Bakafrawi)** — komposisi `OpeningStory`
+     (`studio/remotion/src/OpeningStory.tsx`) dengan animasi pegas, latar foto kopi AI gratis (Cloudflare),
+     headline sapaan harian, kartu rekomendasi menu hari ini, jam buka, & musik santai;
+  2) **Poster Story AI (9:16)** — cepat & ringan (`studio/lib/opening-ai.mjs`).
+  Tersedia 3 tema visual (`hangat-kafe`, `terang-modern`, `minimalis-gelap`, atau otomatis berganti tiap hari).
+- Diuji: 32/32 unit test murni (`npm run uji`), pemeriksaan tipe TypeScript situs & Remotion (`tsc --noEmit`).
 
 ## Tombol "Usulkan arahan" di formulir Studio (19 Nov)
 
