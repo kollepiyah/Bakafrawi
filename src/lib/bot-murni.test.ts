@@ -32,7 +32,10 @@ test("cariProduk", () => {
 test("uraiTombol", () => {
   const id = "0b9c6a2e-1f2d-4c3b-9a8e-7d6c5b4a3f21";
   assert.deepEqual(uraiTombol(`t:${id}`), { aksi: "sekarang", id });
+  assert.deepEqual(uraiTombol(`s:${id}`), { aksi: "sekarang", id, sasaran: "story" });
   assert.deepEqual(uraiTombol(`j:${id}`), { aksi: "jadwal", id });
+  assert.deepEqual(uraiTombol(`j09:${id}`), { aksi: "jadwal", id, jamWib: 9 });
+  assert.deepEqual(uraiTombol(`j12:${id}`), { aksi: "jadwal", id, jamWib: 12 });
   assert.equal(uraiTombol("t:bukan-uuid"), null);
   assert.equal(uraiTombol(`z:${id}`), null);
 });

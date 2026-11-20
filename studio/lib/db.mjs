@@ -197,3 +197,42 @@ export async function simpanPengaturan(isi) {
     'Simpan pengaturan',
   );
 }
+
+/** Semua baris studio_merek → [{ slug, nama, aktif, profil }]. */
+export async function semuaMerek() {
+  const res = await periksa(await fetch(`${URL_SB()}/rest/v1/studio_merek?select=slug,nama,aktif,profil&order=urutan.asc`, { headers: kepala() }), 'Baca semua merek');
+  return res.json();
+}
+
+export async function perbaruiProfilMerek(slug, profil) {
+  await periksa(
+    await fetch(`${URL_SB()}/rest/v1/studio_merek?slug=eq.${m(slug)}`, {
+      method: 'PATCH',
+      headers: kepala({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+      body: JSON.stringify({ profil, diubah: new Date().toISOString() }),
+    }),
+    'Simpan profil merek',
+  );
+}
+
+/** Cari tugas jadwal rutin jam buka yang masih antre/dijadwalkan untuk merek tertentu. */
+export async function cariTugasRutinTerjadwal(merek) {
+  const res = await periksa(
+    await fetch(`${URL_SB()}/rest/v1/studio_tugas?merek=eq.${m(merek)}&produk_slug=eq.rutin-buka&status_tayang=in.(dijadwalkan,antre)&select=id,jadwal_tayang&order=dibuat.desc&limit=1`, { headers: kepala() }),
+    'Cari tugas rutin',
+  );
+  return (await res.json())[0] ?? null;
+}
+
+/** Buat tugas jadwal rutin jam buka berikutnya (status langsung 'selesai' & 'dijadwalkan'). */
+export async function buatTugasRutin(isi) {
+  const res = await periksa(
+    await fetch(`${URL_SB()}/rest/v1/studio_tugas`, {
+      method: 'POST',
+      headers: kepala({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
+      body: JSON.stringify(isi),
+    }),
+    'Buat tugas rutin',
+  );
+  return (await res.json())[0] ?? null;
+}

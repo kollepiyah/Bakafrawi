@@ -17,7 +17,7 @@ import {
 } from "./agenda-murni";
 import { rest } from "./db-server";
 import { aksesToken, adaGoogle, GoogleTerputus, kalender } from "./google-server";
-import { bacaPengaturan, simpanPengaturan } from "./studio-server";
+import { bacaPengaturan, pastikanSemuaJadwalRutin, simpanPengaturan } from "./studio-server";
 import { adaBot, kirim } from "./telegram-server";
 
 // Aksi agenda di sisi server — satu-satunya jalan menulis agenda (layar Studio, APK, bot Telegram),
@@ -177,9 +177,14 @@ export async function sinkronGoogle(sekarang = new Date()): Promise<string> {
   return `Sinkron: ${tertunda.length - gagalDorong} terkirim, ${simpan.length} diperbarui dari Google, ${hilang.length} dicek.`;
 }
 
-/** Detak 5 menit (dipanggil pg_cron Supabase): sinkron, pengingat 30 menit, ringkasan pagi. */
+/** Detak 5 menit (dipanggil pg_cron Supabase): sinkron, pengingat 30 menit, ringkasan pagi, jadwal rutin jam buka. */
 export async function detakAgenda(sekarang = new Date()) {
   const laporan: string[] = [];
+  try {
+    await pastikanSemuaJadwalRutin();
+  } catch (e) {
+    laporan.push(`Jadwal rutin gagal: ${e instanceof Error ? e.message : e}`);
+  }
   try {
     laporan.push(await sinkronGoogle(sekarang));
   } catch (e) {

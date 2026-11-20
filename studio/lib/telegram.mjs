@@ -20,10 +20,11 @@ async function panggil(metode, isi) {
   throw galat;
 }
 
-/** Tombol persetujuan; data diurai /api/telegram (t=tayang sekarang, j=jadwal 19.00, x=tolak, u=buat ulang). */
+/** Tombol persetujuan; data diurai /api/telegram (t=tayang sekarang, s=story sekarang, j=19.00, j09=09.00, j12=12.00, x=tolak, u=buat ulang). */
 export const tombolTayang = (id) => ({
   inline_keyboard: [
-    [{ text: '✅ Tayangkan sekarang', callback_data: `t:${id}` }, { text: '🕖 Jadwal 19.00', callback_data: `j:${id}` }],
+    [{ text: '✅ Tayangkan sekarang', callback_data: `t:${id}` }, { text: '📱 Story sekarang', callback_data: `s:${id}` }],
+    [{ text: '🕘 Buka 09.00', callback_data: `j09:${id}` }, { text: '🕛 Siang 12.00', callback_data: `j12:${id}` }, { text: '🕖 Prime 19.00', callback_data: `j:${id}` }],
     [{ text: '🔁 Buat ulang', callback_data: `u:${id}` }, { text: '❌ Tolak', callback_data: `x:${id}` }],
   ],
 });
@@ -41,6 +42,13 @@ export async function kirimHasil(chatId, { tugas, namaProduk, hasil, caption }) 
     const gambar = hasil.filter((h) => h.jenis === 'gambar').slice(0, 10);
     await panggil('sendMediaGroup', { chat_id: chatId, media: gambar.map((g, i) => ({ type: 'photo', media: g.url, ...(i === 0 ? { caption: `🖼 ${namaProduk}` } : {}) })) });
   }
-  const sasaran = video ? 'Reels Instagram' : 'feed (4:5) + Story Instagram';
-  return kirimTeks(chatId, `${caption}\n\n— Siap tayang ke ${sasaran}. Setujui?`, tombolTayang(tugas.id));
+  const sasaran = video ? 'Reels / Story Instagram' : 'feed (4:5) + Story Instagram';
+  const infoJadwal = tugas.status_tayang === 'dijadwalkan' && tugas.jadwal_tayang
+    ? `\n🕖 Sudah dijadwalkan otomatis: ${new Date(tugas.jadwal_tayang).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })} WIB.`
+    : '';
+  return kirimTeks(
+    chatId,
+    `${caption}\n\n— Siap tayang ke ${sasaran}.${infoJadwal}\nPilih tombol atau balas chat untuk jadwal custom (mis. "jadwalkan besok jam 14.30").`,
+    tombolTayang(tugas.id),
+  );
 }

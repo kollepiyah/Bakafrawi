@@ -59,9 +59,11 @@ export async function postingFeed(k, gambarUrl, caption) {
   return { id, permalink: await tautan(k, id) };
 }
 
-export async function postingStory(k, gambarUrl) {
-  const id = await terbitkan(k, await buatWadah(k, { media_type: 'STORIES', image_url: gambarUrl }, 'Wadah story'), 'story', 5000);
-  return { id };
+export async function postingStory(k, mediaUrl, jenis) {
+  const adalahVideo = jenis === 'video' || /\.(mp4|mov|webm)(\?|$)/i.test(String(mediaUrl ?? ''));
+  const isi = adalahVideo ? { media_type: 'STORIES', video_url: mediaUrl } : { media_type: 'STORIES', image_url: mediaUrl };
+  const id = await terbitkan(k, await buatWadah(k, isi, 'Wadah story'), adalahVideo ? 'video story' : 'story', adalahVideo ? 15_000 : 5000);
+  return { id, jenis: adalahVideo ? 'video' : 'gambar' };
 }
 
 export async function postingReels(k, videoUrl, caption) {

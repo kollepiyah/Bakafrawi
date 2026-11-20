@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { drafTiktok, segarkanTiktok } from './lib/bank/sosmed.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ambilTayang, ambilTugas, bacaKonten, bacaMerek, bacaPengaturan, daftarKredensial, merekBankBasi, perbaruiKredensial, perbaruiTugas, pulihkan, siapDb, tandaiBankDiindeks, unggah } from './lib/db.mjs';
+import { ambilTayang, ambilTugas, bacaKonten, bacaMerek, bacaPengaturan, buatTugasRutin, cariTugasRutinTerjadwal, daftarKredensial, merekBankBasi, perbaruiKredensial, perbaruiProfilMerek, perbaruiTugas, pulihkan, semuaMerek, siapDb, tandaiBankDiindeks, unggah } from './lib/db.mjs';
 import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } from './lib/merek-bank.mjs';
 // Satu modul gambar AI untuk semua merek (versi pindahan Lek Kopi: penyedia berurutan + catatan biaya).
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
@@ -217,17 +217,189 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   return { naskah, caption, hasil, namaProduk: produk.nama };
 }
 
+/** Pastikan URL media dapat diunduh langsung oleh server Instagram (unggah berkas lokal public/ ke bucket studio bila perlu). */
+async function pastikanUrlPublik(urlAsal, jenis = 'video') {
+  const u = String(urlAsal ?? '').trim();
+  if (!u) return u;
+  const namaBerkas = u.startsWith('/') ? u.replace(/^\//, '') : u.endsWith('/lekkopi-opening-story.mp4') ? 'lekkopi-opening-story.mp4' : '';
+  if (namaBerkas) {
+    try {
+      const lokal = path.join(DIR, '..', 'public', namaBerkas);
+      const isi = await readFile(lokal);
+      const mime = jenis === 'gambar' || /\.(jpg|jpeg|png)$/i.test(namaBerkas) ? 'image/jpeg' : 'video/mp4';
+      return await unggah(`rutin/${path.basename(namaBerkas)}`, isi, mime);
+    } catch {
+      // Bila berkas lokal tak ada, lanjutkan dengan URL situs publik
+    }
+  }
+  return /^https?:\/\//.test(u) ? u : `https://bakafrawi.com/${u.replace(/^\//, '')}`;
+}
+
 /** Tayangkan satu tugas yang disetujui ke Instagram → objek `tayang`. */
 async function tayangkan(tugas, k) {
+  const sasaran = tugas.tayang?.sasaran || tugas.naskah?.sasaran || 'otomatis';
+  const adalahRutin = tugas.produk_slug === 'rutin-buka' || Boolean(tugas.naskah?.rutin);
+
+  // Jadwal rutin jam buka (bisa berisi 1 atau beberapa video/gambar opening sekaligus)
+  if (adalahRutin) {
+    const daftarMedia = (tugas.hasil ?? []).filter((h) => h.rasio !== 'sampul' && h.url);
+    if (!daftarMedia.length) throw new Error('Daftar video jadwal buka kosong.');
+    const stories = [];
+    const daftarReels = [];
+    for (const item of daftarMedia) {
+      const jenisItem = item.jenis === 'gambar' ? 'gambar' : 'video';
+      const urlPublik = await pastikanUrlPublik(item.url, jenisItem);
+      const sasaranItem = item.sasaran || sasaran || 'story';
+      if ((sasaranItem === 'reels' || sasaranItem === 'reels+story') && jenisItem === 'video') {
+        daftarReels.push(await postingReels(k, urlPublik, item.caption ?? tugas.caption ?? ''));
+      }
+      if (sasaranItem === 'story' || sasaranItem === 'reels+story' || sasaranItem === 'otomatis') {
+        stories.push(await postingStory(k, urlPublik, jenisItem));
+      }
+    }
+    return {
+      sasaran: 'story',
+      rutin: true,
+      instagram: {
+        story: stories[0] ?? null,
+        stories,
+        reels: daftarReels[0] ?? null,
+        daftarReels,
+        waktu: new Date().toISOString(),
+      },
+    };
+  }
+
   const ambil = (rasio) => tugas.hasil.find((h) => h.rasio === rasio)?.url;
   if (tugas.jenis === 'video') {
-    const reels = await postingReels(k, ambil('story'), tugas.caption ?? '');
-    return { instagram: { reels, waktu: new Date().toISOString() } };
+    const videoAsal = ambil('story') ?? tugas.hasil.find((h) => h.jenis === 'video')?.url;
+    const videoUrl = await pastikanUrlPublik(videoAsal, 'video');
+    if (sasaran === 'story') {
+      const story = await postingStory(k, videoUrl, 'video');
+      return { sasaran, instagram: { story, waktu: new Date().toISOString() } };
+    }
+    if (sasaran === 'reels+story') {
+      const reels = await postingReels(k, videoUrl, tugas.caption ?? '');
+      const story = await postingStory(k, videoUrl, 'video').catch((e) => ({ galat: e.message }));
+      return { sasaran, instagram: { reels, story, waktu: new Date().toISOString() } };
+    }
+    const reels = await postingReels(k, videoUrl, tugas.caption ?? '');
+    return { sasaran, instagram: { reels, waktu: new Date().toISOString() } };
   }
-  const feed = await postingFeed(k, ambil('potret') ?? ambil('feed'), tugas.caption ?? '');
+
+  if (sasaran === 'story') {
+    const gambarUrl = await pastikanUrlPublik(ambil('story') ?? ambil('potret') ?? ambil('feed'), 'gambar');
+    const story = await postingStory(k, gambarUrl, 'gambar');
+    return { sasaran, instagram: { story, waktu: new Date().toISOString() } };
+  }
+  const feedUrl = await pastikanUrlPublik(ambil('potret') ?? ambil('feed'), 'gambar');
+  const feed = await postingFeed(k, feedUrl, tugas.caption ?? '');
+  if (sasaran === 'feed') {
+    return { sasaran, instagram: { feed, waktu: new Date().toISOString() } };
+  }
   // Story pelengkap: gagal di sini tak membatalkan feed yang sudah tayang.
-  const story = ambil('story') ? await postingStory(k, ambil('story')).catch((e) => ({ galat: e.message })) : null;
-  return { instagram: { feed, story, waktu: new Date().toISOString() } };
+  const storyAsal = ambil('story');
+  const story = storyAsal
+    ? await postingStory(k, await pastikanUrlPublik(storyAsal, 'gambar'), 'gambar').catch((e) => ({ galat: e.message }))
+    : null;
+  return { sasaran, instagram: { feed, story, waktu: new Date().toISOString() } };
+}
+
+const ZONA_WIB_MS = 7 * 3600_000;
+function tanggalWib(d = new Date()) {
+  const wib = new Date(d.getTime() + ZONA_WIB_MS);
+  return `${wib.getUTCFullYear()}-${String(wib.getUTCMonth() + 1).padStart(2, '0')}-${String(wib.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** Hitung waktu jam buka berikutnya (WIB) untuk jadwal rutin merek. */
+function hitungJamBukaBerikutnya(jadwal, sekarang = new Date()) {
+  if (!jadwal?.aktif) return null;
+  const hariAktif = Array.isArray(jadwal.hari) ? jadwal.hari.map(Number) : [1, 2, 3, 4, 5, 6];
+  const videoAktif = (jadwal.video ?? []).filter((v) => v && v.aktif && v.url);
+  if (!hariAktif.length || !videoAktif.length) return null;
+  const cocok = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(jadwal.jam ?? '09:00').trim());
+  const [jamNum, menitNum] = cocok ? [Number(cocok[1]), Number(cocok[2])] : [9, 0];
+  const wib = new Date(sekarang.getTime() + ZONA_WIB_MS);
+  const hariIni = tanggalWib(sekarang);
+
+  for (let offset = 0; offset <= 7; offset++) {
+    const kandidatWib = new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate() + offset, jamNum, menitNum, 0));
+    if (!hariAktif.includes(kandidatWib.getUTCDay())) continue;
+    const targetUtc = new Date(kandidatWib.getTime() - ZONA_WIB_MS);
+    const tgl = tanggalWib(targetUtc);
+    if (jadwal.terakhirTayang && tgl === jadwal.terakhirTayang) continue;
+    if (offset === 0 && targetUtc.getTime() <= sekarang.getTime() + 2 * 60_000 && tgl === hariIni) continue;
+    return targetUtc;
+  }
+  return null;
+}
+
+function pilihVideoBukaMurni(jadwal, untukTanggal = new Date()) {
+  const aktif = (jadwal?.video ?? []).filter((v) => v && v.aktif && v.url);
+  if (!aktif.length) return [];
+  const wajib = aktif.filter((v) => v.wajib !== false);
+  const pendamping = aktif.filter((v) => v.wajib === false);
+  if (jadwal?.mode !== 'wajib+bergilir') return [...wajib, ...pendamping];
+  const hariEpoch = Math.floor((untukTanggal.getTime() + ZONA_WIB_MS) / 86_400_000);
+  if (pendamping.length > 0) return [...wajib, pendamping[Math.abs(hariEpoch) % pendamping.length]];
+  return wajib.length ? wajib : [aktif[Math.abs(hariEpoch) % aktif.length]];
+}
+
+/**
+ * Pastikan merek yang mengaktifkan `profil.jadwal_rutin` selalu punya tugas terjadwal berikutnya
+ * di `studio_tugas` supaya pg_cron `studio_picu` menyalakan mesin tepat saat jam buka tiba.
+ */
+async function pastikanJadwalRutin(merekBaruTayang = new Set()) {
+  try {
+    const daftar = await semuaMerek();
+    const hariIni = tanggalWib(new Date());
+    for (const m of daftar) {
+      const jr = m.profil?.jadwal_rutin;
+      if (!jr?.aktif) continue;
+      let jadwal = { ...jr };
+      if (merekBaruTayang.has(m.slug) && jadwal.terakhirTayang !== hariIni) {
+        jadwal = { ...jadwal, terakhirTayang: hariIni };
+        await perbaruiProfilMerek(m.slug, { ...m.profil, jadwal_rutin: jadwal }).catch((e) => console.error(e.message));
+      }
+      const sudahAda = await cariTugasRutinTerjadwal(m.slug);
+      if (sudahAda) continue;
+      const berikutnya = hitungJamBukaBerikutnya(jadwal, new Date());
+      if (!berikutnya) continue;
+      const dipilih = pilihVideoBukaMurni(jadwal, berikutnya);
+      if (!dipilih.length) continue;
+      await buatTugasRutin({
+        merek: m.slug,
+        jenis: 'video',
+        produk_slug: 'rutin-buka',
+        arahan: `Jadwal otomatis jam buka (${jadwal.jam} WIB)`,
+        latar: 'polos',
+        status: 'selesai',
+        selesai: new Date().toISOString(),
+        status_tayang: 'dijadwalkan',
+        jadwal_tayang: berikutnya.toISOString(),
+        caption: dipilih[0]?.caption || `We are OPEN! ${m.nama} ☕`,
+        naskah: {
+          sumber: 'jadwal-rutin',
+          judul: `Story Jam Buka (${jadwal.jam} WIB)`,
+          sasaran: 'story',
+          rutin: true,
+        },
+        tayang: { sasaran: 'story', rutin: true },
+        hasil: dipilih.map((v) => ({
+          jenis: v.jenis === 'gambar' ? 'gambar' : 'video',
+          rasio: 'story',
+          url: v.url,
+          durasi: v.durasi ?? 9,
+          judul: v.judul,
+          sasaran: v.sasaran ?? 'story',
+          caption: v.caption ?? '',
+        })),
+      });
+      console.log(`⏰ Jadwal rutin ${m.slug} berikutnya: ${berikutnya.toISOString()} (${dipilih.length} video)`);
+    }
+  } catch (e) {
+    console.error('Jadwal rutin:', e.message);
+  }
 }
 
 /**
@@ -235,8 +407,9 @@ async function tayangkan(tugas, k) {
  * masuk TikTok, Kyai menekan Posting di aplikasi. Refresh token TikTok berganti tiap dipakai →
  * selalu disimpan ulang. null = merek tak punya TikTok / bukan video.
  */
-async function drafTiktokTugas(tugas) {
+async function drafTiktokTugas(tugas, tayang) {
   if (tugas.jenis !== 'video') return null;
+  if (tayang?.sasaran === 'story' && !tayang?.instagram?.reels) return null;
   const kred = (await daftarKredensial('tiktok')).find((k) => k.merek === (tugas.merek ?? 'bakafrawi'));
   if (!kred) return null;
   let k = { data: kred.data };
@@ -245,8 +418,9 @@ async function drafTiktokTugas(tugas) {
     k = { data: { ...baru.data, kedaluwarsa: baru.kedaluwarsa } };
     await perbaruiKredensial(kred.merek, 'tiktok', { data: k.data });
   }
-  const url = tugas.hasil.find((h) => h.jenis === 'video')?.url;
-  if (!url) throw new Error('video tidak ditemukan');
+  const urlAsal = tugas.hasil.find((h) => h.jenis === 'video')?.url;
+  if (!urlAsal) throw new Error('video tidak ditemukan');
+  const url = await pastikanUrlPublik(urlAsal, 'video');
   const berkas = path.join(os.tmpdir(), `tiktok-${tugas.id}.mp4`);
   const r = await fetch(url);
   if (!r.ok) throw new Error(`unduh video ${r.status}`);
@@ -274,6 +448,7 @@ async function akunInstagram(kabar) {
 
 async function putaranTayang(kabar) {
   const akun = await akunInstagram(kabar);
+  const merekRutinTayang = new Set();
   for (let i = 0; i < MAKS_TUGAS; i++) {
     const tugas = await ambilTayang();
     if (!tugas) break;
@@ -287,18 +462,28 @@ async function putaranTayang(kabar) {
     try {
       const tayang = await tayangkan(tugas, k);
       // TikTok pelengkap: gagal di sini tak membatalkan Instagram yang sudah tayang.
-      const tt = await drafTiktokTugas(tugas).catch((e) => ({ galat: String(e.message ?? e).slice(0, 300) }));
+      const tt = await drafTiktokTugas(tugas, tayang).catch((e) => ({ galat: String(e.message ?? e).slice(0, 300) }));
       if (tt) tayang.tiktok = tt;
       await perbaruiTugas(tugas.id, { status_tayang: 'tayang', tayang, galat: null });
+      if (tugas.produk_slug === 'rutin-buka' || tugas.naskah?.rutin) {
+        merekRutinTayang.add(tugas.merek ?? 'lekkopi');
+      }
       const tautan = tayang.instagram.reels?.permalink ?? tayang.instagram.feed?.permalink ?? '';
+      const jmlStory = tayang.instagram.stories?.length ?? (tayang.instagram.story?.id ? 1 : 0);
+      const labelTayang = tayang.rutin
+        ? `Story Jam Buka (${jmlStory} video)`
+        : tayang.sasaran === 'story'
+        ? 'Story Instagram'
+        : 'Instagram';
       const teksTt = !tt ? '' : tt.galat ? `\nTikTok: gagal (${tt.galat})` : `\nTikTok ${tt.akun ?? ''}: draf masuk — buka TikTok → Kotak masuk → ketuk Posting, lalu tempel caption.`;
-      await kabar(`✅ Sudah tayang di Instagram ${k.ig_akun ?? ''}${tautan ? `\n${tautan}` : ''}${tayang.instagram.story?.galat ? `\n(Story gagal: ${tayang.instagram.story.galat})` : ''}${teksTt}`);
+      await kabar(`✅ ${labelTayang} sudah tayang di ${k.ig_akun ?? 'Instagram'}${tautan ? `\n${tautan}` : ''}${tayang.instagram.story?.galat ? `\n(Story gagal: ${tayang.instagram.story.galat})` : ''}${teksTt}`);
     } catch (e) {
       console.error('✖ Tayang gagal:', e);
       await perbaruiTugas(tugas.id, { status_tayang: 'gagal', galat: `Tayang gagal: ${String(e.message ?? e).slice(0, 800)}` });
       await kabar(`❌ Gagal tayang ke Instagram: ${e.message}`);
     }
   }
+  await pastikanJadwalRutin(merekRutinTayang);
 }
 
 async function modeAwan() {

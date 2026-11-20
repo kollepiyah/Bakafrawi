@@ -10,7 +10,17 @@ import { usulkanArahan } from "./usul-arahan";
 import { bedahDanSimpanReferensi, daftarReferensiMerek } from "./referensi-video";
 import { JADWAL_OPTIMAL, statusWaktuSekarang } from "./riset-reels-murni";
 import { isiNaskah, naskahMenungguTerakhir, pesanNaskah } from "./studio-naskah";
-import { aturTayang, buatTugas, daftarMerek, daftarTugasBot, ubahCaption, type AksiTayang } from "./studio-server";
+import {
+  aturTayang,
+  bacaJadwalRutin,
+  buatTugas,
+  daftarMerek,
+  daftarTugasBot,
+  simpanJadwalRutin,
+  tayangkanRutinSekarang,
+  ubahCaption,
+  type AksiTayang,
+} from "./studio-server";
 
 // Chat bebas bot Telegram: Claude Haiku 5.5 effort rendah — sama dengan bot Kantor AI Lek Kopi
 // (tanya-jawab ringan, cepat & murah). Aksi nyata dijalankan lewat alat yang memakai aturan yang
@@ -203,13 +213,40 @@ const ALAT: Anthropic.Tool[] = [
   },
   {
     name: "atur_tayang",
-    description: "Tayangkan konten yang sudah jadi ke Instagram sekarang, jadwalkan pukul 19.00 WIB, tolak, atau batalkan tayang. Pakai hanya bila pemilik memintanya dengan jelas.",
+    description: "Tayangkan konten yang sudah jadi ke Instagram sekarang, jadwalkan pada tanggal & jam custom WIB (atau pukul 19.00 WIB bila jadwal_wib dikosongkan), pilih sasaran (otomatis, story, reels, reels+story, feed, feed+story), tolak, atau batalkan tayang.",
     strict: true,
     input_schema: {
       type: "object",
       additionalProperties: false,
-      required: ["id", "aksi"],
-      properties: { id: { type: "string" }, aksi: { type: "string", enum: ["sekarang", "jadwal", "tolak", "batal"] } },
+      required: ["id", "aksi", "jadwal_wib", "sasaran"],
+      properties: {
+        id: { type: "string" },
+        aksi: { type: "string", enum: ["sekarang", "jadwal", "tolak", "batal"] },
+        jadwal_wib: {
+          type: "string",
+          description: "Waktu jadwal custom format YYYY-MM-DDTHH:MM (WIB), mis. 2026-11-21T14:30. Kosongkan bila ingin default 19.00 WIB atau bila aksi bukan jadwal.",
+        },
+        sasaran: {
+          type: "string",
+          enum: ["otomatis", "story", "reels", "reels+story", "feed", "feed+story"],
+          description: "Sasaran tayang Instagram; pilih 'otomatis' bila tidak diminta khusus.",
+        },
+      },
+    },
+  },
+  {
+    name: "atur_jadwal_rutin",
+    description: "Lihat atau atur jadwal otomatis jam buka (Story Opening Lek Kopi): aktifkan/nonaktifkan, ubah jam buka (HH:MM WIB, mis. 09:00 atau 14:00), atau langsung tayangkan Story Jam Buka sekarang.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["merek", "aksi", "jam_buka"],
+      properties: {
+        merek: { type: "string", description: "slug merek, default 'lekkopi'" },
+        aksi: { type: "string", enum: ["lihat", "aktifkan", "nonaktifkan", "ubah_jam", "tayang_sekarang"] },
+        jam_buka: { type: "string", description: "Jam buka HH:MM WIB (mis. 09:00 atau 14:00); kosong bila tidak diubah" },
+      },
     },
   },
 ];
@@ -321,8 +358,27 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
       await hapusAcara(String(isi.id));
       return JSON.stringify({ ok: true });
     case "atur_tayang": {
-      const t = await aturTayang(String(isi.id), isi.aksi as AksiTayang);
+      const t = await aturTayang(String(isi.id), isi.aksi as AksiTayang, {
+        jadwal: String(isi.jadwal_wib ?? "").trim() || undefined,
+        sasaran: String(isi.sasaran ?? "otomatis"),
+      });
       return JSON.stringify({ ok: true, status_tayang: t.status_tayang, jadwal_tayang: t.jadwal_tayang });
+    }
+    case "atur_jadwal_rutin": {
+      const merek = String(isi.merek || "lekkopi");
+      const aksi = String(isi.aksi);
+      const jam = String(isi.jam_buka ?? "").trim();
+      if (aksi === "lihat") {
+        return JSON.stringify({ ok: true, ...(await bacaJadwalRutin(merek)) });
+      }
+      if (aksi === "tayang_sekarang") {
+        return JSON.stringify({ ok: true, ...(await tayangkanRutinSekarang(merek)) });
+      }
+      const patch: Record<string, unknown> = {};
+      if (aksi === "aktifkan") patch.aktif = true;
+      if (aksi === "nonaktifkan") patch.aktif = false;
+      if (jam) patch.jam = jam;
+      return JSON.stringify({ ok: true, ...(await simpanJadwalRutin(merek, patch)) });
     }
     default:
       return `Alat ${nama} tidak dikenal.`;

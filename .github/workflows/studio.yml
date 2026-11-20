@@ -64,6 +64,8 @@ jobs:
           sparse-checkout: |
             studio
             public/logo.png
+            public/lekkopi-opening-story.mp4
+            public/lekkopi-opening-story.jpg
           sparse-checkout-cone-mode: false
 
       - uses: actions/setup-node@v4

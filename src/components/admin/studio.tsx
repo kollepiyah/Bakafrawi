@@ -17,6 +17,8 @@ import {
   Link2,
   Loader2,
   Palette,
+  Play,
+  Plus,
   RefreshCw,
   Send,
   Sparkles,
@@ -29,6 +31,18 @@ import {
 import { Sambungan } from "./studio-sambungan";
 import type { Situs } from "@/content/skema";
 import { jalurGudang, muatKonten, supabase } from "@/lib/gudang-admin";
+import {
+  DAFTAR_SASARAN_GAMBAR,
+  DAFTAR_SASARAN_VIDEO,
+  daftarSlotCepatWIB,
+  HARI_WIB,
+  jadwalRutinBawaan,
+  keInputDatetimeWIB,
+  VIDEO_OPENING_BAWAAN_LEKKOPI,
+  type JadwalRutin,
+  type SasaranTayang,
+  type VideoRutin,
+} from "@/lib/jadwal-tayang-murni";
 import { situsBawaan } from "@/content/situs";
 import { teksNaskah, type Naskah } from "@/lib/lekkopi/konten-murni";
 import type { UsulanArahan } from "@/lib/usul-arahan-murni";
@@ -137,7 +151,16 @@ type Tugas = {
   latar: "polos" | "ai";
   status_tayang: "belum" | "antre" | "dijadwalkan" | "proses" | "tayang" | "gagal" | "ditolak";
   jadwal_tayang: string | null;
-  tayang: { instagram?: { feed?: { permalink?: string }; reels?: { permalink?: string } } };
+  tayang: {
+    sasaran?: SasaranTayang;
+    rutin?: boolean;
+    instagram?: {
+      feed?: { permalink?: string };
+      reels?: { permalink?: string };
+      story?: { id?: string; galat?: string };
+      stories?: { id?: string }[];
+    };
+  };
 };
 
 const LABEL_TAYANG: Partial<Record<Tugas["status_tayang"], { teks: string; kelas: string }>> = {
@@ -194,6 +217,22 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     slot: SlotWaktu;
   } | null>(null);
   const [daftarJadwal, setDaftarJadwal] = useState<SlotWaktu[]>([]);
+
+  // Jadwal Otomatis Jam Buka (Story Opening Lek Kopi)
+  const [bukaRutin, setBukaRutin] = useState(false);
+  const [merekRutin, setMerekRutin] = useState("lekkopi");
+  const [jadwalRutin, setJadwalRutin] = useState<JadwalRutin>(() => jadwalRutinBawaan("lekkopi"));
+  const [berikutnyaRutin, setBerikutnyaRutin] = useState<string | null>(null);
+  const [menyimpanRutin, setMenyimpanRutin] = useState(false);
+  const [mengunggahRutin, setMengunggahRutin] = useState(false);
+  const [pesanRutin, setPesanRutin] = useState("");
+  const [urlBaruRutin, setUrlBaruRutin] = useState("");
+  const [judulBaruRutin, setJudulBaruRutin] = useState("");
+
+  // Jadwal Tayang Custom saat membuat konten baru
+  const [modeJadwalBuat, setModeJadwalBuat] = useState<"persetujuan" | "prime19" | "custom">("persetujuan");
+  const [waktuJadwalBuat, setWaktuJadwalBuat] = useState(() => daftarSlotCepatWIB()[3]?.inputWib ?? "");
+  const [sasaranBuat, setSasaranBuat] = useState<SasaranTayang>("otomatis");
 
   const muat = useCallback(async () => {
     const { data, error } = await supabase().from("studio_tugas").select("*").order("dibuat", { ascending: false }).limit(30);
@@ -254,6 +293,150 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     const t = setTimeout(muatReferensi, 0);
     return () => clearTimeout(t);
   }, [muatReferensi]);
+
+  // Muat konfigurasi jadwal otomatis jam buka (Story Opening)
+  const muatJadwalRutin = useCallback(async () => {
+    const tok = await tokenSegar();
+    if (!tok) return;
+    const res = await fetch(`/api/studio/rutin?merek=${encodeURIComponent(merekRutin)}`, {
+      headers: { Authorization: `Bearer ${tok}` },
+    }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    if (j.ok && j.jadwal) {
+      setJadwalRutin(j.jadwal as JadwalRutin);
+      setBerikutnyaRutin(j.berikutnya ?? null);
+    }
+  }, [tokenSegar, merekRutin]);
+
+  useEffect(() => {
+    const t = setTimeout(muatJadwalRutin, 0);
+    return () => clearTimeout(t);
+  }, [muatJadwalRutin]);
+
+  async function simpanPengaturanRutin(patch?: Partial<JadwalRutin>) {
+    setMenyimpanRutin(true);
+    setPesanRutin("");
+    const jadwalBaru = patch ? { ...jadwalRutin, ...patch } : jadwalRutin;
+    if (patch) setJadwalRutin(jadwalBaru);
+    try {
+      const tok = await tokenSegar();
+      const res = await fetch("/api/studio/rutin", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ aksi: "simpan", merek: merekRutin, jadwal: jadwalBaru }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (j.ok) {
+        if (j.jadwal) setJadwalRutin(j.jadwal as JadwalRutin);
+        setBerikutnyaRutin(j.berikutnya ?? null);
+        setPesanRutin(j.pesan ?? "Jadwal jam buka disimpan.");
+        muat();
+      } else {
+        setPesanRutin(j.pesan ?? "Gagal menyimpan jadwal rutin.");
+      }
+    } catch (e) {
+      setPesanRutin(e instanceof Error ? e.message : "Gagal menyimpan jadwal rutin.");
+    }
+    setMenyimpanRutin(false);
+  }
+
+  async function tayangkanStoryBukaSekarang() {
+    setMenyimpanRutin(true);
+    setPesanRutin("");
+    try {
+      const tok = await tokenSegar();
+      const res = await fetch("/api/studio/rutin", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ aksi: "tayang-sekarang", merek: merekRutin }),
+      });
+      const j = await res.json().catch(() => ({}));
+      setPesanRutin(j.pesan ?? (j.ok ? "Story Jam Buka sedang ditayangkan." : "Gagal menayangkan."));
+      if (j.ok) muat();
+    } catch (e) {
+      setPesanRutin(e instanceof Error ? e.message : "Gagal menayangkan Story Jam Buka.");
+    }
+    setMenyimpanRutin(false);
+  }
+
+  async function unggahVideoRutin(berkas: File) {
+    setMengunggahRutin(true);
+    setPesanRutin("");
+    try {
+      const adalahGambar = berkas.type.startsWith("image/") || /\.(jpg|jpeg|png)$/i.test(berkas.name);
+      let durasi = 9;
+      if (!adalahGambar) {
+        const urlTmp = URL.createObjectURL(berkas);
+        try {
+          const v = document.createElement("video");
+          v.src = urlTmp;
+          v.preload = "metadata";
+          await new Promise<void>((ok) => {
+            v.onloadedmetadata = () => ok();
+            v.onerror = () => ok();
+            setTimeout(ok, 2000);
+          });
+          if (Number.isFinite(v.duration) && v.duration > 0) durasi = Math.round(v.duration);
+        } finally {
+          URL.revokeObjectURL(urlTmp);
+        }
+      }
+
+      const tok = await tokenSegar();
+      const izinRes = await fetch("/api/studio/rutin", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ aksi: "izin-unggah", merek: merekRutin, namaBerkas: berkas.name }),
+      });
+      const izin = await izinRes.json().catch(() => ({}));
+      if (!izin.ok || !izin.uploadUrl) throw new Error(izin.pesan ?? "Gagal menyiapkan unggahan.");
+
+      const upRes = await fetch(izin.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": adalahGambar ? berkas.type || "image/jpeg" : "video/mp4" },
+        body: berkas,
+      });
+      if (!upRes.ok) throw new Error(`Unggah gagal (HTTP ${upRes.status}).`);
+
+      const itemBaru: VideoRutin = {
+        id: `rutin-${Date.now()}`,
+        judul: berkas.name.replace(/\.[a-z0-9]+$/i, ""),
+        url: izin.publicUrl,
+        sampul: null,
+        jenis: adalahGambar ? "gambar" : "video",
+        durasi: adalahGambar ? undefined : durasi,
+        sasaran: "story",
+        wajib: true,
+        aktif: true,
+        caption: "We are OPEN! Lek Kopi Waru Sidoarjo ☕",
+      };
+      await simpanPengaturanRutin({ video: [...jadwalRutin.video, itemBaru] });
+    } catch (e) {
+      setPesanRutin(e instanceof Error ? e.message : "Gagal mengunggah video.");
+    }
+    setMengunggahRutin(false);
+  }
+
+  function tambahUrlRutin() {
+    const u = urlBaruRutin.trim();
+    if (!u) return;
+    const adalahGambar = /\.(jpg|jpeg|png)(\?|$)/i.test(u);
+    const itemBaru: VideoRutin = {
+      id: `rutin-${Date.now()}`,
+      judul: judulBaruRutin.trim() || `Video Opening #${jadwalRutin.video.length + 1}`,
+      url: u,
+      sampul: null,
+      jenis: adalahGambar ? "gambar" : "video",
+      durasi: adalahGambar ? undefined : 10,
+      sasaran: "story",
+      wajib: true,
+      aktif: true,
+      caption: "We are OPEN! Lek Kopi Waru Sidoarjo ☕",
+    };
+    setUrlBaruRutin("");
+    setJudulBaruRutin("");
+    void simpanPengaturanRutin({ video: [...jadwalRutin.video, itemBaru] });
+  }
 
   async function bedahLinkReferensi() {
     if (!berkasRef.length && !urlRef.trim()) {
@@ -396,21 +579,65 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     const arahanMentah = String(d.get("arahan") ?? "").trim();
     const prefiksGaya = pilihGaya !== "otomatis" ? `[Gaya: ${pilihGaya}] ` : "";
     const arahanAkhir = prefiksGaya + arahanMentah;
+
+    let jadwalOtomatisIso: string | null = null;
+    if (modeJadwalBuat === "prime19") {
+      jadwalOtomatisIso = daftarSlotCepatWIB()[3]?.waktuIso ?? null;
+    } else if (modeJadwalBuat === "custom" && waktuJadwalBuat.trim()) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(waktuJadwalBuat.trim());
+      if (m) {
+        const [, y, mo, da, h, mi] = m;
+        const tgl = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(da), Number(h), Number(mi), 0) - 7 * 3600_000);
+        if (tgl.getTime() <= Date.now() - 60_000) {
+          setSibuk(false);
+          return setPesan("Waktu jadwal custom sudah lewat — pilih waktu ke depan (WIB).");
+        }
+        jadwalOtomatisIso = tgl.toISOString();
+      }
+    }
+
     // Merek bank media (Lek Kopi): naskah ditulis server dulu, video dibuat setelah naskah disetujui.
     if (merekBank) {
-      const j = await kirimNaskah({ aksi: "buat", merek: pilihMerek, permintaan: arahanAkhir });
+      const j = await kirimNaskah({
+        aksi: "buat",
+        merek: pilihMerek,
+        permintaan: arahanAkhir,
+        jadwal_tayang: jadwalOtomatisIso,
+        sasaran: sasaranBuat,
+      });
       setSibuk(false);
       if (j.ok) form.reset();
       return void muat();
     }
-    const { error } = await supabase().from("studio_tugas").insert({ merek: d.get("merek") ?? "bakafrawi", jenis: d.get("jenis"), produk_slug: d.get("produk"), arahan: arahanAkhir, latar: d.get("latar") ? "ai" : "polos" });
+    const barisInsert: Record<string, unknown> = {
+      merek: d.get("merek") ?? "bakafrawi",
+      jenis: d.get("jenis"),
+      produk_slug: d.get("produk"),
+      arahan: arahanAkhir,
+      latar: d.get("latar") ? "ai" : "polos",
+    };
+    if (jadwalOtomatisIso) {
+      barisInsert.status_tayang = "dijadwalkan";
+      barisInsert.jadwal_tayang = jadwalOtomatisIso;
+    }
+    if (sasaranBuat !== "otomatis") {
+      barisInsert.tayang = { sasaran: sasaranBuat };
+    }
+    const { error } = await supabase().from("studio_tugas").insert(barisInsert);
     if (error) {
       setSibuk(false);
       return setPesan(`Gagal membuat tugas: ${error.message}`);
     }
     const res = await fetch("/api/studio/jalankan", { method: "POST", headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}` } });
     const j = await res.json().catch(() => ({}));
-    setPesan(j.dipicu ? "Tugas dibuat — mesin Studio dinyalakan. Gambar ±1–2 menit, video ±3–6 menit." : "Tugas dibuat. Mesin akan mengerjakannya pada putaran jadwal berikutnya (≤ 30 menit).");
+    const infoJadwalPesan = jadwalOtomatisIso
+      ? ` & otomatis dijadwalkan ${new Date(jadwalOtomatisIso).toLocaleString("id-ID", { timeZone: "Asia/Jakarta", dateStyle: "short", timeStyle: "short" })} WIB`
+      : "";
+    setPesan(
+      j.dipicu
+        ? `Tugas dibuat${infoJadwalPesan} — mesin Studio dinyalakan. Gambar ±1–2 menit, video ±3–6 menit.`
+        : `Tugas dibuat${infoJadwalPesan}. Mesin akan mengerjakannya pada putaran jadwal berikutnya (≤ 30 menit).`,
+    );
     setSibuk(false);
     form.reset();
     muat();
@@ -434,14 +661,24 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     muat();
   }
 
-  async function tayang(t: Tugas, aksi: AksiTayang) {
+  async function tayang(t: Tugas, aksi: AksiTayang, opsi?: { jadwal?: string; sasaran?: SasaranTayang }) {
+    const tok = await tokenSegar();
     const res = await fetch("/api/studio/tayang", {
       method: "POST",
-      headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ id: t.id, aksi }),
+      headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ id: t.id, aksi, ...opsi }),
     });
     const j = await res.json().catch(() => ({}));
-    const ok: Record<AksiTayang, string> = { sekarang: "Segera ditayangkan ke Instagram.", jadwal: "Dijadwalkan pukul 19.00 WIB.", tolak: "Ditolak.", batal: "Tayang dibatalkan.", ulang: "Dibuat ulang." };
+    const waktuLabel = j.tugas?.jadwal_tayang
+      ? new Date(j.tugas.jadwal_tayang).toLocaleString("id-ID", { timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short" }) + " WIB"
+      : "pukul 19.00 WIB";
+    const ok: Record<AksiTayang, string> = {
+      sekarang: opsi?.sasaran === "story" ? "Segera ditayangkan ke Story Instagram." : "Segera ditayangkan ke Instagram.",
+      jadwal: `Dijadwalkan tayang ${waktuLabel}.`,
+      tolak: "Ditolak.",
+      batal: "Tayang dibatalkan.",
+      ulang: "Dibuat ulang.",
+    };
     setPesan(j.ok ? ok[aksi] : (j.pesan ?? "Gagal."));
     muat();
   }
@@ -528,6 +765,23 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                       <span className="rounded-full bg-sky-500/20 px-1.5 text-[10px] text-sky-300">{daftarRef.length}</span>
                     )}
                     {bukaRef ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBukaRutin((v) => !v)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition ${
+                      bukaRutin || jadwalRutin.aktif
+                        ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-300"
+                        : "border-white/10 text-muted-foreground hover:border-emerald-400/40 hover:text-emerald-300"
+                    }`}
+                  >
+                    <CalendarClock className="size-3.5" />
+                    <span>Story Jam Buka</span>
+                    <span className={`rounded-full px-1.5 text-[10px] ${jadwalRutin.aktif ? "bg-emerald-500/25 text-emerald-200" : "bg-white/10 text-zinc-400"}`}>
+                      {jadwalRutin.aktif ? jadwalRutin.jam : "Mati"}
+                    </span>
+                    {bukaRutin ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
                   </button>
                 </div>
               </div>
@@ -784,6 +1038,356 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   )}
                 </div>
               )}
+
+              {/* ── Panel Jadwal Otomatis Setiap Jam Buka (Story & Opening Lek Kopi) ── */}
+              {bukaRutin && (
+                <div className="mt-4 space-y-4 border-t border-border/50 pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h4 className="font-heading text-sm font-semibold text-foreground flex items-center gap-2">
+                        <CalendarClock className="size-4 text-emerald-400" />
+                        Jadwal Otomatis Setiap Jam Buka (Story & Opening)
+                      </h4>
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        Otomatis mengunggah video opening (mis. <b>We Are Open</b>) ke Instagram Story / Reels setiap hari buka sesuai jam yang ditentukan.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {merek.length > 1 && (
+                        <select
+                          value={merekRutin}
+                          onChange={(e) => setMerekRutin(e.target.value)}
+                          className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-xs"
+                        >
+                          {merek.map((m) => (
+                            <option key={m.slug} value={m.slug} className="bg-card">
+                              {m.nama}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        type="button"
+                        disabled={menyimpanRutin}
+                        onClick={() => void simpanPengaturanRutin({ aktif: !jadwalRutin.aktif })}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                          jadwalRutin.aktif
+                            ? "bg-emerald-500 text-background hover:bg-emerald-400"
+                            : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500 hover:text-background"
+                        }`}
+                      >
+                        {menyimpanRutin ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                        {jadwalRutin.aktif ? "Jadwal Buka Aktif" : "Aktifkan Jadwal Buka"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Status waktu tayang berikutnya */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-3.5 py-2.5 text-xs">
+                    <div className="text-zinc-300">
+                      {jadwalRutin.aktif && berikutnyaRutin ? (
+                        <>
+                          ⏰ <b className="text-emerald-300">Tayang otomatis berikutnya:</b>{" "}
+                          {new Date(berikutnyaRutin).toLocaleString("id-ID", {
+                            timeZone: "Asia/Jakarta",
+                            dateStyle: "full",
+                            timeStyle: "short",
+                          })}{" "}
+                          WIB ({jadwalRutin.video.filter((v) => v.aktif).length} video siap tayang)
+                        </>
+                      ) : (
+                        <span className="text-zinc-400">
+                          Jadwal otomatis sedang nonaktif. Klik <b>Aktifkan Jadwal Buka</b> atau atur jam & video di bawah lalu tekan <b>Simpan Jadwal Buka</b>.
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={menyimpanRutin || jadwalRutin.video.filter((v) => v.aktif).length === 0}
+                      onClick={tayangkanStoryBukaSekarang}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-200 hover:bg-emerald-500 hover:text-background disabled:opacity-50"
+                    >
+                      <Play className="size-3" /> Tayangkan Story Buka Sekarang
+                    </button>
+                  </div>
+
+                  {/* Pengaturan Jam Buka, Hari Buka, dan Mode Beberapa Video */}
+                  <div className="grid gap-4 sm:grid-cols-3 rounded-xl border border-border/70 bg-white/[0.02] p-3.5 text-xs">
+                    <div className="space-y-1.5">
+                      <span className="font-medium text-foreground block">Jam Buka (WIB)</span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="time"
+                          value={jadwalRutin.jam}
+                          onChange={(e) => setJadwalRutin((j) => ({ ...j, jam: e.target.value || "09:00" }))}
+                          className="h-9 rounded-lg border border-input bg-transparent px-3 font-mono text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setJadwalRutin((j) => ({ ...j, jam: "09:00" }))}
+                          className={`rounded-md border px-2 py-1 text-[11px] ${
+                            jadwalRutin.jam === "09:00" ? "border-emas bg-emas/15 text-emas" : "border-white/10 text-zinc-400 hover:text-foreground"
+                          }`}
+                        >
+                          09:00 (Video)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setJadwalRutin((j) => ({ ...j, jam: "14:00" }))}
+                          className={`rounded-md border px-2 py-1 text-[11px] ${
+                            jadwalRutin.jam === "14:00" ? "border-emas bg-emas/15 text-emas" : "border-white/10 text-zinc-400 hover:text-foreground"
+                          }`}
+                        >
+                          14:00 (Shift)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-foreground">Hari Buka</span>
+                        <button
+                          type="button"
+                          onClick={() => setJadwalRutin((j) => ({ ...j, hari: [1, 2, 3, 4, 5, 6] }))}
+                          className="text-[10px] text-emas hover:underline"
+                        >
+                          Senin–Sabtu
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {HARI_WIB.map((h) => {
+                          const dipilih = jadwalRutin.hari.includes(h.kode);
+                          return (
+                            <button
+                              key={h.kode}
+                              type="button"
+                              onClick={() =>
+                                setJadwalRutin((j) => ({
+                                  ...j,
+                                  hari: dipilih ? j.hari.filter((x) => x !== h.kode) : [...j.hari, h.kode],
+                                }))
+                              }
+                              className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
+                                dipilih
+                                  ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-200"
+                                  : "border-white/10 bg-white/[0.02] text-zinc-500 hover:text-zinc-300"
+                              }`}
+                            >
+                              {h.pendek}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="font-medium text-foreground block">Mode Beberapa Video</span>
+                      <select
+                        value={jadwalRutin.mode}
+                        onChange={(e) => setJadwalRutin((j) => ({ ...j, mode: e.target.value as JadwalRutin["mode"] }))}
+                        className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-xs"
+                      >
+                        <option value="semua" className="bg-card">Upload semua video aktif sekaligus</option>
+                        <option value="wajib+bergilir" className="bg-card">Video wajib + 1 video pendamping bergilir/hari</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Daftar Video Jam Buka */}
+                  <div className="space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-foreground">
+                        Daftar Video Opening / Story Jam Buka ({jadwalRutin.video.length} video)
+                      </p>
+                      {!jadwalRutin.video.some((v) => v.url.includes("lekkopi-opening-story")) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setJadwalRutin((j) => ({
+                              ...j,
+                              video: [{ ...VIDEO_OPENING_BAWAAN_LEKKOPI }, ...j.video],
+                            }))
+                          }
+                          className="text-[11px] text-emas hover:underline"
+                        >
+                          + Pulihkan Video Bawaan "We Are Open"
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {jadwalRutin.video.map((v, idx) => (
+                        <div
+                          key={v.id}
+                          className={`flex gap-3 rounded-xl border p-3 text-xs transition ${
+                            v.aktif ? "border-border/80 bg-white/[0.03]" : "border-border/40 bg-white/[0.01] opacity-60"
+                          }`}
+                        >
+                          <div className="shrink-0">
+                            {v.jenis === "video" ? (
+                              <video
+                                src={v.url}
+                                poster={v.sampul ?? undefined}
+                                controls
+                                playsInline
+                                preload="metadata"
+                                className="h-32 w-20 rounded-lg bg-black object-cover"
+                              />
+                            ) : (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={v.url} alt={v.judul} className="h-32 w-20 rounded-lg bg-black object-cover" />
+                            )}
+                          </div>
+
+                          <div className="flex flex-1 flex-col justify-between gap-2 min-w-0">
+                            <div className="space-y-1.5">
+                              <div className="flex items-start justify-between gap-1">
+                                <input
+                                  type="text"
+                                  value={v.judul}
+                                  onChange={(e) =>
+                                    setJadwalRutin((j) => ({
+                                      ...j,
+                                      video: j.video.map((x, i) => (i === idx ? { ...x, judul: e.target.value } : x)),
+                                    }))
+                                  }
+                                  className="h-7 w-full rounded border border-white/10 bg-transparent px-2 text-xs font-semibold text-foreground"
+                                  placeholder="Judul video opening"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setJadwalRutin((j) => ({
+                                      ...j,
+                                      video: j.video.filter((_, i) => i !== idx),
+                                    }))
+                                  }
+                                  className="p-1 text-zinc-400 hover:text-red-400"
+                                  title="Hapus dari jadwal buka"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              </div>
+
+                              <select
+                                value={v.sasaran}
+                                onChange={(e) =>
+                                  setJadwalRutin((j) => ({
+                                    ...j,
+                                    video: j.video.map((x, i) =>
+                                      i === idx ? { ...x, sasaran: e.target.value as VideoRutin["sasaran"] } : x,
+                                    ),
+                                  }))
+                                }
+                                className="h-7 w-full rounded border border-white/10 bg-transparent px-2 text-[11px]"
+                              >
+                                <option value="story" className="bg-card">📱 Upload ke Story Instagram</option>
+                                <option value="reels+story" className="bg-card">🎬 Upload ke Story + Reels</option>
+                                <option value="reels" className="bg-card">🎬 Upload ke Reels saja</option>
+                              </select>
+
+                              <div className="flex flex-wrap items-center gap-3 pt-0.5 text-[11px]">
+                                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={v.aktif}
+                                    onChange={(e) =>
+                                      setJadwalRutin((j) => ({
+                                        ...j,
+                                        video: j.video.map((x, i) => (i === idx ? { ...x, aktif: e.target.checked } : x)),
+                                      }))
+                                    }
+                                    className="size-3.5 accent-emerald-500"
+                                  />
+                                  <span>Aktif</span>
+                                </label>
+                                <label className="inline-flex items-center gap-1.5 cursor-pointer" title="Selalu diupload setiap jam buka">
+                                  <input
+                                    type="checkbox"
+                                    checked={v.wajib}
+                                    onChange={(e) =>
+                                      setJadwalRutin((j) => ({
+                                        ...j,
+                                        video: j.video.map((x, i) => (i === idx ? { ...x, wajib: e.target.checked } : x)),
+                                      }))
+                                    }
+                                    className="size-3.5 accent-[#c9a24b]"
+                                  />
+                                  <span className="text-emas-muda">Selalu tayang tiap buka</span>
+                                </label>
+                              </div>
+                            </div>
+
+                            <span className="truncate text-[10px] text-zinc-500">
+                              {v.durasi ? `${v.durasi} dtk · ` : ""}{v.url}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Unggah Video Opening Baru atau Tambah URL */}
+                    <div className="grid gap-2.5 sm:grid-cols-2 pt-1">
+                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-400/40 bg-emerald-500/5 px-4 py-2.5 text-xs font-medium text-emerald-300 hover:border-emerald-400 hover:bg-emerald-500/10 transition">
+                        {mengunggahRutin ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                        <span>
+                          {mengunggahRutin ? "Mengunggah video ke Studio…" : "Unggah Video/Foto Opening Baru (.mp4 / .mov / .jpg)"}
+                        </span>
+                        <input
+                          type="file"
+                          accept="video/mp4,video/quicktime,video/webm,image/jpeg,image/png"
+                          className="hidden"
+                          disabled={mengunggahRutin}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) void unggahVideoRutin(f);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={judulBaruRutin}
+                          onChange={(e) => setJudulBaruRutin(e.target.value)}
+                          placeholder="Judul (opsional)"
+                          className="h-10 w-28 rounded-lg border border-input bg-transparent px-2.5 text-xs"
+                        />
+                        <input
+                          type="text"
+                          value={urlBaruRutin}
+                          onChange={(e) => setUrlBaruRutin(e.target.value)}
+                          placeholder="Atau tempel URL video (.mp4)"
+                          className="h-10 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={tambahUrlRutin}
+                          disabled={!urlBaruRutin.trim()}
+                          className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 text-xs hover:border-emas hover:text-emas disabled:opacity-40"
+                        >
+                          <Plus className="size-3.5" /> Tambah
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                    <button
+                      type="button"
+                      disabled={menyimpanRutin}
+                      onClick={() => void simpanPengaturanRutin()}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-emas px-4 py-2 text-xs font-semibold text-background hover:bg-emas/90 disabled:opacity-60"
+                    >
+                      {menyimpanRutin ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                      Simpan Jadwal Buka
+                    </button>
+                    {pesanRutin && <span className="text-xs text-emerald-300">{pesanRutin}</span>}
+                  </div>
+                </div>
+              )}
             </div>
 
             <form onSubmit={buat} className="mb-8 grid gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6">
@@ -886,6 +1490,69 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   </div>
                 )}
               </div>
+
+              {/* Opsi Jadwal Tayang Otomatis / Custom & Sasaran Instagram */}
+              <div className="rounded-xl border border-border/70 bg-white/[0.02] p-3.5 text-xs space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1.5">
+                    <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                      <CalendarClock className="size-3.5 text-emas" /> Jadwal Tayang Setelah Selesai
+                    </span>
+                    <select
+                      value={modeJadwalBuat}
+                      onChange={(e) => setModeJadwalBuat(e.target.value as "persetujuan" | "prime19" | "custom")}
+                      className="h-9 rounded-lg border border-input bg-transparent px-3 text-xs"
+                    >
+                      <option value="persetujuan" className="bg-card">Tunggu persetujuan dulu (bawaan)</option>
+                      <option value="prime19" className="bg-card">Otomatis jadwalkan Prime Time 19.00 WIB</option>
+                      <option value="custom" className="bg-card">Otomatis jadwalkan di tanggal & jam custom…</option>
+                    </select>
+                  </label>
+
+                  <label className="grid gap-1.5">
+                    <span className="font-medium text-muted-foreground">Sasaran Tayang Instagram</span>
+                    <select
+                      value={sasaranBuat}
+                      onChange={(e) => setSasaranBuat(e.target.value as SasaranTayang)}
+                      className="h-9 rounded-lg border border-input bg-transparent px-3 text-xs"
+                    >
+                      {(merekBank || pilihJenis === "video" ? DAFTAR_SASARAN_VIDEO : DAFTAR_SASARAN_GAMBAR).map((s) => (
+                        <option key={s.kode} value={s.kode} className="bg-card">
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                {modeJadwalBuat === "custom" && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <input
+                      type="datetime-local"
+                      value={waktuJadwalBuat}
+                      onChange={(e) => setWaktuJadwalBuat(e.target.value)}
+                      className="h-9 rounded-lg border border-input bg-transparent px-3 font-mono text-xs"
+                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {daftarSlotCepatWIB().map((s) => (
+                        <button
+                          key={s.kode}
+                          type="button"
+                          onClick={() => setWaktuJadwalBuat(s.inputWib)}
+                          className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+                            waktuJadwalBuat === s.inputWib
+                              ? "border-emas bg-emas/15 text-emas"
+                              : "border-white/10 text-zinc-400 hover:border-white/25 hover:text-foreground"
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="flex flex-wrap items-center gap-3">
                 <button disabled={sibuk} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
                   {sibuk ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Buat
@@ -900,7 +1567,21 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
             {daftar.length === 0 && <p className="text-sm text-muted-foreground">Belum ada konten.</p>}
             <div className="grid gap-4">
               {daftar.map((t) => (
-                <KartuTugas key={t.id} t={t} nama={namaMerek(t.merek) + (t.produk_slug === t.merek ? "video bank media" : namaProduk(t.produk_slug))} hapus={() => hapus(t)} tayang={(a) => tayang(t, a)} naskah={(a) => putusNaskah(t, a)} />
+                <KartuTugas
+                  key={t.id}
+                  t={t}
+                  nama={
+                    namaMerek(t.merek) +
+                    (t.produk_slug === "rutin-buka"
+                      ? "Story Jam Buka Otomatis"
+                      : t.produk_slug === t.merek
+                      ? "video bank media"
+                      : namaProduk(t.produk_slug))
+                  }
+                  hapus={() => hapus(t)}
+                  tayang={(a, opsi) => tayang(t, a, opsi)}
+                  naskah={(a) => putusNaskah(t, a)}
+                />
               ))}
             </div>
           </>
@@ -910,12 +1591,39 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   );
 }
 
-function KartuTugas({ t, nama, hapus, tayang, naskah }: { t: Tugas; nama: string; hapus: () => void; tayang: (a: AksiTayang) => void; naskah: (a: "setujui" | "tolak" | "revisi") => void }) {
+function KartuTugas({
+  t,
+  nama,
+  hapus,
+  tayang,
+  naskah,
+}: {
+  t: Tugas;
+  nama: string;
+  hapus: () => void;
+  tayang: (a: AksiTayang, opsi?: { jadwal?: string; sasaran?: SasaranTayang }) => void;
+  naskah: (a: "setujui" | "tolak" | "revisi") => void;
+}) {
   const [tersalin, setTersalin] = useState(false);
+  const [bukaCustom, setBukaCustom] = useState(false);
+  const [waktuCustom, setWaktuCustom] = useState(() =>
+    t.jadwal_tayang ? keInputDatetimeWIB(new Date(t.jadwal_tayang)) : (daftarSlotCepatWIB()[3]?.inputWib ?? ""),
+  );
+  const [sasaranCustom, setSasaranCustom] = useState<SasaranTayang>(() => t.tayang?.sasaran ?? "otomatis");
+
   const s = LABEL_STATUS[t.status];
   const st = LABEL_TAYANG[t.status_tayang];
   const tautanIg = t.tayang?.instagram?.reels?.permalink ?? t.tayang?.instagram?.feed?.permalink;
   const bisaTayang = t.status === "selesai" && ["belum", "gagal", "ditolak"].includes(t.status_tayang);
+  const bisaUbahJadwal = t.status === "selesai" && ["belum", "gagal", "ditolak", "dijadwalkan"].includes(t.status_tayang);
+  const daftarSasaran = t.jenis === "video" ? DAFTAR_SASARAN_VIDEO : DAFTAR_SASARAN_GAMBAR;
+
+  function simpanJadwalCustom() {
+    if (!waktuCustom.trim()) return;
+    tayang("jadwal", { jadwal: waktuCustom.trim(), sasaran: sasaranCustom });
+    setBukaCustom(false);
+  }
+
   return (
     <article className="rounded-2xl border border-border bg-card p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -925,6 +1633,11 @@ function KartuTugas({ t, nama, hapus, tayang, naskah }: { t: Tugas; nama: string
           <span className="text-redup">· {new Date(t.dibuat).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}</span>
         </div>
         <div className="flex items-center gap-2">
+          {t.tayang?.sasaran && t.tayang.sasaran !== "otomatis" && (
+            <span className="rounded-full bg-purple-500/15 px-2.5 py-1 text-xs text-purple-300 uppercase">
+              {t.tayang.sasaran}
+            </span>
+          )}
           {t.latar === "ai" && <span className="rounded-full bg-emas/15 px-2.5 py-1 text-xs text-emas-muda">Latar AI</span>}
           <span className={`rounded-full px-2.5 py-1 text-xs ${s.kelas}`}>{t.status === "proses" && <Loader2 className="mr-1 inline size-3 animate-spin" />}{s.teks}</span>
           {st && (
@@ -990,31 +1703,107 @@ function KartuTugas({ t, nama, hapus, tayang, naskah }: { t: Tugas; nama: string
         </div>
       )}
       {t.status === "selesai" && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-          {bisaTayang && (
-            <>
-              <button onClick={() => tayang("sekarang")} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 font-semibold text-primary-foreground">
-                <Send className="size-4" /> Tayangkan sekarang
+        <div className="mt-3 space-y-3 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            {bisaTayang && (
+              <>
+                <button onClick={() => tayang("sekarang")} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 font-semibold text-primary-foreground">
+                  <Send className="size-4" /> Tayangkan sekarang
+                </button>
+                <button
+                  onClick={() => tayang("sekarang", { sasaran: "story" })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/35 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500 hover:text-background"
+                >
+                  📱 Story sekarang
+                </button>
+                <button onClick={() => tayang("jadwal")} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-4 py-1.5 hover:border-emas hover:text-emas">
+                  <CalendarClock className="size-4" /> Jadwal 19.00
+                </button>
+              </>
+            )}
+            {bisaUbahJadwal && (
+              <button
+                type="button"
+                onClick={() => setBukaCustom((v) => !v)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
+                  bukaCustom
+                    ? "border-emas bg-emas/15 text-emas"
+                    : "border-white/15 text-muted-foreground hover:border-emas hover:text-emas"
+                }`}
+              >
+                <Clock className="size-3.5" />
+                {t.status_tayang === "dijadwalkan" ? "Ubah Jadwal Custom…" : "Jadwal Custom…"}
               </button>
-              <button onClick={() => tayang("jadwal")} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-4 py-1.5 hover:border-emas hover:text-emas">
-                <CalendarClock className="size-4" /> Jadwal 19.00
+            )}
+            {(t.status_tayang === "antre" || t.status_tayang === "dijadwalkan") && (
+              <button onClick={() => tayang("batal")} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-4 py-1.5">
+                <X className="size-4" /> Batalkan tayang
               </button>
-            </>
-          )}
-          {(t.status_tayang === "antre" || t.status_tayang === "dijadwalkan") && (
-            <button onClick={() => tayang("batal")} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-4 py-1.5">
-              <X className="size-4" /> Batalkan tayang
-            </button>
-          )}
-          {t.status_tayang !== "tayang" && t.status_tayang !== "proses" && (
-            <button onClick={() => tayang("ulang")} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground">
-              <RefreshCw className="size-4" /> Buat ulang
-            </button>
-          )}
-          {tautanIg && (
-            <a href={tautanIg} target="_blank" className="text-emas underline">
-              Lihat di Instagram
-            </a>
+            )}
+            {t.status_tayang !== "tayang" && t.status_tayang !== "proses" && t.produk_slug !== "rutin-buka" && (
+              <button onClick={() => tayang("ulang")} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground">
+                <RefreshCw className="size-4" /> Buat ulang
+              </button>
+            )}
+            {tautanIg && (
+              <a href={tautanIg} target="_blank" className="text-emas underline">
+                Lihat di Instagram
+              </a>
+            )}
+          </div>
+
+          {/* Pemilih Jadwal Tayang Custom pada Kartu Tugas */}
+          {bukaCustom && bisaUbahJadwal && (
+            <div className="rounded-xl border border-emas/30 bg-emas/[0.04] p-3.5 text-xs space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold text-foreground flex items-center gap-1.5">
+                  <CalendarClock className="size-3.5 text-emas" /> Atur Tanggal, Jam (WIB) & Sasaran Tayang Custom
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {daftarSlotCepatWIB().map((slot) => (
+                    <button
+                      key={slot.kode}
+                      type="button"
+                      onClick={() => setWaktuCustom(slot.inputWib)}
+                      className={`rounded-full border px-2.5 py-0.5 text-[11px] transition ${
+                        waktuCustom === slot.inputWib
+                          ? "border-emas bg-emas/20 text-emas"
+                          : "border-white/10 text-zinc-400 hover:border-white/25 hover:text-foreground"
+                      }`}
+                    >
+                      {slot.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="datetime-local"
+                  value={waktuCustom}
+                  onChange={(e) => setWaktuCustom(e.target.value)}
+                  className="h-9 rounded-lg border border-input bg-card px-3 font-mono text-xs"
+                />
+                <select
+                  value={sasaranCustom}
+                  onChange={(e) => setSasaranCustom(e.target.value as SasaranTayang)}
+                  className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
+                >
+                  {daftarSasaran.map((ds) => (
+                    <option key={ds.kode} value={ds.kode} className="bg-card">
+                      {ds.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={simpanJadwalCustom}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emas px-4 py-2 text-xs font-semibold text-background hover:bg-emas/90"
+                >
+                  <Check className="size-3.5" /> Simpan Jadwal
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}

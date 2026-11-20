@@ -6,14 +6,27 @@ export const maxDuration = 120;
 
 // Alur naskah merek bank media (Lek Kopi) dari layar Konten. Penulisan naskah (±30–60 dtk Claude)
 // dikerjakan sesudah respons dikirim; hasilnya muncul di daftar dan di bot Telegram.
-type Isi = { aksi?: "buat" | "setujui" | "tolak" | "revisi"; id?: string; merek?: string; permintaan?: string; catatan?: string };
+type Isi = {
+  aksi?: "buat" | "setujui" | "tolak" | "revisi";
+  id?: string;
+  merek?: string;
+  permintaan?: string;
+  catatan?: string;
+  jadwal_tayang?: string | null;
+  sasaran?: string | null;
+};
 
 export async function POST(req: Request) {
   if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
   const isi = (await req.json()) as Isi;
   try {
     if (isi.aksi === "buat") {
-      const { id, merek } = await pesanNaskah({ merek: isi.merek ?? "", permintaan: isi.permintaan ?? "" });
+      const { id, merek } = await pesanNaskah({
+        merek: isi.merek ?? "",
+        permintaan: isi.permintaan ?? "",
+        jadwal_tayang: isi.jadwal_tayang,
+        sasaran: isi.sasaran,
+      });
       after(() => isiNaskah(id).catch((e) => console.error("Naskah:", e)));
       return Response.json({ ok: true, id, pesan: `Naskah ${merek.nama} sedang ditulis (±1 menit). Hasilnya muncul di sini dan di bot Telegram.` });
     }

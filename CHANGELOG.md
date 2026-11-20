@@ -1,5 +1,26 @@
 # CHANGELOG — bakafrawi.com
 
+## Jadwal Otomatis Jam Buka (Story Opening Lek Kopi) & Jadwal Tayang Custom (20 Nov)
+
+- **Jadwal Otomatis Setiap Jam Buka (Story & Opening):** panel baru **Story Jam Buka** di Studio
+  (`/api/studio/rutin`, `src/lib/jadwal-tayang-murni.ts`). Video contoh *We Are Open (9AM - 11PM)*
+  dari Kyai sudah dipasang sebagai video bawaan (`public/lekkopi-opening-story.mp4` + sampul).
+  Mendukung banyak video opening sekaligus (mode *upload semua video aktif* atau *video wajib +
+  1 video pendamping bergilir per hari*), pilihan hari buka (default Senin–Sabtu), jam buka WIB
+  (tombol cepat `09:00` & `14:00`), serta unggah video `.mp4`/`.mov` baru langsung ke Supabase
+  Storage bucket `studio`.
+- **Mesin otomatis menjadwalkan hari buka berikutnya:** saat diaktifkan, tugas `rutin-buka`
+  dijadwalkan di `studio_tugas` sehingga `pg_cron` Supabase (`studio_picu`) menyalakan GitHub
+  Actions tepat saat jam buka tiba; selesai tayang, mesin otomatis menjadwalkan hari buka berikutnya.
+  `studio/lib/instagram.mjs` kini mendukung upload **video Story** (`media_type: 'STORIES'`,
+  `video_url`) selain gambar Story.
+- **Jadwal Tayang Custom & Pilihan Sasaran untuk Semua Konten:** di formulir pembuatan konten,
+  tiap kartu riwayat tugas (`KartuTugas`), dan bot Telegram (`atur_tayang`, `atur_jadwal_rutin`),
+  penjadwalan tidak lagi terkunci di pukul 19.00 WIB — bisa memilih tanggal & jam WIB bebas,
+  tombol slot cepat (`09.00`, `12.00`, `14.00`, `19.00`, `20.30`), serta sasaran tayang (`Reels`,
+  `Story saja`, `Reels + Story`, `Feed + Story`, `Feed saja`).
+- Diuji: 31/31 unit test murni (`npm run uji`), pemeriksaan tipe TypeScript (`tsc --noEmit`).
+
 ## Tombol "Usulkan arahan" di formulir Studio (19 Nov)
 
 - Kyai: "apakah ada arahan AI?" — formulir Studio kini punya tombol **Usulkan arahan**: Claude Sonnet

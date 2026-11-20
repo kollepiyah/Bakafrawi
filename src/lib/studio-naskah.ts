@@ -1,5 +1,6 @@
 import "server-only";
 import { rest } from "./db-server";
+import { normalisasiSasaran, uraiJadwalCustomWIB, type SasaranTayang } from "./jadwal-tayang-murni";
 import { tulisNaskahBank } from "./naskah-bank";
 import type { Naskah } from "./lekkopi/konten-murni";
 import { bacaPengaturan, daftarMerek, picuStudio, type Merek } from "./studio-server";
@@ -45,14 +46,35 @@ async function kabarNaskah(id: string, merek: Merek, teks: string, perbaikan: st
 }
 
 /** Catat permintaan; naskahnya ditulis terpisah (isiNaskah) supaya pemanggil bisa menjawab cepat. */
-export async function pesanNaskah(isi: { merek: string; permintaan: string }) {
+export async function pesanNaskah(isi: {
+  merek: string;
+  permintaan: string;
+  jadwal_tayang?: string | null;
+  sasaran?: SasaranTayang | string | null;
+}) {
   const merek = await merekAda(isi.merek);
   // Ide opsional: bila kosong (atau cuma prefiks gaya), AI otomatis memilih menu/konsep terbaik dari data kedai.
   const permintaan = isi.permintaan.trim() || "Pilih otomatis menu andalan & konsep paling menarik minggu ini";
+  let jadwalIso: string | null = null;
+  if (isi.jadwal_tayang && String(isi.jadwal_tayang).trim()) {
+    const parsed = uraiJadwalCustomWIB(String(isi.jadwal_tayang));
+    if (!parsed.ok) throw new Error(parsed.pesan);
+    jadwalIso = parsed.tanggal.toISOString();
+  }
+  const sasaran = isi.sasaran ? normalisasiSasaran(isi.sasaran) : undefined;
   const [t] = (await rest("studio_tugas?select=id", {
     method: "POST",
     headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ merek: merek.slug, jenis: "video", produk_slug: merek.slug, arahan: permintaan.slice(0, 1000), latar: "polos", status: "naskah" }),
+    body: JSON.stringify({
+      merek: merek.slug,
+      jenis: "video",
+      produk_slug: merek.slug,
+      arahan: permintaan.slice(0, 1000),
+      latar: "polos",
+      status: "naskah",
+      ...(jadwalIso ? { status_tayang: "dijadwalkan", jadwal_tayang: jadwalIso } : {}),
+      ...(sasaran && sasaran !== "otomatis" ? { tayang: { sasaran } } : {}),
+    }),
   })) as { id: string }[];
   return { id: t.id, merek };
 }

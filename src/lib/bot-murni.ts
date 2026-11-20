@@ -30,12 +30,18 @@ export function cariProduk<T extends { slug: string; nama: string }>(produk: T[]
   return produk.find((p) => p.slug === k) ?? produk.find((p) => p.slug.includes(k) || p.nama.toLowerCase().includes(k)) ?? null;
 }
 
-/** Data tombol: "t:<id>" tayang sekarang, "j:<id>" jadwal, "x:<id>" tolak, "u:<id>" buat ulang. */
-export function uraiTombol(data: string): { aksi: "sekarang" | "jadwal" | "tolak" | "ulang"; id: string } | null {
-  const m = /^([tjxu]):([0-9a-f-]{36})$/.exec(data);
+/** Data tombol: "t:<id>" tayang sekarang, "s:<id>" story sekarang, "j:<id>" jadwal 19.00, "j09:<id>" / "j12:<id>" / "j14:<id>" jadwal jam tertentu, "x:<id>" tolak, "u:<id>" buat ulang. */
+export function uraiTombol(data: string): { aksi: "sekarang" | "jadwal" | "tolak" | "ulang"; id: string; jamWib?: number; sasaran?: "story" } | null {
+  const m = /^(t|s|j|j09|j12|j14|x|u):([0-9a-f-]{36})$/.exec(data);
   if (!m) return null;
-  const aksi = ({ t: "sekarang", j: "jadwal", x: "tolak", u: "ulang" } as const)[m[1] as "t" | "j" | "x" | "u"];
-  return { aksi, id: m[2] };
+  const kode = m[1];
+  const id = m[2];
+  if (kode === "s") return { aksi: "sekarang", id, sasaran: "story" };
+  if (kode === "j09") return { aksi: "jadwal", id, jamWib: 9 };
+  if (kode === "j12") return { aksi: "jadwal", id, jamWib: 12 };
+  if (kode === "j14") return { aksi: "jadwal", id, jamWib: 14 };
+  const aksi = ({ t: "sekarang", j: "jadwal", x: "tolak", u: "ulang" } as const)[kode as "t" | "j" | "x" | "u"];
+  return { aksi, id };
 }
 
 /** Tombol persetujuan naskah (merek bank media): ns = setujui → video dibuat, nx = tolak. */

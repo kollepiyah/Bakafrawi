@@ -68,9 +68,9 @@ export async function POST(req: Request) {
           const { dipicu } = await buatUlang(t.id);
           balasan = `🔁 Dibuat ulang${dipicu ? " — mesin dinyalakan." : " — menunggu putaran jadwal."}`;
         } else {
-          const tugas = await aturTayang(t.id, t.aksi);
+          const tugas = await aturTayang(t.id, t.aksi, { jamWib: t.jamWib, sasaran: t.sasaran });
           balasan =
-            t.aksi === "sekarang" ? "📤 Ditayangkan ke Instagram sebentar lagi."
+            t.aksi === "sekarang" ? `📤 Ditayangkan ke ${t.sasaran === "story" ? "Story Instagram" : "Instagram"} sebentar lagi.`
             : t.aksi === "jadwal" ? `🕖 Dijadwalkan ${new Date(tugas.jadwal_tayang!).toLocaleString("id-ID", { timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "short" })} WIB.`
             : "❌ Ditolak, tidak ditayangkan.";
         }

@@ -1,5 +1,15 @@
 import "server-only";
 import { adaKunciServer, rest } from "./db-server";
+import {
+  jamBukaBerikutnya,
+  jamWibBerikutnya,
+  normalisasiJadwalRutin,
+  normalisasiSasaran,
+  pilihVideoBuka,
+  uraiJadwalCustomWIB,
+  type JadwalRutin,
+  type SasaranTayang,
+} from "./jadwal-tayang-murni";
 
 // Aksi Studio di sisi server, dipakai bersama oleh panel admin (/api/studio/*) dan bot Telegram
 // (/api/telegram) — satu tempat supaya aturan tayang/jadwal tak berbeda antara keduanya.
@@ -161,21 +171,47 @@ export async function ringkasBiayaBulanIni(sekarang = new Date()): Promise<Ringk
 }
 
 /** Pukul 19.00 WIB berikutnya (12.00 UTC); bila sudah lewat hari ini → besok. */
-export function jamTayangBerikutnya(sekarang = new Date()) {
-  const t = new Date(Date.UTC(sekarang.getUTCFullYear(), sekarang.getUTCMonth(), sekarang.getUTCDate(), 12, 0, 0));
-  if (t.getTime() <= sekarang.getTime() + 5 * 60_000) t.setUTCDate(t.getUTCDate() + 1);
-  return t;
+export function jamTayangBerikutnya(sekarang = new Date(), jamWib = 19, menitWib = 0) {
+  return jamWibBerikutnya(jamWib, menitWib, sekarang);
 }
 
 export type AksiTayang = "sekarang" | "jadwal" | "tolak" | "batal";
 
+export type OpsiAturTayang = {
+  /** Waktu jadwal custom: "YYYY-MM-DDTHH:MM" (WIB) atau ISO string. Kosong = jamWib (bawaan 19.00 WIB). */
+  jadwal?: string | null;
+  /** Jam WIB cepat (mis. 9, 12, 14, 19) bila jadwal custom string tidak dikirim. */
+  jamWib?: number;
+  /** Sasaran tayang Instagram: otomatis, story, reels, reels+story, feed, feed+story. */
+  sasaran?: SasaranTayang | string | null;
+};
+
 /** Ubah status tayang satu tugas. Hanya tugas yang sudah selesai dibuat yang bisa ditayangkan. */
-export async function aturTayang(id: string, aksi: AksiTayang) {
-  const isi =
+export async function aturTayang(id: string, aksi: AksiTayang, opsi?: OpsiAturTayang) {
+  let jadwalIso: string | null = null;
+  if (aksi === "jadwal") {
+    if (opsi?.jadwal && String(opsi.jadwal).trim()) {
+      const parsed = uraiJadwalCustomWIB(String(opsi.jadwal));
+      if (!parsed.ok) throw new Error(parsed.pesan);
+      jadwalIso = parsed.tanggal.toISOString();
+    } else if (typeof opsi?.jamWib === "number") {
+      jadwalIso = jamTayangBerikutnya(new Date(), opsi.jamWib, 0).toISOString();
+    } else {
+      jadwalIso = jamTayangBerikutnya().toISOString();
+    }
+  }
+
+  const sasaran = opsi?.sasaran ? normalisasiSasaran(opsi.sasaran) : undefined;
+  const isi: Record<string, unknown> =
     aksi === "sekarang" ? { status_tayang: "antre", jadwal_tayang: null }
-    : aksi === "jadwal" ? { status_tayang: "dijadwalkan", jadwal_tayang: jamTayangBerikutnya().toISOString() }
+    : aksi === "jadwal" ? { status_tayang: "dijadwalkan", jadwal_tayang: jadwalIso }
     : aksi === "tolak" ? { status_tayang: "ditolak", jadwal_tayang: null }
     : { status_tayang: "belum", jadwal_tayang: null };
+
+  if (sasaran) {
+    isi.tayang = { sasaran };
+  }
+
   // Tak boleh mengubah yang sedang diproses / sudah tayang (cegah posting ganda).
   const hasil = (await rest(`studio_tugas?id=eq.${id}&status=eq.selesai&status_tayang=not.in.(proses,tayang)`, {
     method: "PATCH",
@@ -222,16 +258,231 @@ export async function hapusKredensial(merek: string, layanan: Layanan) {
   await rest(`studio_kredensial?merek=eq.${encodeURIComponent(merek)}&layanan=eq.${layanan}`, { method: "DELETE", headers: { Prefer: "return=minimal" } });
 }
 
-export async function buatTugas(isi: { produk_slug: string; jenis: "gambar" | "video"; latar: "polos" | "ai"; arahan?: string; merek?: string }) {
-  const [t] = (await rest("studio_tugas", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ arahan: "", ...isi }) })) as RingkasTugas[];
+export async function buatTugas(isi: {
+  produk_slug: string;
+  jenis: "gambar" | "video";
+  latar: "polos" | "ai";
+  arahan?: string;
+  merek?: string;
+  jadwal_tayang?: string | null;
+  sasaran?: SasaranTayang | string | null;
+}) {
+  let jadwalIso: string | null = null;
+  if (isi.jadwal_tayang && String(isi.jadwal_tayang).trim()) {
+    const parsed = uraiJadwalCustomWIB(String(isi.jadwal_tayang));
+    if (!parsed.ok) throw new Error(parsed.pesan);
+    jadwalIso = parsed.tanggal.toISOString();
+  }
+  const sasaran = isi.sasaran ? normalisasiSasaran(isi.sasaran) : undefined;
+  const baris: Record<string, unknown> = {
+    produk_slug: isi.produk_slug,
+    jenis: isi.jenis,
+    latar: isi.latar,
+    arahan: isi.arahan ?? "",
+    ...(isi.merek ? { merek: isi.merek } : {}),
+    ...(jadwalIso ? { status_tayang: "dijadwalkan", jadwal_tayang: jadwalIso } : {}),
+    ...(sasaran && sasaran !== "otomatis" ? { tayang: { sasaran } } : {}),
+  };
+  const [t] = (await rest("studio_tugas", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(baris) })) as RingkasTugas[];
   return { tugas: t, dipicu: await picuStudio() };
 }
 
 export async function buatUlang(id: string) {
-  const [lama] = (await rest(`studio_tugas?id=eq.${id}&select=produk_slug,jenis,latar,arahan`)) as { produk_slug: string; jenis: "gambar" | "video"; latar: "polos" | "ai"; arahan: string }[];
+  const [lama] = (await rest(`studio_tugas?id=eq.${id}&select=produk_slug,jenis,latar,arahan,merek`)) as {
+    produk_slug: string;
+    jenis: "gambar" | "video";
+    latar: "polos" | "ai";
+    arahan: string;
+    merek?: string;
+  }[];
   if (!lama) throw new Error("Tugas asal tidak ditemukan.");
   await aturTayang(id, "tolak").catch(() => {});
   return buatTugas(lama);
+}
+
+// ------------------------------------------------------------ jadwal rutin jam buka (Story Opening)
+
+const mutlakUrlMedia = (url: string, origin = "https://bakafrawi.com") =>
+  /^https?:\/\//.test(url) ? url : `${origin.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
+
+/** Baca konfigurasi jadwal rutin jam buka satu merek beserta waktu tayang berikutnya. */
+export async function bacaJadwalRutin(slugMerek = "lekkopi") {
+  const daftar = await daftarMerek();
+  const m = daftar.find((x) => x.slug === slugMerek) ?? daftar.find((x) => x.slug === "lekkopi") ?? daftar[0];
+  if (!m) throw new Error("Merek tidak ditemukan.");
+  const jadwal = normalisasiJadwalRutin(m.profil?.jadwal_rutin, m.slug);
+  const berikutnya = jamBukaBerikutnya(jadwal, new Date());
+  const [terjadwal] = (await rest(
+    `studio_tugas?merek=eq.${encodeURIComponent(m.slug)}&produk_slug=eq.rutin-buka&status_tayang=in.(dijadwalkan,antre)&select=id,status_tayang,jadwal_tayang,hasil&order=dibuat.desc&limit=1`,
+  ).catch(() => [])) as RingkasTugas[];
+  return {
+    merek: m.slug,
+    namaMerek: m.nama,
+    jadwal,
+    berikutnya: berikutnya ? berikutnya.toISOString() : null,
+    tugasTerjadwal: terjadwal ?? null,
+  };
+}
+
+/** Sinkronkan baris tugas `rutin-buka` di `studio_tugas` supaya pg_cron menyalakan mesin tepat pada jam buka berikutnya. */
+export async function sinkronTugasJadwalRutin(
+  merek: Merek,
+  jadwal: JadwalRutin,
+  originSitus = "https://bakafrawi.com",
+): Promise<RingkasTugas | null> {
+  const berikutnya = jamBukaBerikutnya(jadwal, new Date());
+  const antrean = (await rest(
+    `studio_tugas?merek=eq.${encodeURIComponent(merek.slug)}&produk_slug=eq.rutin-buka&status_tayang=eq.dijadwalkan&select=id,jadwal_tayang&order=dibuat.desc`,
+  ).catch(() => [])) as { id: string; jadwal_tayang: string | null }[];
+
+  if (!jadwal.aktif || !berikutnya) {
+    // Matikan/hapus antrean rutin yang belum tayang bila jadwal rutin dinonaktifkan
+    for (const a of antrean) {
+      await rest(`studio_tugas?id=eq.${a.id}&status_tayang=eq.dijadwalkan`, { method: "DELETE", headers: { Prefer: "return=minimal" } }).catch(() => {});
+    }
+    return null;
+  }
+
+  const dipilih = pilihVideoBuka(jadwal, berikutnya);
+  if (!dipilih.length) return null;
+
+  const hasil = dipilih.map((v) => ({
+    jenis: v.jenis,
+    rasio: "story",
+    url: mutlakUrlMedia(v.url, originSitus),
+    durasi: v.durasi ?? 9,
+    judul: v.judul,
+    sasaran: v.sasaran,
+    caption: v.caption ?? "",
+  }));
+
+  const isiTugas = {
+    merek: merek.slug,
+    jenis: "video",
+    produk_slug: "rutin-buka",
+    arahan: `Jadwal otomatis jam buka (${jadwal.jam} WIB · ${dipilih.length} video)`,
+    latar: "polos",
+    status: "selesai",
+    selesai: new Date().toISOString(),
+    status_tayang: "dijadwalkan",
+    jadwal_tayang: berikutnya.toISOString(),
+    caption: dipilih[0]?.caption || `We are OPEN! ${merek.nama} ☕`,
+    naskah: {
+      sumber: "jadwal-rutin",
+      judul: `Story Jam Buka (${jadwal.jam} WIB)`,
+      sasaran: "story",
+      rutin: true,
+    },
+    tayang: { sasaran: "story", rutin: true },
+    hasil,
+    galat: null,
+  };
+
+  if (antrean.length > 0) {
+    const utama = antrean[0];
+    // Hapus duplikat bila ada lebih dari satu
+    for (const ekstra of antrean.slice(1)) {
+      await rest(`studio_tugas?id=eq.${ekstra.id}`, { method: "DELETE", headers: { Prefer: "return=minimal" } }).catch(() => {});
+    }
+    const [diperbarui] = (await rest(`studio_tugas?id=eq.${utama.id}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify(isiTugas),
+    })) as RingkasTugas[];
+    return diperbarui ?? null;
+  }
+
+  const [baru] = (await rest("studio_tugas", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(isiTugas),
+  })) as RingkasTugas[];
+  return baru ?? null;
+}
+
+/** Simpan pengaturan jadwal rutin jam buka merek & langsung jadwalkan antrean berikutnya. */
+export async function simpanJadwalRutin(
+  slugMerek: string,
+  masukan: Partial<JadwalRutin>,
+  originSitus = "https://bakafrawi.com",
+) {
+  const daftar = await daftarMerek();
+  const m = daftar.find((x) => x.slug === slugMerek);
+  if (!m) throw new Error(`Merek "${slugMerek}" tidak ditemukan.`);
+  const lama = normalisasiJadwalRutin(m.profil?.jadwal_rutin, m.slug);
+  const jadwal = normalisasiJadwalRutin({ ...lama, ...masukan }, m.slug);
+  const profilBaru = { ...m.profil, jadwal_rutin: jadwal };
+  await rest(`studio_merek?slug=eq.${encodeURIComponent(m.slug)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ profil: profilBaru, diubah: new Date().toISOString() }),
+  });
+  const tugasTerjadwal = await sinkronTugasJadwalRutin({ ...m, profil: profilBaru }, jadwal, originSitus);
+  const berikutnya = jamBukaBerikutnya(jadwal, new Date());
+  return {
+    merek: m.slug,
+    jadwal,
+    berikutnya: berikutnya ? berikutnya.toISOString() : null,
+    tugasTerjadwal,
+  };
+}
+
+/** Tayangkan Story Jam Buka sekarang juga (untuk tes atau buka kedai lebih awal). */
+export async function tayangkanRutinSekarang(slugMerek = "lekkopi", originSitus = "https://bakafrawi.com") {
+  const daftar = await daftarMerek();
+  const m = daftar.find((x) => x.slug === slugMerek);
+  if (!m) throw new Error(`Merek "${slugMerek}" tidak ditemukan.`);
+  const jadwal = normalisasiJadwalRutin(m.profil?.jadwal_rutin, m.slug);
+  const dipilih = pilihVideoBuka(jadwal, new Date());
+  if (!dipilih.length) throw new Error("Belum ada video aktif di daftar jadwal buka.");
+
+  const hasil = dipilih.map((v) => ({
+    jenis: v.jenis,
+    rasio: "story",
+    url: mutlakUrlMedia(v.url, originSitus),
+    durasi: v.durasi ?? 9,
+    judul: v.judul,
+    sasaran: v.sasaran,
+    caption: v.caption ?? "",
+  }));
+
+  const [tugas] = (await rest("studio_tugas", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      merek: m.slug,
+      jenis: "video",
+      produk_slug: "rutin-buka",
+      arahan: `Tayang langsung Story Jam Buka (${dipilih.length} video)`,
+      latar: "polos",
+      status: "selesai",
+      selesai: new Date().toISOString(),
+      status_tayang: "antre",
+      jadwal_tayang: null,
+      caption: dipilih[0]?.caption || `We are OPEN! ${m.nama} ☕`,
+      naskah: {
+        sumber: "jadwal-rutin",
+        judul: `Story Jam Buka (${m.nama})`,
+        sasaran: "story",
+        rutin: true,
+      },
+      tayang: { sasaran: "story", rutin: true },
+      hasil,
+    }),
+  })) as RingkasTugas[];
+  const dipicu = await picuStudio();
+  return { tugas, dipicu, jumlahVideo: dipilih.length };
+}
+
+/** Dipanggil oleh detak 5 menit untuk memastikan semua merek yang jadwal rutinnya aktif selalu memiliki antrean berikutnya. */
+export async function pastikanSemuaJadwalRutin() {
+  const daftar = await daftarMerek();
+  for (const m of daftar) {
+    const jr = m.profil?.jadwal_rutin as JadwalRutin | undefined;
+    if (!jr?.aktif) continue;
+    const jadwal = normalisasiJadwalRutin(jr, m.slug);
+    await sinkronTugasJadwalRutin(m, jadwal).catch((e) => console.error(`Sinkron rutin ${m.slug}:`, e));
+  }
 }
 
 /** Nyalakan mesin Studio (GitHub Actions) sekarang. false → tetap jalan via jadwal 30 menit. */
