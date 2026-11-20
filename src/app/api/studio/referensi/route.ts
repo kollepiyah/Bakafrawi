@@ -8,7 +8,7 @@ import {
 export const maxDuration = 60;
 
 export async function GET(req: Request) {
-  if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
+  if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false, pesan: "Sesi admin habis, silakan muat ulang halaman." }, { status: 401 });
   const merek = new URL(req.url).searchParams.get("merek") || "bakafrawi";
   try {
     const daftar = await daftarReferensiMerek(merek);
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
+  if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false, pesan: "Sesi admin habis, silakan muat ulang halaman." }, { status: 401 });
   const isi = (await req.json().catch(() => ({}))) as { merek?: string; url?: string; catatan?: string };
   if (!isi.url?.trim()) return Response.json({ ok: false, pesan: "Tempelkan tautan video Reels/TikTok terlebih dahulu." }, { status: 400 });
   try {

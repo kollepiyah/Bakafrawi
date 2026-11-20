@@ -59,11 +59,13 @@ const teksSkema = (skema?: Record<string, unknown>) =>
 
 async function panggilGemini(opsi: OpsiLlm) {
   const kunci = process.env.GEMINI_API_KEY!;
-  const model = process.env.STUDIO_GEMINI_TEKS || "gemini-flash-latest";
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-  const kirim = async (pakaiSkema: boolean, search: boolean) => {
+  const kandidatModel = [...new Set([process.env.STUDIO_GEMINI_TEKS, "gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"].filter(Boolean) as string[])];
+
+  const kirim = async (model: string, pakaiSkema: boolean, search: boolean) => {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const res = await fetch(url, {
       method: "POST",
+      signal: AbortSignal.timeout(25_000),
       headers: { "Content-Type": "application/json", "x-goog-api-key": kunci },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: opsi.system + (pakaiSkema && !search ? "" : teksSkema(opsi.skema)) }] },
@@ -80,33 +82,47 @@ async function panggilGemini(opsi: OpsiLlm) {
     if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
     return res.json();
   };
-  // Bila pakaiSearch aktif: coba Google Search Grounding dulu; bila ditolak, lanjut mode JSON biasa.
+
   let j;
-  if (opsi.pakaiSearch) {
+  let modelDipakai = kandidatModel[0];
+  let galatTerakhir: unknown = null;
+  for (const model of kandidatModel) {
+    modelDipakai = model;
     try {
-      j = await kirim(false, true);
-    } catch {
-      j = await kirim(true, false).catch(() => kirim(false, false));
-    }
-  } else {
-    try {
-      j = await kirim(true, false);
+      if (opsi.pakaiSearch) {
+        try {
+          j = await kirim(model, false, true);
+        } catch {
+          j = await kirim(model, true, false).catch(() => kirim(model, false, false));
+        }
+      } else {
+        try {
+          j = await kirim(model, true, false);
+        } catch (e) {
+          if (!opsi.skema || !String(e).includes("Gemini 400")) throw e;
+          j = await kirim(model, false, false);
+        }
+      }
+      break;
     } catch (e) {
-      if (!opsi.skema || !String(e).includes("Gemini 400")) throw e;
-      j = await kirim(false, false);
+      galatTerakhir = e;
+      // Bila bukan 404 (mis. kuota habis / kunci salah), tak perlu coba nama model lain.
+      if (!String(e).includes("Gemini 404")) throw e;
     }
   }
+  if (!j) throw galatTerakhir ?? new Error("Gemini gagal merespons.");
   const teks = (j.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("") || "{}";
   const u = j.usageMetadata ?? {};
   const input = Number(u.promptTokenCount) || 0;
   const output = (Number(u.candidatesTokenCount) || 0) + (Number(u.thoughtsTokenCount) || 0);
-  return { data: JSON.parse(ekstrakJson(teks)), pemakaian: { penyedia: "gemini" as const, model, input, output, biayaUsd: biaya(input, output, HARGA.gemini) } };
+  return { data: JSON.parse(ekstrakJson(teks)), pemakaian: { penyedia: "gemini" as const, model: modelDipakai, input, output, biayaUsd: biaya(input, output, HARGA.gemini) } };
 }
 
 async function panggilCloudflare(opsi: OpsiLlm) {
   const model = process.env.STUDIO_CF_TEKS || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
   const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID}/ai/run/${model}`, {
     method: "POST",
+    signal: AbortSignal.timeout(25_000),
     headers: { Authorization: `Bearer ${process.env.CF_API_TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       messages: [

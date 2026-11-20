@@ -43,8 +43,9 @@ async function ambilMetadataLink(url: string) {
   let thumbnail: string | null = null;
 
   try {
+    const sinyal = AbortSignal.timeout(4000);
     if (platform === "tiktok") {
-      const r = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`, { cache: "no-store" });
+      const r = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`, { cache: "no-store", signal: sinyal });
       if (r.ok) {
         const j = await r.json();
         judul = String(j.title ?? "");
@@ -52,7 +53,7 @@ async function ambilMetadataLink(url: string) {
         thumbnail = typeof j.thumbnail_url === "string" ? j.thumbnail_url : null;
       }
     } else if (platform === "youtube") {
-      const r = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`, { cache: "no-store" });
+      const r = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`, { cache: "no-store", signal: sinyal });
       if (r.ok) {
         const j = await r.json();
         judul = String(j.title ?? "");
@@ -62,6 +63,7 @@ async function ambilMetadataLink(url: string) {
     } else {
       const r = await fetch(url, {
         cache: "no-store",
+        signal: sinyal,
         headers: { "User-Agent": "Mozilla/5.0 (compatible; BakafrawiStudio/1.0)" },
       });
       if (r.ok) {

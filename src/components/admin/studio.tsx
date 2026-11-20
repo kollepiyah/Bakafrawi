@@ -159,15 +159,25 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       .catch(() => {});
   }, [sesi]);
 
+  // Selalu ambil token terbaru dari Supabase (otomatis segar meski halaman lama terbuka di HP)
+  const tokenSegar = useCallback(async () => {
+    try {
+      const { data } = await supabase().auth.getSession();
+      if (data.session?.access_token) return data.session.access_token;
+    } catch { /* pakai prop sesi */ }
+    return sesi?.access_token ?? "";
+  }, [sesi]);
+
   // Muat daftar link video referensi yang sudah dipelajari untuk merek aktif
   const muatReferensi = useCallback(async () => {
-    if (!sesi?.access_token) return;
+    const tok = await tokenSegar();
+    if (!tok) return;
     const res = await fetch(`/api/studio/referensi?merek=${encodeURIComponent(pilihMerek)}`, {
-      headers: { Authorization: `Bearer ${sesi.access_token}` },
+      headers: { Authorization: `Bearer ${tok}` },
     }).catch(() => null);
     const j = res ? await res.json().catch(() => ({})) : {};
     if (j.ok && Array.isArray(j.daftar)) setDaftarRef(j.daftar as ReferensiTersimpan[]);
-  }, [sesi, pilihMerek]);
+  }, [tokenSegar, pilihMerek]);
 
   useEffect(() => {
     const t = setTimeout(muatReferensi, 0);
@@ -179,9 +189,10 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     setMembedahRef(true);
     setGalatRef("");
     try {
+      const tok = await tokenSegar();
       const res = await fetch("/api/studio/referensi", {
         method: "POST",
-        headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
         body: JSON.stringify({ merek: pilihMerek, url: urlRef.trim(), catatan: catatanRef.trim() }),
       });
       const j = await res.json().catch(() => ({}));
@@ -191,7 +202,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
         setPesan(`Referensi "${j.referensi.caption}" berhasil dipelajari & disimpan!`);
         muatReferensi();
       } else {
-        setGalatRef(j.pesan ?? "Gagal membedah link video.");
+        setGalatRef(j.pesan ?? `Gagal membedah link video (HTTP ${res.status}).`);
       }
     } catch (e) {
       setGalatRef(e instanceof Error ? e.message : "Terjadi kesalahan saat membedah link.");
@@ -200,9 +211,10 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   }
 
   async function hapusReferensi(id: string) {
+    const tok = await tokenSegar();
     await fetch(`/api/studio/referensi?merek=${encodeURIComponent(pilihMerek)}&id=${encodeURIComponent(id)}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}` },
+      headers: { Authorization: `Bearer ${tok}` },
     }).catch(() => null);
     muatReferensi();
   }
