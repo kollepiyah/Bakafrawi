@@ -299,13 +299,16 @@ export async function renderSinematikRemotion({
     });
   }
 
-  // Untuk editorial-scroll (1 scene laptop 4 blok), ambil 1 media per adegan agar tidak duplikat.
-  const segmenFinal = gaya === 'editorial-scroll'
-    ? segmen.filter((s, i) => i === 0 || segmen[i - 1].adeganKe !== s.adeganKe).slice(0, 4)
+  // editorial-scroll (1 scene laptop 4 blok) & dial-menu (keypad + potongan menu): 1 media unik per adegan.
+  const satuMediaPerAdegan = gaya === 'editorial-scroll' || gaya === 'dial-menu';
+  const segmenFinal = satuMediaPerAdegan
+    ? segmen.filter((s, i) => i === 0 || segmen[i - 1].adeganKe !== s.adeganKe).slice(0, gaya === 'dial-menu' ? 8 : 4)
     : segmen;
 
   const totalDetik = gaya === 'editorial-scroll'
     ? Math.max(7, segmenFinal.length * 2.4)
+    : gaya === 'dial-menu'
+    ? 3 + segmenFinal.length * 1.9 + 1.6
     : (Number(r.total) || segmenFinal.reduce((a, b) => a + b.durasi, 0) + 2.2);
   let musikNama = null;
   if (musik) {

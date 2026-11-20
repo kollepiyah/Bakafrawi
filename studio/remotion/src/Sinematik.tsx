@@ -16,6 +16,7 @@ import {
   useVideoConfig,
 } from 'remotion';
 import { SANS, SERIF, TANGAN } from './components/dasar';
+import { DialMenu, hitungDurasiDial } from './DialMenu';
 
 export const FPS_SINEMATIK = 30;
 
@@ -67,6 +68,8 @@ export const contohSinematik: PropsSinematik = {
 };
 
 export function hitungDurasiSinematik(p: PropsSinematik) {
+  // Mode dial-menu = keypad menu + potongan foto layar penuh bernomor (ala Happy Cake).
+  if (p.gaya === 'dial-menu') return hitungDurasiDial(p);
   // Mode editorial-scroll = 1 scene tunggal laptop di meja kayu (~9–11 detik total, tanpa penutup terpisah).
   if (p.gaya === 'editorial-scroll') {
     const jumlah = Math.max(1, Math.min(4, p.segmen.length));
@@ -481,8 +484,14 @@ const HalamanEditorialScroll: React.FC<{
                 {blok.map((s, i) => {
                   const mentah = String(s.teksLayar ?? '').trim();
                   const bagian = mentah ? mentah.split('|').map((x) => x.trim()).filter(Boolean) : [];
-                  const judul = bagian[0] || JUDUL_CADANGAN[i % JUDUL_CADANGAN.length];
-                  const sub = bagian[1] || (i === blok.length - 1 ? (merek.info || 'Buka tiap hari · Waru, Sidoarjo') : `Nikmati racikan kopi segar khas ${merek.nama}.`);
+                  // Bila sebelum "|" cuma 1 kata (mis. "Kopi | waktu ngopi"), gabungkan agar judul 2-3 baris gagah ala POUR/PLAY.
+                  const gabungJudul = bagian.length >= 2 && bagian[0].split(/\s+/).length < 2 && bagian[1].length <= 24;
+                  const judul = gabungJudul
+                    ? `${bagian[0]} ${bagian[1]}`
+                    : (bagian[0] || JUDUL_CADANGAN[i % JUDUL_CADANGAN.length]);
+                  const sub = (!gabungJudul && bagian[1])
+                    ? bagian[1]
+                    : (i === blok.length - 1 ? (merek.info || 'Buka tiap hari · Waru, Sidoarjo') : `Nikmati racikan kopi segar khas ${merek.nama}.`);
                   const subLabel = SUB_LAPTOP[i % SUB_LAPTOP.length];
 
                   // BLOK 3 (indeks 2): Full-bleed showcase kopi lebar penuh (persis detik 00:05 POUR / PLAY!)
@@ -533,9 +542,9 @@ const HalamanEditorialScroll: React.FC<{
                         <div
                           style={{
                             fontFamily: SERIF,
-                            fontSize: judul.length > 22 ? 52 : 64,
-                            lineHeight: 0.96,
-                            letterSpacing: -1,
+                            fontSize: judul.length > 24 ? 58 : 72,
+                            lineHeight: 0.94,
+                            letterSpacing: -1.2,
                             color: '#1A130E',
                             textTransform: 'uppercase',
                           }}
@@ -677,10 +686,13 @@ export const Sinematik: React.FC<PropsSinematik> = (props) => {
   const aksen = props.merek.aksen || '#D9A441';
   const volDasar = Number(props.musikVolume) || 0.72;
   const editorial = props.gaya === 'editorial-scroll';
+  const dial = props.gaya === 'dial-menu';
 
   return (
-    <AbsoluteFill style={{ background: editorial ? '#1B1511' : '#0E0B09' }}>
-      {editorial ? (
+    <AbsoluteFill style={{ background: editorial ? '#1B1511' : dial ? '#F3EBD8' : '#0E0B09' }}>
+      {dial ? (
+        <DialMenu props={props} />
+      ) : editorial ? (
         <HalamanEditorialScroll props={props} jadwal={jadwal} total={total} />
       ) : (
         <>
@@ -700,14 +712,14 @@ export const Sinematik: React.FC<PropsSinematik> = (props) => {
       )}
 
       {/* Bilah progres tipis di atas layar (disembunyikan pada editorial laptop agar bersih 100% sinematik) */}
-      {!editorial ? (
+      {!editorial && !dial ? (
         <div style={{ position: 'absolute', top: 44, left: 48, right: 48, height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
           <div style={{ width: `${Math.min(100, (frame / total) * 100)}%`, height: '100%', background: aksen, borderRadius: 99 }} />
         </div>
       ) : null}
 
       {/* Watermark merek halus di pojok kiri atas (khusus non-editorial; editorial sudah tampil di layar laptop) */}
-      {!editorial && frame < penutupMulai ? (
+      {!editorial && !dial && frame < penutupMulai ? (
         <div style={{ position: 'absolute', top: 72, left: 52, display: 'flex', alignItems: 'center', gap: 12, opacity: 0.85 }}>
           {props.merek.logo ? (
             <Img src={staticFile(props.merek.logo)} style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'contain' }} />

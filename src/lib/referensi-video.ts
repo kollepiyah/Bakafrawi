@@ -95,7 +95,7 @@ const SKEMA_BLUEPRINT = {
     pacing: { type: "string", description: "Ritme potongan klip, mis. cepat 1.5-2.5 dtk atau sinematik santai 3-4 dtk" },
     presetCocok: {
       type: "string",
-      description: "Pilih satu preset yang paling dekat: editorial-scroll, sinematik-kafe, clean-ui, dark-keynote, pov-chat, atau split-hook",
+      description: "Pilih satu preset yang paling dekat: editorial-scroll (laptop di meja menggulir halaman website), dial-menu (keypad telepon berisi foto menu lalu potongan foto penuh bernomor), sinematik-kafe, clean-ui, dark-keynote, pov-chat, atau split-hook",
     },
     strukturAdegan: {
       type: "array",

@@ -37,7 +37,8 @@ import type { ReferensiTersimpan } from "@/lib/referensi-video";
 
 const PRESET_VIDEO = [
   { kode: "otomatis", label: "Otomatis (sesuai AI / referensi)" },
-  { kode: "editorial-scroll", label: "Editorial Majalah / Scroll Menu (Krem Mewah)" },
+  { kode: "editorial-scroll", label: "Laptop di Meja Kayu / Scroll Website (ala POUR·PLAY)" },
+  { kode: "dial-menu", label: "Dial Menu: Keypad + Foto Penuh Bernomor (ala Happy Cake)" },
   { kode: "sinematik-kafe", label: "Sinematik Kafe / Remotion + B-roll AI" },
   { kode: "clean-ui", label: "Clean Motion UI + Maskot" },
   { kode: "dark-keynote", label: "Dark Tech / Apple Keynote" },

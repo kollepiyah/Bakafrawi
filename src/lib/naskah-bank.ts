@@ -84,11 +84,13 @@ export async function tulisNaskahBank(
   const data = await dataKontenMerek(merek);
   if (!data.tagBank.length) throw new Error(`Bank media ${merek.nama} masih kosong — mesin Studio belum mengindeks folder Drive-nya.`);
   const adalahEditorial = /\[Gaya:\s*editorial-scroll\]/i.test(permintaan);
-  if (adalahEditorial) {
-    // Gaya editorial majalah ala POUR/PLAY butuh visual studio kopi bersih berlatar krem (gratis via Cloudflare FLUX.2).
+  const adalahDial = /\[Gaya:\s*dial-menu\]/i.test(permintaan);
+  if (adalahEditorial || adalahDial) {
+    // Gaya referensi (laptop POUR/PLAY atau keypad Happy Cake) butuh visual produk bersih & seragam (gratis via Cloudflare FLUX.2).
     data.gambarAi = Math.max(Number(data.gambarAi) || 0, 4);
   }
-  const sudutTambahan = adalahEditorial
+  const sudutDial = `MODE DIAL-MENU (ala "Dial a slice" Happy Cake): buat TEPAT 4–6 adegan, satu adegan = satu menu andalan (durasi 1.8 detik per adegan, total ±10 detik). Tiap adegan berisi SATU foto/klip produk close-up (minuman/cemilan Lek Kopi) yang bersih dan menggugah selera; utamakan foto asli dari bank untuk minuman/menu, boleh tag "ai" untuk melengkapi bila bank kurang (tanpa tulisan di gambar). WAJIB isi "teks_layar" tiap adegan dengan format PERSIS "Jenis | Nama Menu" mis. "Kopi | Es Kopi Susu Lek", "Kopi | Latte Art", "Cemilan | Cireng Crispy" (gunakan hanya menu yang ada di daftar menu). Tanpa teks bercerita, tanpa narasi. Adegan terakhir tetap menu (ajakan mampir ditangani kartu penutup otomatis).`;
+  const sudutTambahan = adalahDial ? sudutDial : adalahEditorial
     ? `MODE EDITORIAL LAPTOP 1-SCENE (persis referensi POUR/PLAY): buat TEPAT 4 adegan untuk 4 blok gulir di dalam layar laptop (durasi 2.2–2.5 detik per blok, total ±9.6 detik). WAJIB isi "teks_layar" pada blok 1, 2, 4 dengan format "JUDUL 2–3 KATA | subteks pendek 6–10 kata" (bahasa Indonesia keren untuk menu/suasana Lek Kopi); blok 3 cukup judul 2 kata sebagai showcase full-bleed. Pakai tag "ai" untuk 3–4 blok dengan "bidikan" fotografi studio kopi minimalis mewah berlatar krem hangat (#F4ECE0): mis. biji kopi & percikan espresso emas, tuangan pour-over di gelas kaca estetik, latte art creamy melayang di cangkir — TANPA tulisan di gambar.`
     : `Ikuti persis tema permintaan ini: "${permintaan}". Pilih tag & bidikan yang paling sesuai temanya (utamakan rekaman video).`;
   const ide = { judul: permintaan, alasan: "permintaan Kyai", sudut: sudutTambahan };
