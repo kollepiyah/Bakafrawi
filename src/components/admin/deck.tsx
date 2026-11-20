@@ -178,12 +178,12 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
         <div className="col-span-2 rounded-xl border border-emas/25 bg-emas/[0.04] p-3">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Wallet className="size-3 text-emas" /> Biaya AI bulan ini</p>
+              <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Wallet className="size-3 text-emas" /> Pengeluaran Token & Biaya AI</p>
               <p className="mt-1 font-heading text-xl font-bold text-foreground">
                 {biaya ? rupiah(biaya.usd) : "-"} <span className="text-xs font-normal text-muted-foreground">{biaya ? `≈ $${biaya.usd.toFixed(3)}` : ""}</span>
               </p>
               <p className="text-[10px] text-zinc-500">
-                {biaya ? `${angka(biaya.input)} token masuk · ${angka(biaya.output)} token keluar · ${biaya.tugas} konten` : "Belum ada catatan biaya."}
+                {biaya ? `${angka(biaya.input)} token masuk · ${angka(biaya.output)} token keluar · ${biaya.tugas} konten${biaya.kurasi ? ` · ${biaya.kurasi} kurasi` : ""}` : "Belum ada catatan biaya."}
               </p>
             </div>
             {biaya && biaya.perPenyedia.length > 0 && (
