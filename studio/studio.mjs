@@ -135,8 +135,10 @@ async function kerjakanBank(tugas, merek, simpan, kabar) {
   const ctx = await bankMerek(merek, kabar);
   const r = await renderBankMerek(tugas, merek, ctx);
   const url = await simpan(r.berkas, 'video/mp4');
+  // Biaya AI mesin (pemilih klip, pemeriksa, gambar AI) ditambahkan ke catatan biaya naskah → tampil di Deck.
+  const pakai = r.pemakaian && r.pemakaian.biayaUsd > 0 ? [{ tahap: 'render video', penyedia: 'claude', model: 'studio', input: r.pemakaian.input, output: r.pemakaian.output, biayaUsd: r.pemakaian.biayaUsd }] : [];
   return {
-    naskah: { ...tugas.naskah, catatan: r.catatan },
+    naskah: { ...tugas.naskah, catatan: r.catatan, pemakaian: [...(tugas.naskah?.pemakaian ?? []), ...pakai] },
     caption: tugas.caption ?? '',
     hasil: [{ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url }],
     namaProduk: merek.nama,

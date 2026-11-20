@@ -11,16 +11,29 @@ export const maxDuration = 60;
 
 export async function POST(req: Request) {
   if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
-  const isi = (await req.json().catch(() => ({}))) as { produk?: string; topik?: string };
+  const isi = (await req.json().catch(() => ({}))) as { merek?: string; produk?: string; topik?: string };
   try {
-    if (isi.produk === "lek-kopi") {
-      return Response.json(
-        { ok: false, pesan: "Riset Reels AI saat ini difokuskan untuk produk resmi Bakafrawi (Maktaba POS, Ammu Online, Waseela)." },
-        { status: 400 },
-      );
-    }
     const konten = await ambilKonten();
-    const produk = konten.produk.find((p) => p.slug === (isi.produk || "maktaba-pos"));
+    const adalahLekKopi = isi.merek === "lekkopi" || isi.produk === "lek-kopi" || isi.produk === "lekkopi";
+    const produk = adalahLekKopi
+      ? {
+          slug: "lekkopi",
+          nama: "Lek Kopi",
+          label: "Kedai Kopi & Nongkrong Waru",
+          kategori: "sendiri" as const,
+          judul: "Kedai Kopi Nyaman & Es Kopi Susu Gula Aren di Waru, Sidoarjo",
+          ringkas: "Tempat nongkrong malam santai, kopi racikan barista, dan cemilan hangat.",
+          deskripsi: "Lek Kopi menghadirkan suasana nongkrong hangat di Waru dengan menu andalan Es Kopi Susu Lek, latte art, kopi tubruk, dan cemilan sore/malam.",
+          platform: ["Kedai Offline", "Instagram Reels"],
+          fitur: [
+            { judul: "Suasana Nyaman", isi: "Tempat nongkrong malam temaram dan santai bareng teman" },
+            { judul: "Es Kopi Susu Lek", isi: "Racikan kopi susu gula aren creamy favorit pelanggan" },
+            { judul: "Barista & Latte Art", isi: "Seduhan kopi segar dari biji pilihan tiap hari" },
+          ],
+          layarHp: [],
+          layarDesktop: [],
+        }
+      : konten.produk.find((p) => p.slug === (isi.produk || "maktaba-pos"));
     if (!produk) return Response.json({ ok: false, pesan: "Produk tidak ditemukan." }, { status: 400 });
 
     const konsep = await risetKonsepReels(produk, isi.topik);

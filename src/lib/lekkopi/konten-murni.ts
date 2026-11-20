@@ -173,8 +173,12 @@ const ATURAN_NARASI = `Bentuk: NARASI — suara dibacakan + subtitle. Narasi tot
 function aturanSinematik(d: DataKonten): string {
   return `Bentuk: SINEMATIK — TANPA narasi suara. Hanya musik latar, bidikan berurutan dengan transisi, dan sedikit teks di layar.
 - 6–10 adegan, durasi tiap adegan 1.5–4 detik, total 15–25 detik.
-- Alur khas Lek Kopi: buka dengan bidikan paling menarik (mis. fasad kedai malam yang menyala) + judul → proses racik / close-up minuman → suasana & pelanggan → tutup dengan ajakan mampir.
-- "bidikan" = gambar yang diinginkan, sespesifik mungkin, sesuai isi bank.
+- Alur harus fleksibel MENGIKUTI TEMA / PERMINTAAN KYAI:
+  * Jika permintaan Kyai menekankan "suasana" / kedai / nongkrong: fokuskan sebagian besar adegan (≥60%) pada tag [suasana] dan pelanggan di kedai (misal meja, lampu temaram, tawa nongkrong, fasad malam). Jangan batasi suasana hanya 1 adegan!
+  * Jika permintaan menekankan racikan / menu kopi tertentu: fokuskan ke tag menu terkait dan racik barista.
+  * Tetap buka dengan bidikan paling menarik (mis. fasad menyala atau suasana kedai) + judul singkat, lalu masuki inti tema, dan tutup dengan ajakan mampir / jam buka.
+- Utamakan memilih klip VIDEO (.mp4) bergerak daripada foto diam jika tag tersebut memiliki rekaman video di bank, agar video dinamis dan sinematik.
+- "bidikan" = deskripsi gambar yang diinginkan, sespesifik mungkin, sesuai isi bank.
 - Teks hemat: kebanyakan adegan "tanpa" teks. Adegan pertama "judul" (2–3 kata; judul bahasa Inggris pendek boleh, mis. "Coffee | time" — bagian sesudah "|" ditulis tangan). Teks lain berbahasa Indonesia. Adegan terakhir "cerita" berisi ajakan + jam buka.
 - Boleh juga teks bercerita (mis. notifikasi chat lucu lalu jawabannya) dengan gaya_teks "cerita" di beberapa adegan berurutan.
 - Caption: satu kalimat reflektif atau lucu, lalu alamat & jam buka, lalu hashtag.${d.toko ? `\n- Info toko: ${d.toko}` : ''}${aturanAi(d)}`
@@ -205,8 +209,8 @@ ${daftar(d.promo)}
 Tag bank yang BOLEH dipakai (persis):
 ${daftar(d.tagBank)}${mode === 'sinematik' && d.gambarAi ? `\n- ${TAG_AI} (gambar dibuat AI — lihat aturan di bawah)` : ''}
 
-Isi bank (pilih tag yang gambarnya cocok dengan adegan):
-${daftar((d.isiBank ?? []).slice(0, 40))}
+Isi bank (pilih tag yang gambarnya cocok dengan adegan; [VIDEO] = rekaman bergerak, utamakan):
+${daftar((d.isiBank ?? []).slice(0, 60))}
 ${teksGaya(d.gaya)}${teksIngatanKonten(d.ingatan)}
 
 ${mode === 'narasi' ? ATURAN_NARASI : aturanSinematik(d)}

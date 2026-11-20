@@ -139,7 +139,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       const res = await fetch("/api/studio/riset", {
         method: "POST",
         headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ produk: pilihProduk, topik: topikRiset }),
+        body: JSON.stringify({ merek: pilihMerek, produk: merekBank ? pilihMerek : pilihProduk, topik: topikRiset }),
       });
       const j = await res.json().catch(() => ({}));
       if (j.ok && Array.isArray(j.konsep)) {
@@ -386,7 +386,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                       type="text"
                       value={topikRiset}
                       onChange={(e) => setTopikRiset(e.target.value)}
-                      placeholder={`Topik/sudut khusus untuk ${namaProduk(pilihProduk)} (opsional, mis. nota WhatsApp, kasir lemot)`}
+                      placeholder={`Topik/sudut khusus untuk ${merekBank ? (merek.find((m) => m.slug === pilihMerek)?.nama ?? pilihMerek) : namaProduk(pilihProduk)} (opsional, mis. ${merekBank ? "suasana malam minggu, es kopi susu" : "nota WhatsApp, kasir lemot"})`}
                       className="h-10 flex-1 rounded-lg border border-input bg-transparent px-3 text-xs"
                     />
                     <button

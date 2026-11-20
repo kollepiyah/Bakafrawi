@@ -20,6 +20,14 @@ export const SkemaNaskah = z.object({
 // Opus, dan biayanya kira-kira separuh.
 const MODEL = process.env.STUDIO_MODEL || 'claude-sonnet-5-5';
 
+// Catatan biaya (USD per 1 juta token, perkiraan) → naskah.pemakaian, dijumlah di Deck admin.
+function catatBiaya(tahap, u = {}) {
+  const h = MODEL.includes('haiku') ? { input: 0.1, output: 0.5 } : { input: 2, output: 10 };
+  const input = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+  const output = u.output_tokens ?? 0;
+  return { tahap, penyedia: 'claude', model: MODEL, input, output, biayaUsd: Math.round(((input * h.input + output * h.output) / 1e6) * 1e6) / 1e6 };
+}
+
 // Cadangan bila profil merek belum berisi gaya (isi utamanya ada di studio_merek.profil.gaya).
 const GAYA_BAWAAN =
   'Kamu copywriter iklan media sosial untuk Bakafrawi Project, software developer di Sidoarjo yang membuat website & aplikasi custom serta menjual aplikasi siap pakai. ' +
@@ -58,7 +66,7 @@ export async function buatNaskah(produk, situs, arahan, jenis, merek = null) {
       ],
     });
     if (res.stop_reason === 'refusal' || !res.parsed_output) throw new Error(`Claude tidak memberi naskah (${res.stop_reason}).`);
-    return { ...res.parsed_output, sumber: MODEL };
+    return { ...res.parsed_output, sumber: MODEL, pemakaian: [catatBiaya('naskah poster', res.usage)] };
   } catch (e) {
     console.error('Naskah Claude gagal, memakai templat:', e.message);
     return { ...naskahTemplat(produk, situs, merek), sumber: `templat (Claude gagal: ${e.message.slice(0, 120)})` };
@@ -153,7 +161,7 @@ export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar
       }],
     });
     if (res.stop_reason === 'refusal' || !res.parsed_output?.adegan?.length) throw new Error(`Claude tidak memberi naskah (${res.stop_reason}).`);
-    return lengkapiVideo(res.parsed_output, MODEL);
+    return { ...lengkapiVideo(res.parsed_output, MODEL), pemakaian: [catatBiaya('naskah video', res.usage)] };
   } catch (e) {
     console.error('Naskah video Claude gagal, memakai templat:', e.message);
     return { ...templat(), sumber: `templat (Claude gagal: ${e.message.slice(0, 120)})` };

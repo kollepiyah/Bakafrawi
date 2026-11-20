@@ -14,14 +14,16 @@ import {
   ImageIcon,
   Loader2,
   MessageCircle,
+  Play,
   RefreshCw,
   Sparkles,
   Video,
+  Wallet,
   Workflow,
   XCircle,
 } from "lucide-react";
 import type { KesimpulanWorkflow, RunWorkflow } from "@/lib/deck-server";
-import type { RingkasTugas } from "@/lib/studio-server";
+import type { HasilTugas, RingkasBiaya, RingkasTugas } from "@/lib/studio-server";
 import type { RingkasInsight } from "@/lib/instagram-insight";
 import { apiAdmin } from "./agenda";
 
@@ -30,8 +32,40 @@ type DeckResponse = {
   workflows: RunWorkflow[];
   tugas: RingkasTugas[];
   insight?: RingkasInsight;
+  biaya?: RingkasBiaya | null;
   pesan?: string;
 };
+
+const KURS_IDR = 16_300;
+const angka = (n: number) => new Intl.NumberFormat("id-ID", { notation: n >= 10_000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(n);
+const rupiah = (usd: number) => `Rp${Math.round(usd * KURS_IDR).toLocaleString("id-ID")}`;
+
+/** Miniatur konten: gambar sampul/poster, atau bingkai awal video bila tak ada sampul. */
+function Miniatur({ gambar, video, adalahVideo, besar = false }: { gambar?: string | null; video?: string | null; adalahVideo: boolean; besar?: boolean }) {
+  const ukuran = besar ? "h-20 w-[3.4rem]" : "h-12 w-9";
+  return (
+    <div className={`relative ${ukuran} shrink-0 overflow-hidden rounded-lg border border-white/10 bg-white/5`}>
+      {gambar ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={gambar} alt="" loading="lazy" className="size-full object-cover" />
+      ) : video ? (
+        <video src={`${video}#t=0.8`} preload="metadata" muted playsInline className="size-full object-cover" />
+      ) : (
+        <div className="flex size-full items-center justify-center">
+          {adalahVideo ? <Video className="size-4 text-sky-400" /> : <ImageIcon className="size-4 text-amber-400" />}
+        </div>
+      )}
+      {adalahVideo && (gambar || video) && (
+        <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 p-0.5"><Play className="size-2.5 fill-white text-white" /></span>
+      )}
+    </div>
+  );
+}
+
+const miniaturTugas = (hasil?: HasilTugas[]) => ({
+  gambar: hasil?.find((h) => h.rasio === "sampul")?.url ?? hasil?.find((h) => h.jenis === "gambar")?.url ?? null,
+  video: hasil?.find((h) => h.jenis === "video")?.url ?? null,
+});
 
 function formatDurasi(detik: number | null) {
   if (detik == null) return "-";
@@ -57,6 +91,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
     workflows: RunWorkflow[];
     tugas: RingkasTugas[];
     insight?: RingkasInsight;
+    biaya?: RingkasBiaya | null;
   } | null>(null);
   const [galat, setGalat] = useState("");
   const [sedangMuat, setSedangMuat] = useState(false);
@@ -77,6 +112,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
         workflows: j.workflows ?? [],
         tugas: j.tugas ?? [],
         insight: j.insight,
+        biaya: j.biaya ?? null,
       });
     } catch (e) {
       setGalat(e instanceof Error ? e.message : "Gagal memuat.");
@@ -115,6 +151,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
   const workflows = data?.workflows ?? [];
   const tugas = data?.tugas ?? [];
   const insight = data?.insight;
+  const biaya = data?.biaya;
 
   const runSedangJalan = workflows.find((w) => w.status === "in_progress" || w.status === "queued");
   const runTerakhir = workflows[0];
@@ -126,6 +163,41 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
 
   return (
     <div className="space-y-4">
+      {/* ── Ringkasan cepat: tayangan & biaya AI bulan ini ── */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <div className="rounded-xl border border-border/80 bg-white/[0.02] p-3">
+          <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Eye className="size-3 text-sky-400" /> Total tayangan</p>
+          <p className="mt-1 font-heading text-xl font-bold text-foreground">{angka(insight?.totalViews ?? 0)}</p>
+          <p className="text-[10px] text-zinc-500">{insight?.totalTayang ?? 0} postingan terakhir</p>
+        </div>
+        <div className="rounded-xl border border-border/80 bg-white/[0.02] p-3">
+          <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Heart className="size-3 text-red-400" /> Suka · Komentar</p>
+          <p className="mt-1 font-heading text-xl font-bold text-foreground">{angka(insight?.totalLikes ?? 0)} <span className="text-sm text-muted-foreground">· {angka(insight?.totalComments ?? 0)}</span></p>
+          <p className="text-[10px] text-zinc-500">dari Instagram</p>
+        </div>
+        <div className="col-span-2 rounded-xl border border-emas/25 bg-emas/[0.04] p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Wallet className="size-3 text-emas" /> Biaya AI bulan ini</p>
+              <p className="mt-1 font-heading text-xl font-bold text-foreground">
+                {biaya ? rupiah(biaya.usd) : "-"} <span className="text-xs font-normal text-muted-foreground">{biaya ? `≈ $${biaya.usd.toFixed(3)}` : ""}</span>
+              </p>
+              <p className="text-[10px] text-zinc-500">
+                {biaya ? `${angka(biaya.input)} token masuk · ${angka(biaya.output)} token keluar · ${biaya.tugas} konten` : "Belum ada catatan biaya."}
+              </p>
+            </div>
+            {biaya && biaya.perPenyedia.length > 0 && (
+              <div className="space-y-0.5 text-right text-[10px]">
+                {biaya.perPenyedia.map((p) => (
+                  <p key={p.penyedia} className="text-muted-foreground">
+                    <span className="capitalize text-foreground">{p.penyedia}</span> · {p.panggilan}× · {rupiah(p.usd)}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
       {/* ── Status Mesin & Navigasi Tab ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 pb-3.5">
         <div className="flex items-center gap-2">
@@ -220,6 +292,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
               <div className="grid gap-2 sm:grid-cols-2">
                 {tugasDitampilkan.map((t) => {
                   const adalahVideo = t.jenis === "video";
+                  const mini = miniaturTugas(t.hasil);
                   return (
                     <div
                       key={t.id}
@@ -227,19 +300,15 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
                       className="group flex cursor-pointer items-center justify-between rounded-xl border border-border/70 bg-white/[0.02] p-3 transition hover:border-emas/50 hover:bg-white/[0.04]"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-                          {adalahVideo ? (
-                            <Video className="size-4 text-sky-400" />
-                          ) : (
-                            <ImageIcon className="size-4 text-amber-400" />
-                          )}
-                        </div>
+                        <Miniatur gambar={mini.gambar} video={mini.video} adalahVideo={adalahVideo} />
                         <div className="min-w-0">
                           <p className="truncate text-xs font-semibold text-foreground group-hover:text-emas">
-                            {t.produk_slug}
+                            {t.judul || t.produk_slug}
                           </p>
-                          <p className="text-[11px] text-muted-foreground">
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {t.merek && t.merek !== "bakafrawi" ? `${t.merek} · ` : ""}
                             {adalahVideo ? "Video Reels" : "Poster promosi"}
+                            {t.dibuat ? ` · ${waktuRelatif(t.dibuat)}` : ""}
                           </p>
                         </div>
                       </div>
@@ -361,36 +430,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
       {/* ── TAB 2: INSIGHT KONTEN INSTAGRAM ── */}
       {tabAktif === "insight" && (
         <div className="space-y-4">
-          {/* Kartu Ringkasan Metrik Instagram */}
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-            <div className="rounded-xl border border-border/80 bg-white/[0.02] p-3 text-center sm:text-left">
-              <p className="text-[11px] text-muted-foreground flex items-center justify-center sm:justify-start gap-1">
-                <Video className="size-3 text-emas" /> Konten Tayang
-              </p>
-              <p className="mt-1 font-heading text-xl font-bold text-foreground">
-                {insight?.totalTayang ?? 0}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border/80 bg-white/[0.02] p-3 text-center sm:text-left">
-              <p className="text-[11px] text-muted-foreground flex items-center justify-center sm:justify-start gap-1">
-                <Heart className="size-3 text-red-400" /> Total Suka
-              </p>
-              <p className="mt-1 font-heading text-xl font-bold text-foreground">
-                {insight?.totalLikes ?? 0}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-border/80 bg-white/[0.02] p-3 text-center sm:text-left">
-              <p className="text-[11px] text-muted-foreground flex items-center justify-center sm:justify-start gap-1">
-                <MessageCircle className="size-3 text-sky-400" /> Komentar
-              </p>
-              <p className="mt-1 font-heading text-xl font-bold text-foreground">
-                {insight?.totalComments ?? 0}
-              </p>
-            </div>
-          </div>
-
+          {/* Ringkasan metrik ada di kartu atas; tab ini fokus per postingan. */}
           {/* Daftar Postingan Tayang */}
           <div>
             <div className="mb-2 flex items-center justify-between">
@@ -425,20 +465,17 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
                       key={p.id}
                       className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border/70 bg-white/[0.02] p-3 transition hover:border-border hover:bg-white/[0.03]"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-                          {adalahVideo ? (
-                            <Video className="size-4 text-sky-400" />
-                          ) : (
-                            <ImageIcon className="size-4 text-amber-400" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Miniatur gambar={p.thumbnail} video={p.videoUrl} adalahVideo={adalahVideo} besar />
+                        <div className="min-w-0 space-y-1">
                           <p className="text-xs font-semibold text-foreground truncate">
-                            {p.produk} · {adalahVideo ? "Reels" : "Feed"}
+                            {p.merek && p.merek !== "bakafrawi" ? `${p.merek} · ` : ""}{p.produk === p.merek ? "Video bank media" : p.produk} · {adalahVideo ? "Reels" : "Feed"}
                           </p>
                           <p className="text-[11px] text-muted-foreground truncate max-w-sm">
                             {p.caption ? p.caption.slice(0, 60) + "…" : "Tanpa caption"}
+                          </p>
+                          <p className="inline-flex items-center gap-1 rounded-md bg-sky-500/10 px-1.5 py-0.5 font-mono text-[11px] text-sky-300">
+                            <Eye className="size-3" /> {p.views != null ? `${angka(p.views)} kali ditonton` : "tayangan belum tersedia"}
                           </p>
                         </div>
                       </div>
@@ -451,9 +488,9 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
                           <span className="inline-flex items-center gap-1 font-mono text-[11px] text-sky-300">
                             <MessageCircle className="size-3 text-sky-400" /> {p.comments}
                           </span>
-                          {p.views != null && (
-                            <span className="inline-flex items-center gap-1 font-mono text-[11px] text-zinc-400">
-                              <Eye className="size-3" /> {p.views}
+                          {p.reach != null && (
+                            <span className="inline-flex items-center gap-1 font-mono text-[11px] text-zinc-400" title="Jangkauan (akun unik)">
+                              <BarChart3 className="size-3" /> {angka(p.reach)}
                             </span>
                           )}
                           <span className="text-[11px] text-zinc-500">

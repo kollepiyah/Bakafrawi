@@ -1,7 +1,7 @@
 import { permintaanDariAdmin } from "@/lib/admin-server";
 import { ambilKonten } from "@/lib/konten";
 import { usulkanArahan } from "@/lib/usul-arahan";
-import Anthropic from "@anthropic-ai/sdk";
+import { panggilLlmJson } from "@/lib/llm-router";
 import { SISTEM_KONTEN } from "@/lib/lekkopi/konten-murni";
 
 export const maxDuration = 60;
@@ -25,45 +25,42 @@ const IDE_LEKKOPI_BAWAAN = [
   },
 ];
 
-// Tombol "Usulkan arahan / Ide" di formulir Studio: pilihan dari Claude untuk produk Bakafrawi & Lek Kopi.
+const SKEMA_IDE_SINGKAT = {
+  type: "object",
+  properties: {
+    usulan: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { judul: { type: "string" }, arahan: { type: "string" } },
+        required: ["judul", "arahan"],
+      },
+    },
+  },
+  required: ["usulan"],
+};
+
+// Tombol "Usulkan arahan / Ide" di formulir Studio (Bakafrawi & Lek Kopi). AI lewat llm-router (Gemini dulu).
 export async function POST(req: Request) {
   if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
   const isi = (await req.json().catch(() => ({}))) as { merek?: string; produk?: string; jenis?: string };
   try {
-    const adalahLekKopi =
-      isi.merek === "lekkopi" ||
-      isi.produk === "lek-kopi" ||
-      isi.produk === "lekkopi";
+    const adalahLekKopi = isi.merek === "lekkopi" || isi.produk === "lek-kopi" || isi.produk === "lekkopi";
 
     if (adalahLekKopi) {
-      if (process.env.ANTHROPIC_API_KEY) {
-        try {
-          const client = new Anthropic();
-          const res = await client.messages.create({
-            model: "claude-sonnet-5-5",
-            max_tokens: 1500,
-            system: SISTEM_KONTEN,
-            messages: [
-              {
-                role: "user",
-                content:
-                  "Usulkan 3 ide video Reels/TikTok kreatif untuk Lek Kopi (kedai kopi di Waru, Sidoarjo). Konsep sinematik tanpa suara narasi, santai, menu andalan es kopi susu, suasana malam/sore nongkrong. Kembalikan HANYA format JSON: [{\"judul\": \"...\", \"arahan\": \"... (1-2 kalimat deskripsi ide dan suasana)\"}]",
-              },
-            ],
-          });
-          const teks = res.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
-          const match = teks.match(/\[[\s\S]*\]/);
-          if (match) {
-            const parsed = JSON.parse(match[0]);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              return Response.json({ ok: true, usulan: parsed.slice(0, 4) });
-            }
-          }
-        } catch (err) {
-          console.error("Gagal panggil Claude untuk ide Lek Kopi, memakai ide cadangan:", err);
-        }
+      try {
+        const { data } = await panggilLlmJson<{ usulan?: { judul: string; arahan: string }[] }>({
+          system: SISTEM_KONTEN,
+          prompt: "Usulkan 3 ide video Reels/TikTok kreatif untuk Lek Kopi (kedai kopi di Waru, Sidoarjo). Konsep sinematik tanpa suara narasi, santai: suasana kedai malam/sore, nongkrong, racik kopi, menu andalan es kopi susu. Tiap ide: judul pendek + arahan 1-2 kalimat (tema, suasana, bidikan utama).",
+          skema: SKEMA_IDE_SINGKAT,
+          maksToken: 1500,
+          valid: (d) => Array.isArray((d as { usulan?: unknown[] })?.usulan) && (d as { usulan: unknown[] }).usulan.length > 0,
+        }, "usulan ide");
+        return Response.json({ ok: true, usulan: (data.usulan ?? []).slice(0, 4) });
+      } catch (err) {
+        console.error("Usulan ide Lek Kopi gagal, memakai ide cadangan:", err);
+        return Response.json({ ok: true, usulan: IDE_LEKKOPI_BAWAAN });
       }
-      return Response.json({ ok: true, usulan: IDE_LEKKOPI_BAWAAN });
     }
 
     const produk = (await ambilKonten()).produk.find((p) => p.slug === isi.produk);

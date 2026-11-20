@@ -1,6 +1,6 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
 import { rest } from "./db-server";
+import { panggilLlmJson, type PemakaianLlm } from "./llm-router";
 import {
   captionAkhir, MODE_BAWAAN, promptIde, promptNaskah, rapikanNaskah, skemaNaskah, SKEMA_IDE, SISTEM_KONTEN, teksNaskah,
   type DataKonten, type ModeVideo, type Naskah,
@@ -9,8 +9,7 @@ import type { Merek } from "./studio-server";
 
 // Naskah video bahan "bank media" (gaya Lek Kopi): data kedai dari pintu-bakafrawi Lek Kopi
 // (baca-saja), isi bank & gaya dari tabel Bakafrawi, aturan & prompt dari konten-murni.
-// Sonnet 5.5 medium — sama dengan MODEL_KONTEN Lek Kopi.
-const MODEL = "claude-sonnet-5-5";
+// Penyedia AI dipilih llm-router (Gemini → Cloudflare → Claude) supaya hemat kuota Claude.
 
 type DataPintu = Pick<DataKonten, "periode" | "terlaris" | "turun" | "jamSepi" | "menu" | "promo" | "toko" | "ingatan">;
 
@@ -31,18 +30,20 @@ export async function dataKontenMerek(merek: Merek): Promise<DataKonten> {
   const m = encodeURIComponent(merek.slug);
   const [pintu, bank, gaya, terakhir] = await Promise.all([
     merek.profil.naskah === "lekkopi" ? dataPintuLekKopi() : Promise.resolve(KOSONG),
-    rest(`studio_bank?merek=eq.${m}&jenis=in.(foto,video)&select=tag,kurasi`) as Promise<{ tag: string; kurasi: { deskripsi?: string; kualitas?: number } | null }[]>,
+    rest(`studio_bank?merek=eq.${m}&jenis=in.(foto,video)&select=tag,jenis,kurasi`) as Promise<{ tag: string; jenis: string; kurasi: { deskripsi?: string; kualitas?: number } | null }[]>,
     rest(`studio_gaya?merek=eq.${m}&select=profil`) as Promise<{ profil: { naskah?: Record<string, unknown> } }[]>,
     rest(`studio_tugas?merek=eq.${m}&naskah=not.is.null&select=naskah->>judul&order=dibuat.desc&limit=10`) as Promise<{ judul: string | null }[]>,
   ]);
-  // Tiga isi terbaik per tag hasil kurasi — supaya naskah memilih tag yang gambarnya cocok.
-  const perTag = new Map<string, { deskripsi: string; kualitas: number }[]>();
+  // Isi terbaik per tag hasil kurasi (video didahulukan) — supaya naskah memilih tag yang gambarnya
+  // cocok dengan tema, dan tahu tag mana yang punya rekaman bergerak.
+  const perTag = new Map<string, { deskripsi: string; kualitas: number; video: boolean }[]>();
   for (const b of bank) {
     if (!b.kurasi?.deskripsi) continue;
-    perTag.set(b.tag, [...(perTag.get(b.tag) ?? []), { deskripsi: b.kurasi.deskripsi, kualitas: Number(b.kurasi.kualitas) || 0 }]);
+    perTag.set(b.tag, [...(perTag.get(b.tag) ?? []), { deskripsi: b.kurasi.deskripsi, kualitas: Number(b.kurasi.kualitas) || 0, video: b.jenis === "video" }]);
   }
   const isiBank = [...perTag].flatMap(([tag, isi]) =>
-    isi.sort((a, b) => b.kualitas - a.kualitas).slice(0, 3).map((x) => `${tag}: ${x.deskripsi} (kualitas ${x.kualitas || "-"})`));
+    isi.sort((a, b) => Number(b.video) - Number(a.video) || b.kualitas - a.kualitas).slice(0, 4)
+      .map((x) => `${tag}: [${x.video ? "VIDEO" : "foto"}] ${x.deskripsi} (kualitas ${x.kualitas || "-"})`));
   return {
     ...pintu,
     tagBank: [...new Set(bank.map((b) => b.tag))].sort(),
@@ -55,20 +56,17 @@ export async function dataKontenMerek(merek: Merek): Promise<DataKonten> {
 
 /** Usulan ide video dari data kedai minggu lalu (seperti /ide Lek AI) → [{ judul, alasan, sudut, rekaman }]. */
 export async function usulkanIde(merek: Merek, jumlah = 4) {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY belum diisi di Vercel.");
   const data = await dataKontenMerek(merek);
-  const res = await new Anthropic().messages.create({
-    model: MODEL,
-    max_tokens: 8000,
-    output_config: { effort: "medium", format: { type: "json_schema", schema: SKEMA_IDE } },
+  const { data: j, pemakaian } = await panggilLlmJson<{ ide?: Record<string, string>[] }>({
     system: SISTEM_KONTEN,
-    messages: [{ role: "user", content: promptIde(data, jumlah) }],
-  });
-  if (res.stop_reason === "refusal") throw new Error("Claude menolak mengusulkan ide.");
-  const teks = res.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "{}";
-  const ide = ((JSON.parse(teks) as { ide?: Record<string, string>[] }).ide ?? []).slice(0, jumlah);
-  if (!ide.length) throw new Error("Claude tidak memberi ide.");
-  return { ide, bankKosong: !data.tagBank.length };
+    prompt: promptIde(data, jumlah),
+    skema: SKEMA_IDE as Record<string, unknown>,
+    maksToken: 8000,
+    valid: (d) => Array.isArray((d as { ide?: unknown[] })?.ide) && ((d as { ide: unknown[] }).ide.length > 0),
+  }, "ide");
+  const ide = (j.ide ?? []).slice(0, jumlah);
+  if (!ide.length) throw new Error("AI tidak memberi ide.");
+  return { ide, bankKosong: !data.tagBank.length, pemakaian };
 }
 
 /**
@@ -80,23 +78,22 @@ export async function tulisNaskahBank(
   permintaan: string,
   opsi: { mode?: ModeVideo; catatan?: string; naskahLama?: Naskah } = {},
 ) {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY belum diisi di Vercel.");
   const mode = opsi.mode ?? MODE_BAWAAN;
   const data = await dataKontenMerek(merek);
   if (!data.tagBank.length) throw new Error(`Bank media ${merek.nama} masih kosong — mesin Studio belum mengindeks folder Drive-nya.`);
-  const ide = { judul: permintaan, alasan: "permintaan Kyai", sudut: "" };
-  const client = new Anthropic();
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 16000,
-    output_config: { effort: "medium", format: { type: "json_schema", schema: skemaNaskah(mode) } },
+  // Permintaan Kyai = tema utama; sudut menegaskan supaya AI tidak kembali ke alur baku.
+  const ide = { judul: permintaan, alasan: "permintaan Kyai", sudut: `Ikuti persis tema permintaan ini: "${permintaan}". Pilih tag & bidikan yang paling sesuai temanya (utamakan rekaman video).` };
+  const { data: mentah, pemakaian } = await panggilLlmJson<Naskah>({
     system: SISTEM_KONTEN,
-    messages: [{ role: "user", content: promptNaskah(data, ide, opsi.catatan, opsi.naskahLama as unknown as Record<string, unknown>, mode) }],
-  });
-  if (res.stop_reason === "refusal") throw new Error("Claude menolak menulis naskah ini.");
-  const teks = res.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
-  const mentah = JSON.parse(teks) as Naskah;
+    prompt: promptNaskah(data, ide, opsi.catatan, opsi.naskahLama as unknown as Record<string, unknown>, mode),
+    skema: skemaNaskah(mode) as Record<string, unknown>,
+    maksToken: 16000,
+    valid: (d) => Array.isArray((d as { adegan?: unknown[] })?.adegan) && ((d as { adegan: unknown[] }).adegan.length > 0),
+  }, opsi.catatan ? "revisi naskah" : "naskah");
   const { naskah, perbaikan } = rapikanNaskah(mentah, data.tagBank, mode, data.gambarAi ?? 0);
-  if (!naskah.adegan.length) throw new Error("Naskah dari Claude tidak berisi adegan.");
+  if (!naskah.adegan.length) throw new Error("Naskah dari AI tidak berisi adegan.");
+  // Catatan biaya ikut tersimpan di naskah → dijumlah di Deck. Revisi menambah ke catatan lama.
+  const lama = ((opsi.naskahLama as unknown as { pemakaian?: PemakaianLlm[] } | undefined)?.pemakaian ?? []);
+  (naskah as Naskah & { pemakaian?: PemakaianLlm[] }).pemakaian = [...lama, pemakaian];
   return { naskah, caption: captionAkhir(naskah), teks: teksNaskah(naskah), perbaikan };
 }

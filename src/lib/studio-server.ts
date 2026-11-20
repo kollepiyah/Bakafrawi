@@ -23,10 +23,55 @@ export async function simpanPengaturan(isi: Partial<Pengaturan> & Record<string,
   await rest("studio_pengaturan?id=eq.1", { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ ...isi, diubah: new Date().toISOString() }) });
 }
 
-export type RingkasTugas = { id: string; jenis: string; produk_slug: string; status: string; status_tayang: string; jadwal_tayang: string | null };
+export type HasilTugas = { jenis: string; rasio: string; url: string; durasi?: number };
+export type RingkasTugas = {
+  id: string; jenis: string; produk_slug: string; status: string; status_tayang: string; jadwal_tayang: string | null;
+  merek?: string; dibuat?: string; judul?: string | null; hasil?: HasilTugas[];
+};
 
 export async function daftarTugas(batas = 5): Promise<RingkasTugas[]> {
-  return rest(`studio_tugas?select=id,jenis,produk_slug,status,status_tayang,jadwal_tayang&order=dibuat.desc&limit=${batas}`);
+  return rest(`studio_tugas?select=id,jenis,produk_slug,status,status_tayang,jadwal_tayang,merek,dibuat,hasil,judul:naskah->>judul&order=dibuat.desc&limit=${batas}`);
+}
+
+export type PemakaianTersimpan = { tahap?: string; penyedia?: string; model?: string; input?: number; output?: number; biayaUsd?: number };
+export type RingkasBiaya = {
+  sejak: string;
+  tugas: number;
+  input: number;
+  output: number;
+  usd: number;
+  perPenyedia: { penyedia: string; panggilan: number; input: number; output: number; usd: number }[];
+};
+
+/** Jumlah biaya AI tercatat (naskah.pemakaian) untuk tugas yang dibuat sejak awal bulan ini (WIB). */
+export async function ringkasBiayaBulanIni(sekarang = new Date()): Promise<RingkasBiaya> {
+  const wib = new Date(sekarang.getTime() + 7 * 3600_000);
+  const sejak = new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), 1) - 7 * 3600_000).toISOString();
+  const baris = (await rest(`studio_tugas?dibuat=gte.${encodeURIComponent(sejak)}&select=pemakaian:naskah->pemakaian&limit=1000`)) as { pemakaian: PemakaianTersimpan[] | null }[];
+  const per = new Map<string, { penyedia: string; panggilan: number; input: number; output: number; usd: number }>();
+  let tugas = 0;
+  for (const b of baris) {
+    const daftar = Array.isArray(b.pemakaian) ? b.pemakaian : [];
+    if (daftar.length) tugas++;
+    for (const p of daftar) {
+      const k = p.penyedia ?? "lain";
+      const x = per.get(k) ?? { penyedia: k, panggilan: 0, input: 0, output: 0, usd: 0 };
+      x.panggilan++;
+      x.input += Number(p.input) || 0;
+      x.output += Number(p.output) || 0;
+      x.usd += Number(p.biayaUsd) || 0;
+      per.set(k, x);
+    }
+  }
+  const perPenyedia = [...per.values()].sort((a, b) => b.usd - a.usd);
+  return {
+    sejak,
+    tugas,
+    input: perPenyedia.reduce((a, b) => a + b.input, 0),
+    output: perPenyedia.reduce((a, b) => a + b.output, 0),
+    usd: Math.round(perPenyedia.reduce((a, b) => a + b.usd, 0) * 1e4) / 1e4,
+    perPenyedia,
+  };
 }
 
 /** Pukul 19.00 WIB berikutnya (12.00 UTC); bila sudah lewat hari ini → besok. */

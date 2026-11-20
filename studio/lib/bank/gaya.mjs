@@ -138,9 +138,11 @@ export function skorMedia(m, adegan, terpakai = 0) {
   let cocok = 0
   for (const w of sasaran) if (isi.has(w)) cocok++
   const teksPenghalang = k.ada_teks ? 0.5 : 0
+  // Klip video bergerak lebih diutamakan daripada foto diam (+2.5 skor) agar konten lebih hidup
+  const bonusVideo = m.jenis === 'video' ? 2.5 : 0
   // Penalti pakai-ulang lebih besar dari selisih skor terbesar: klip lain yang belum
   // dipakai selalu didahulukan, walau kualitasnya lebih rendah.
-  return kualitas * 2 + Math.min(cocok, 4) * 1.5 - terpakai * 12 - teksPenghalang
+  return kualitas * 2 + Math.min(cocok, 4) * 1.5 + bonusVideo - terpakai * 12 - teksPenghalang
 }
 
 // ------------------------------------------------------------ referensi
