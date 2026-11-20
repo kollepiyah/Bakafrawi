@@ -17,9 +17,17 @@ export type PemakaianLlm = {
   biayaUsd: number;
 };
 
+export type GambarInput = {
+  mimeType: string;
+  /** Base64 tanpa prefix data:...;base64, */
+  data: string;
+};
+
 export type OpsiLlm = {
   system: string;
   prompt: string;
+  /** Daftar gambar / bingkai video (opsional, untuk analisis Vision nyata). */
+  gambar?: GambarInput[];
   /** JSON Schema keluaran. */
   skema?: Record<string, unknown>;
   suhu?: number;
@@ -61,6 +69,11 @@ async function panggilGemini(opsi: OpsiLlm) {
   const kunci = process.env.GEMINI_API_KEY!;
   const kandidatModel = [...new Set([process.env.STUDIO_GEMINI_TEKS, "gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"].filter(Boolean) as string[])];
 
+  const bagianUser = [
+    ...(opsi.gambar ?? []).map((g) => ({ inline_data: { mime_type: g.mimeType, data: g.data } })),
+    { text: opsi.prompt },
+  ];
+
   const kirim = async (model: string, pakaiSkema: boolean, search: boolean) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const res = await fetch(url, {
@@ -69,7 +82,7 @@ async function panggilGemini(opsi: OpsiLlm) {
       headers: { "Content-Type": "application/json", "x-goog-api-key": kunci },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: opsi.system + (pakaiSkema && !search ? "" : teksSkema(opsi.skema)) }] },
-        contents: [{ role: "user", parts: [{ text: opsi.prompt }] }],
+        contents: [{ role: "user", parts: bagianUser }],
         ...(search ? { tools: [{ google_search: {} }] } : {}),
         generationConfig: {
           temperature: opsi.suhu ?? 0.8,
@@ -159,12 +172,25 @@ function rapikanSkemaClaude(node: unknown): unknown {
 async function panggilClaude(opsi: OpsiLlm) {
   const model = process.env.STUDIO_CLAUDE_TEKS || "claude-sonnet-5-5";
   const skemaClaude = opsi.skema ? (rapikanSkemaClaude(opsi.skema) as Record<string, unknown>) : undefined;
+  const kontenUser: Anthropic.MessageParam["content"] = opsi.gambar?.length
+    ? [
+        ...opsi.gambar.map((g) => ({
+          type: "image" as const,
+          source: {
+            type: "base64" as const,
+            media_type: (g.mimeType === "image/png" || g.mimeType === "image/webp" ? g.mimeType : "image/jpeg") as "image/jpeg" | "image/png" | "image/webp",
+            data: g.data,
+          },
+        })),
+        { type: "text" as const, text: opsi.prompt },
+      ]
+    : opsi.prompt;
   const res = await new Anthropic().messages.create({
     model,
     max_tokens: opsi.maksToken ?? 8000,
     output_config: skemaClaude ? { effort: "low", format: { type: "json_schema", schema: skemaClaude } } : undefined,
     system: opsi.system,
-    messages: [{ role: "user", content: opsi.prompt }],
+    messages: [{ role: "user", content: kontenUser }],
   });
   if (res.stop_reason === "refusal") throw new Error("Claude menolak permintaan ini.");
   const teks = res.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "{}";
@@ -191,6 +217,8 @@ export async function panggilLlmJson<T>(opsi: OpsiLlm, tahap?: string): Promise<
   const urut = [...PENYEDIA].sort((a, b) => Number(b.kode.includes(paksa ?? "")) - Number(a.kode.includes(paksa ?? "")));
   const galat: string[] = [];
   for (const p of urut.filter((x) => x.ada())) {
+    // Cloudflare Llama teks belum mendukung gambar vision — lewati bila ada input gambar.
+    if (opsi.gambar?.length && p.nama === "cloudflare") continue;
     try {
       const r = await p.panggil(opsi);
       if (opsi.valid && !opsi.valid(r.data)) throw new Error("jawaban tidak sesuai format");

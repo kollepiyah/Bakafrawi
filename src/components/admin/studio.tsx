@@ -22,6 +22,7 @@ import {
   Sparkles,
   Trash2,
   TrendingUp,
+  Upload,
   Video,
   X,
 } from "lucide-react";
@@ -36,12 +37,80 @@ import type { ReferensiTersimpan } from "@/lib/referensi-video";
 
 const PRESET_VIDEO = [
   { kode: "otomatis", label: "Otomatis (sesuai AI / referensi)" },
+  { kode: "editorial-scroll", label: "Editorial Majalah / Scroll Menu (Krem Mewah)" },
   { kode: "sinematik-kafe", label: "Sinematik Kafe / Remotion + B-roll AI" },
   { kode: "clean-ui", label: "Clean Motion UI + Maskot" },
   { kode: "dark-keynote", label: "Dark Tech / Apple Keynote" },
   { kode: "pov-chat", label: "POV / Storytelling & Chat WA" },
   { kode: "split-hook", label: "Split-Screen / Fast Hook" },
 ];
+
+type BingkaiUnggah = { mimeType: string; data: string };
+
+/** Ekstrak 5 bingkai merata dari video .mp4/.mov langsung di browser (hemat ukuran & anti-timeout Vercel). */
+async function ekstrakBingkaiVideo(file: File, jumlah = 5): Promise<{ gambar: BingkaiUnggah[]; durasiDetik: number }> {
+  const url = URL.createObjectURL(file);
+  try {
+    const v = document.createElement("video");
+    v.src = url;
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = "auto";
+    await new Promise<void>((ok, gagal) => {
+      v.onloadedmetadata = () => ok();
+      v.onerror = () => gagal(new Error("Video tidak dapat dibaca browser."));
+    });
+    const durasi = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 6;
+    const lebar = Math.min(540, v.videoWidth || 540);
+    const tinggi = Math.max(1, Math.round(lebar * ((v.videoHeight || 960) / (v.videoWidth || 540))));
+    const canvas = document.createElement("canvas");
+    canvas.width = lebar;
+    canvas.height = tinggi;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas tidak tersedia.");
+
+    const titik = Array.from({ length: jumlah }, (_, i) => Math.min(durasi - 0.1, Math.max(0.05, durasi * (0.05 + (i * 0.87) / Math.max(1, jumlah - 1)))));
+    const hasil: BingkaiUnggah[] = [];
+    for (const t of titik) {
+      await new Promise<void>((ok) => {
+        const selesai = () => { v.onseeked = null; ok(); };
+        v.onseeked = selesai;
+        v.currentTime = t;
+        setTimeout(selesai, 1500);
+      });
+      ctx.drawImage(v, 0, 0, lebar, tinggi);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.78);
+      hasil.push({ mimeType: "image/jpeg", data: dataUrl.split(",")[1] ?? "" });
+    }
+    return { gambar: hasil.filter((g) => g.data), durasiDetik: durasi };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Perkecil screenshot (JPG/PNG/WebP) ke lebar maks 720px agar ringan dikirim ke Vision AI. */
+async function kompresGambar(file: File): Promise<BingkaiUnggah> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await new Promise<void>((ok, gagal) => {
+      img.onload = () => ok();
+      img.onerror = () => gagal(new Error(`Gambar ${file.name} gagal dibaca.`));
+    });
+    const rasio = Math.min(1, 720 / (img.naturalWidth || 720));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * rasio));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * rasio));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas tidak tersedia.");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+    return { mimeType: "image/jpeg", data: dataUrl.split(",")[1] ?? "" };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 const PRESET_POSTER = [
   { kode: "otomatis", label: "Otomatis (sesuai AI)" },
@@ -113,6 +182,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [bukaRef, setBukaRef] = useState(false);
   const [urlRef, setUrlRef] = useState("");
   const [catatanRef, setCatatanRef] = useState("");
+  const [berkasRef, setBerkasRef] = useState<File[]>([]);
   const [membedahRef, setMembedahRef] = useState(false);
   const [galatRef, setGalatRef] = useState("");
   const [daftarRef, setDaftarRef] = useState<ReferensiTersimpan[]>([]);
@@ -185,27 +255,54 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   }, [muatReferensi]);
 
   async function bedahLinkReferensi() {
-    if (!urlRef.trim()) return setGalatRef("Tempelkan tautan Instagram Reels / TikTok terlebih dahulu.");
+    if (!berkasRef.length && !urlRef.trim()) {
+      return setGalatRef("Unggah video (.mp4) / screenshot, atau tempel tautan Reels/TikTok terlebih dahulu.");
+    }
     setMembedahRef(true);
     setGalatRef("");
     try {
+      let gambar: BingkaiUnggah[] | undefined;
+      let durasiDetik: number | undefined;
+      let namaFile: string | undefined;
+
+      if (berkasRef.length > 0) {
+        const videoFile = berkasRef.find((f) => f.type.startsWith("video/") || /\.(mp4|mov|webm)$/i.test(f.name));
+        if (videoFile) {
+          const r = await ekstrakBingkaiVideo(videoFile, 5);
+          gambar = r.gambar;
+          durasiDetik = r.durasiDetik;
+          namaFile = videoFile.name;
+        } else {
+          gambar = await Promise.all(berkasRef.slice(0, 6).map(kompresGambar));
+          namaFile = berkasRef[0].name;
+        }
+      }
+
       const tok = await tokenSegar();
       const res = await fetch("/api/studio/referensi", {
         method: "POST",
         headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ merek: pilihMerek, url: urlRef.trim(), catatan: catatanRef.trim() }),
+        body: JSON.stringify({
+          merek: pilihMerek,
+          url: urlRef.trim() || undefined,
+          namaFile,
+          durasiDetik,
+          gambar,
+          catatan: catatanRef.trim(),
+        }),
       });
       const j = await res.json().catch(() => ({}));
       if (j.ok && j.referensi) {
         setUrlRef("");
         setCatatanRef("");
-        setPesan(`Referensi "${j.referensi.caption}" berhasil dipelajari & disimpan!`);
+        setBerkasRef([]);
+        setPesan(`Referensi "${j.referensi.caption}" berhasil ditonton AI & disimpan!`);
         muatReferensi();
       } else {
-        setGalatRef(j.pesan ?? `Gagal membedah link video (HTTP ${res.status}).`);
+        setGalatRef(j.pesan ?? `Gagal membedah referensi (HTTP ${res.status}).`);
       }
     } catch (e) {
-      setGalatRef(e instanceof Error ? e.message : "Terjadi kesalahan saat membedah link.");
+      setGalatRef(e instanceof Error ? e.message : "Terjadi kesalahan saat membedah referensi.");
     }
     setMembedahRef(false);
   }
@@ -590,30 +687,53 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     )}
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                    <input
-                      type="url"
-                      value={urlRef}
-                      onChange={(e) => setUrlRef(e.target.value)}
-                      placeholder="https://www.instagram.com/reel/... atau https://www.tiktok.com/..."
-                      className="h-10 rounded-lg border border-input bg-transparent px-3 text-xs"
-                    />
-                    <input
-                      type="text"
-                      value={catatanRef}
-                      onChange={(e) => setCatatanRef(e.target.value)}
-                      placeholder="Catatan opsional (mis. suka transisi cepat & teks stabilo)"
-                      className="h-10 rounded-lg border border-input bg-transparent px-3 text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={bedahLinkReferensi}
-                      disabled={membedahRef}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-500 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-400 disabled:opacity-60"
-                    >
-                      {membedahRef ? <Loader2 className="size-3.5 animate-spin" /> : <Link2 className="size-3.5" />}
-                      Bedah & Simpan
-                    </button>
+                  <div className="space-y-2.5">
+                    <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-sky-400/40 bg-sky-500/5 px-4 py-3 text-center text-xs hover:border-sky-400 hover:bg-sky-500/10 transition">
+                      <div className="flex items-center gap-1.5 font-medium text-sky-300">
+                        <Upload className="size-4" />
+                        <span>
+                          {berkasRef.length > 0
+                            ? `${berkasRef.length} berkas dipilih (${berkasRef[0].name})`
+                            : "Unggah Video Reels/TikTok (.mp4) atau 2–5 Screenshot — AI Menonton Langsung!"}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-zinc-400">
+                        Paling akurat (anti-blokir login Instagram) · otomatis mengambil 5 bingkai utama dari video
+                      </span>
+                      <input
+                        type="file"
+                        accept="video/mp4,video/quicktime,video/webm,image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => setBerkasRef(Array.from(e.target.files ?? []))}
+                      />
+                    </label>
+
+                    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                      <input
+                        type="url"
+                        value={urlRef}
+                        onChange={(e) => setUrlRef(e.target.value)}
+                        placeholder="Atau tempel link TikTok / YouTube Shorts (opsional)"
+                        className="h-10 rounded-lg border border-input bg-transparent px-3 text-xs"
+                      />
+                      <input
+                        type="text"
+                        value={catatanRef}
+                        onChange={(e) => setCatatanRef(e.target.value)}
+                        placeholder="Catatan (mis. sesuaikan dengan menu Lek Kopi)"
+                        className="h-10 rounded-lg border border-input bg-transparent px-3 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={bedahLinkReferensi}
+                        disabled={membedahRef}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-500 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-400 disabled:opacity-60"
+                      >
+                        {membedahRef ? <Loader2 className="size-3.5 animate-spin" /> : <Link2 className="size-3.5" />}
+                        {berkasRef.length > 0 ? "Tonton & Bedah AI" : "Bedah & Simpan"}
+                      </button>
+                    </div>
                   </div>
 
                   {galatRef && <p className="text-xs text-red-300 break-words">{galatRef}</p>}

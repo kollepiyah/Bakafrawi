@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { rest } from "./db-server";
-import { panggilLlmJson } from "./llm-router";
+import { panggilLlmJson, type GambarInput } from "./llm-router";
 
 export type BlueprintReferensi = {
   judul: string;
@@ -95,7 +95,7 @@ const SKEMA_BLUEPRINT = {
     pacing: { type: "string", description: "Ritme potongan klip, mis. cepat 1.5-2.5 dtk atau sinematik santai 3-4 dtk" },
     presetCocok: {
       type: "string",
-      description: "Pilih satu preset yang paling dekat: clean-ui, dark-keynote, pov-chat, split-hook, atau sinematik-kafe",
+      description: "Pilih satu preset yang paling dekat: editorial-scroll, sinematik-kafe, clean-ui, dark-keynote, pov-chat, atau split-hook",
     },
     strukturAdegan: {
       type: "array",
@@ -111,51 +111,68 @@ const SKEMA_BLUEPRINT = {
 };
 
 /**
- * Bedah link Reels/TikTok/Shorts menjadi Blueprint Gaya dan simpan ke `studio_referensi`
- * supaya Studio belajar & bisa meniru polanya untuk merek tersebut.
+ * Bedah video referensi (dari unggahan file video/screenshot lewat Vision AI, atau link TikTok/YouTube)
+ * menjadi Blueprint Gaya nyata dan simpan ke `studio_referensi`.
  */
 export async function bedahDanSimpanReferensi(opsi: {
   merek: string;
-  url: string;
+  url?: string;
+  namaFile?: string;
+  durasiDetik?: number;
+  gambar?: GambarInput[];
   catatan?: string;
 }): Promise<ReferensiTersimpan> {
-  const urlBersih = opsi.url.trim();
-  if (!/^https?:\/\//i.test(urlBersih)) throw new Error("Tautan video harus diawali https://");
+  const urlBersih = (opsi.url ?? "").trim();
+  const adaGambar = Boolean(opsi.gambar?.length);
+  if (!adaGambar && !/^https?:\/\//i.test(urlBersih)) {
+    throw new Error("Unggah video (.mp4) / screenshot, atau tempel tautan https:// yang valid.");
+  }
 
-  const meta = await ambilMetadataLink(urlBersih);
+  const meta = urlBersih ? await ambilMetadataLink(urlBersih) : { platform: "lain" as const, judul: "", penulis: "", deskripsi: "", thumbnail: null };
+
+  // Jujur bila link Instagram diblokir login wall dan tidak ada bingkai video/screenshot yang diunggah.
+  if (!adaGambar && meta.platform === "instagram" && !meta.judul && !meta.deskripsi) {
+    throw new Error(
+      "Instagram memblokir akses tautan ini sehingga AI tidak bisa menonton isi videonya. Silakan unggah file video (.mp4) atau 2–4 screenshot adegannya di kolom Unggah agar AI benar-benar melihat dan meniru gaya aslinya.",
+    );
+  }
+
   const namaMerek = opsi.merek === "lekkopi"
     ? "Lek Kopi (kedai kopi & tempat nongkrong santai di Waru, Sidoarjo)"
     : "Bakafrawi Project (software developer aplikasi kasir/POS, UMKM, dan website custom)";
 
   const { data } = await panggilLlmJson<Omit<BlueprintReferensi, "platform" | "thumbnail">>({
     system: `Kamu adalah sutradara kreatif & analis konten viral Instagram Reels dan TikTok Indonesia.
-Tugasmu: membedah video referensi yang dikirim pemilik merek lalu menerjemahkannya menjadi Blueprint Gaya yang bisa langsung ditiru oleh mesin Studio AI untuk merek: ${namaMerek}.
-Gunakan bahasa Indonesia yang tajam, konkret, dan praktis.`,
+Tugasmu: menganalisis secara NYATA & PRESISI bingkai video referensi yang diberikan (warna latar, font/tipografi, tata letak, gaya scroll/transisi, sudut kamera, durasi & ritme potongan) lalu menerjemahkannya menjadi Blueprint Gaya agar mesin Studio AI meniru gaya tersebut untuk merek: ${namaMerek}.
+Jangan mengarang elemen yang tidak ada di referensi. Bila referensi bergaya editorial majalah / latar krem / scroll vertikal / mockup web-menu mewah, pilih presetCocok = "editorial-scroll".`,
+    gambar: opsi.gambar?.slice(0, 6),
     prompt: [
-      `Tautan video referensi (${meta.platform}): ${urlBersih}`,
+      adaGambar
+        ? `Di atas adalah ${opsi.gambar!.length} bingkai berurutan (awal → tengah → akhir) dari video referensi${opsi.durasiDetik ? ` berdurasi ${opsi.durasiDetik.toFixed(1)} detik` : ""}${opsi.namaFile ? ` (${opsi.namaFile})` : ""}.`
+        : `Tautan video referensi (${meta.platform}): ${urlBersih}`,
       meta.penulis ? `Kreator: ${meta.penulis}` : "",
       meta.judul ? `Judul/Caption terdeteksi: ${meta.judul}` : "",
       meta.deskripsi ? `Deskripsi: ${meta.deskripsi}` : "",
       opsi.catatan ? `Catatan pemilik (bagian yang disukai / ingin ditiru): ${opsi.catatan}` : "",
       "",
-      "Bedah pola video ini (cari info publik tentang video/tren tersebut bila perlu) dan buat Blueprint Gaya + arahanTiru yang langsung bisa dipakai membuat konten baru untuk merek kita.",
+      "Bedah persis apa yang terlihat di bingkai-bingkai tersebut: palet warna, gaya huruf (serif/sans), tata letak, gerakan/transisi, jumlah adegan, serta buat `arahanTiru` konkret agar mesin Studio bisa meniru gaya simpel & estetik ini untuk merek kita.",
     ].filter(Boolean).join("\n"),
     skema: SKEMA_BLUEPRINT,
     maksToken: 3000,
-    pakaiSearch: true,
+    pakaiSearch: !adaGambar,
   }, "bedah referensi");
 
   const blueprint: BlueprintReferensi = {
     ...data,
-    platform: meta.platform,
+    platform: urlBersih ? meta.platform : "lain",
     thumbnail: meta.thumbnail,
   };
 
-  const hash = createHash("sha1").update(urlBersih).digest("hex").slice(0, 12);
+  const kunciHash = urlBersih || `${opsi.namaFile ?? "upload"}-${Date.now()}`;
+  const hash = createHash("sha1").update(kunciHash).digest("hex").slice(0, 12);
   const id = `link:${hash}`;
   const kini = new Date().toISOString();
 
-  // Simpan ke studio_referensi (memakai sumber='ig' agar sesuai constraint tabel yang sudah ada).
   await rest("studio_referensi?on_conflict=merek,id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
@@ -163,7 +180,7 @@ Gunakan bahasa Indonesia yang tajam, konkret, dan praktis.`,
       merek: opsi.merek,
       id,
       sumber: "ig",
-      permalink: urlBersih,
+      permalink: urlBersih || null,
       caption: blueprint.judul,
       analisis: blueprint,
       dianalisis: kini,
@@ -173,7 +190,7 @@ Gunakan bahasa Indonesia yang tajam, konkret, dan praktis.`,
   return {
     id,
     merek: opsi.merek,
-    permalink: urlBersih,
+    permalink: urlBersih || null,
     caption: blueprint.judul,
     dianalisis: kini,
     analisis: blueprint,

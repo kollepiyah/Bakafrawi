@@ -274,18 +274,173 @@ const PenutupSinematik: React.FC<{ merek: PropsSinematik['merek']; penutup: NonN
   );
 };
 
+/** Adegan bergaya editorial majalah / landing page scroll krem hangat (ala referensi POUR / PLAY). */
+const AdeganEditorialScroll: React.FC<{
+  s: SegmenSinematik;
+  durasi: number;
+  indeks: number;
+  totalSegmen: number;
+  merek: PropsSinematik['merek'];
+}> = ({ s, durasi, indeks, totalSegmen, merek }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const p = spring({ frame, fps, config: { damping: 18, stiffness: 110, mass: 0.9 } });
+  const keluar = interpolate(frame, [durasi - 10, durasi], [0, -140], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const opKeluar = interpolate(frame, [durasi - 9, durasi], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const geserY = interpolate(p, [0, 1], [160, 0]) + keluar;
+  const skalaMedia = interpolate(frame, [0, durasi], [1.03, 1.1], { extrapolateRight: 'clamp' });
+
+  const teksMentah = String(s.teksLayar ?? '').trim();
+  const bagian = teksMentah ? teksMentah.split('|').map((x) => x.trim()).filter(Boolean) : [];
+  const judulUtama = bagian[0] || (indeks === 0 ? merek.nama : `Pilihan ${indeks + 1}`);
+  const judulAksen = bagian[1] || '';
+  const nomor = `${indeks + 1}.`;
+
+  return (
+    <AbsoluteFill style={{ background: '#F3EBDF', color: '#1B140F', opacity: Math.min(p, opKeluar) }}>
+      {/* Header tipis ala website editorial mewah */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 84,
+          left: 64,
+          right: 64,
+          paddingBottom: 22,
+          borderBottom: '1.5px solid rgba(27,20,15,0.14)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontFamily: SANS,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 38, height: 38, borderRadius: 10, objectFit: 'contain' }} /> : null}
+          <span style={{ fontWeight: 800, fontSize: 28, letterSpacing: 2.5, textTransform: 'uppercase', color: '#1B140F' }}>
+            {merek.nama}
+          </span>
+        </div>
+        <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'rgba(27,20,15,0.55)' }}>
+          {merek.sub || 'SIGNATURE · MENU · WARU'}
+        </span>
+      </div>
+
+      {/* Konten utama menggulir halus vertikal */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 210,
+          left: 64,
+          right: 64,
+          bottom: 110,
+          transform: `translateY(${geserY}px)`,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          gap: 36,
+        }}
+      >
+        {/* Blok tipografi editorial */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 48, color: '#8C6239' }}>{nomor}</span>
+            <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 700, letterSpacing: 2.5, textTransform: 'uppercase', color: 'rgba(27,20,15,0.52)' }}>
+              {indeks === 0 ? 'SPECIALTY BREW' : indeks === totalSegmen - 1 ? 'VISIT US TONIGHT' : 'HANDCRAFTED EXPERIENCE'}
+            </span>
+          </div>
+
+          <div
+            style={{
+              fontFamily: SERIF,
+              fontSize: teksMentah.length > 26 ? 78 : 96,
+              lineHeight: 1.0,
+              letterSpacing: -1.5,
+              color: '#1B140F',
+              textTransform: 'uppercase',
+            }}
+          >
+            {judulUtama}
+            {judulAksen ? (
+              <span style={{ display: 'block', fontStyle: 'italic', color: '#8C6239', textTransform: 'none', marginTop: 6 }}>
+                {judulAksen}
+              </span>
+            ) : null}
+          </div>
+
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                background: '#1B140F',
+                color: '#F3EBDF',
+                borderRadius: 999,
+                padding: '14px 28px',
+                fontFamily: SANS,
+                fontSize: 22,
+                fontWeight: 700,
+                letterSpacing: 1,
+                textTransform: 'uppercase',
+              }}
+            >
+              {indeks === totalSegmen - 1 ? 'Mampir Sekarang →' : 'Temukan Rasanya →'}
+            </span>
+          </div>
+        </div>
+
+        {/* Bingkai visual produk / video kopi dengan sudut mewah & parallax */}
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            borderRadius: 40,
+            overflow: 'hidden',
+            position: 'relative',
+            boxShadow: '0 36px 72px -24px rgba(27,20,15,0.32)',
+            border: '2px solid rgba(27,20,15,0.08)',
+            background: '#E6D9C6',
+          }}
+        >
+          {s.berkas ? (
+            s.jenis === 'video' ? (
+              <OffthreadVideo
+                src={staticFile(s.berkas)}
+                startFrom={Math.max(0, Math.round((Number(s.mulaiKlip) || 0) * FPS_SINEMATIK))}
+                muted
+                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${skalaMedia})`, filter: 'contrast(1.04) saturate(1.1) sepia(0.06)' }}
+              />
+            ) : (
+              <Img
+                src={staticFile(s.berkas)}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${skalaMedia})`, filter: 'contrast(1.04) saturate(1.1) sepia(0.06)' }}
+              />
+            )
+          ) : null}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 export const Sinematik: React.FC<PropsSinematik> = (props) => {
   const frame = useCurrentFrame();
   const { jadwal, penutupMulai, penutupDurasi, total } = hitungDurasiSinematik(props);
   const aksen = props.merek.aksen || '#D9A441';
   const volDasar = Number(props.musikVolume) || 0.72;
+  const editorial = props.gaya === 'editorial-scroll';
 
   return (
-    <AbsoluteFill style={{ background: '#0E0B09' }}>
+    <AbsoluteFill style={{ background: editorial ? '#F3EBDF' : '#0E0B09' }}>
       {props.segmen.map((s, i) => (
         <Sequence key={i} from={jadwal[i].mulai} durationInFrames={jadwal[i].durasi} name={`Segmen ${i + 1}`}>
-          <LapisanMedia s={s} durasi={jadwal[i].durasi} indeks={i} gaya={props.gaya} />
-          <LapisanTeks s={s} durasi={jadwal[i].durasi} aksen={aksen} gaya={props.gaya} namaMerek={props.merek.nama} />
+          {editorial ? (
+            <AdeganEditorialScroll s={s} durasi={jadwal[i].durasi} indeks={i} totalSegmen={props.segmen.length} merek={props.merek} />
+          ) : (
+            <>
+              <LapisanMedia s={s} durasi={jadwal[i].durasi} indeks={i} gaya={props.gaya} />
+              <LapisanTeks s={s} durasi={jadwal[i].durasi} aksen={aksen} gaya={props.gaya} namaMerek={props.merek.nama} />
+            </>
+          )}
           {s.suaraBerkas ? <Audio src={staticFile(s.suaraBerkas)} /> : null}
         </Sequence>
       ))}
@@ -297,12 +452,12 @@ export const Sinematik: React.FC<PropsSinematik> = (props) => {
       ) : null}
 
       {/* Bilah progres tipis di atas layar */}
-      <div style={{ position: 'absolute', top: 44, left: 48, right: 48, height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
-        <div style={{ width: `${Math.min(100, (frame / total) * 100)}%`, height: '100%', background: aksen, borderRadius: 99 }} />
+      <div style={{ position: 'absolute', top: 44, left: 48, right: 48, height: 5, borderRadius: 99, background: editorial ? 'rgba(27,20,15,0.14)' : 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
+        <div style={{ width: `${Math.min(100, (frame / total) * 100)}%`, height: '100%', background: editorial ? '#1B140F' : aksen, borderRadius: 99 }} />
       </div>
 
-      {/* Watermark merek halus di pojok kiri atas (hilang saat penutup) */}
-      {frame < penutupMulai ? (
+      {/* Watermark merek halus di pojok kiri atas (khusus non-editorial; editorial sudah punya header sendiri) */}
+      {!editorial && frame < penutupMulai ? (
         <div style={{ position: 'absolute', top: 72, left: 52, display: 'flex', alignItems: 'center', gap: 12, opacity: 0.85 }}>
           {props.merek.logo ? (
             <Img src={staticFile(props.merek.logo)} style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'contain' }} />
