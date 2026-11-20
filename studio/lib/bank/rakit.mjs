@@ -26,7 +26,12 @@ export function benih(teks) {
   return h >>> 0
 }
 
-const bukanLogo = (m) => !/(^|\/|\\)logo/i.test(`${m.tag ?? ''}/${m.path ?? ''}`)
+const bukanLogo = (m) => {
+  if (/(^|\/|\\)logo/i.test(`${m.tag ?? ''}/${m.path ?? ''}`)) return false
+  const desk = String(m.kurasi?.deskripsi ?? '').toLowerCase()
+  if (/\blogo\b|lambang merek|tulisan besar.*lek kopi/i.test(desk)) return false
+  return true
+}
 
 function kelompokkan(bank) {
   const perTag = new Map()

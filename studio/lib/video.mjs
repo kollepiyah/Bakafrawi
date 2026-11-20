@@ -301,8 +301,10 @@ export async function renderSinematikRemotion({
 
   // editorial-scroll (1 scene laptop 4 blok) & dial-menu (keypad + potongan menu): 1 media unik per adegan.
   const satuMediaPerAdegan = gaya === 'editorial-scroll' || gaya === 'dial-menu';
-  const segmenFinal = satuMediaPerAdegan
-    ? segmen.filter((s, i) => i === 0 || segmen[i - 1].adeganKe !== s.adeganKe).slice(0, gaya === 'dial-menu' ? 8 : 4)
+  const segmenFinal = gaya === 'dial-menu'
+    ? segmen.filter((s, i) => (i === 0 || segmen[i - 1].adeganKe !== s.adeganKe) && String(s.teksLayar ?? '').trim()).slice(0, 6)
+    : satuMediaPerAdegan
+    ? segmen.filter((s, i) => i === 0 || segmen[i - 1].adeganKe !== s.adeganKe).slice(0, 4)
     : segmen;
 
   const totalDetik = gaya === 'editorial-scroll'
@@ -320,7 +322,9 @@ export async function renderSinematikRemotion({
     musikNama = 'musik-lofi.mp3';
   }
 
-  const ajakanAkhir = r.adegan.at(-1)?.teksLayar || `Mampir ke ${merek.nama || 'Lek Kopi'}`;
+  const ajakanAkhir = gaya === 'dial-menu'
+    ? `Mampir ngopi di ${merek.nama || 'Lek Kopi'}`
+    : (r.adegan.at(-1)?.teksLayar || `Mampir ke ${merek.nama || 'Lek Kopi'}`);
   const propsData = {
     merek: {
       nama: merek.nama || 'Lek Kopi',

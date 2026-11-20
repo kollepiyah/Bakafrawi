@@ -17,11 +17,15 @@ const MAKS_ITEM = 8;
 
 const TOMBOL = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 const HURUF: Record<string, string> = { '2': 'ABC', '3': 'DEF', '4': 'GHI', '5': 'JKL', '6': 'MNO', '7': 'PQRS', '8': 'TUV', '9': 'WXYZ' };
-// Tombol yang diisi foto menu berurutan (tombol * dan # selalu tetap angka seperti di referensi).
-const URUTAN_FOTO = ['1', '2', '3', '4', '6', '7', '9', '8', '0'];
+// Tombol diisi foto menu secara berurutan 1, 2, 3, 4, 5, 6, ... agar nomor tidak loncat.
+const URUTAN_FOTO = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+
+/** Hanya ambil segmen yang punya teks menu valid (cegah "Menu Pilihan 7" atau logo tersesat). */
+const itemValid = (p: PropsSinematik) =>
+  p.segmen.filter((s) => String(s.teksLayar ?? '').trim().length > 0).slice(0, MAKS_ITEM);
 
 export function hitungDurasiDial(p: PropsSinematik) {
-  const item = p.segmen.slice(0, MAKS_ITEM);
+  const item = itemValid(p);
   let mulai = INTRO_DIAL;
   const jadwal = item.map((s) => {
     const durasi = Math.min(66, Math.max(48, Math.round((Number(s.durasi) || 1.8) * FPS)));
@@ -33,12 +37,16 @@ export function hitungDurasiDial(p: PropsSinematik) {
   return { jadwal, penutupMulai: mulai, penutupDurasi, total: Math.max(INTRO_DIAL + FPS, mulai + penutupDurasi) };
 }
 
-/** "Kopi | Es Kopi Susu Lek" → { jenis: 'Kopi', nama: 'Es Kopi Susu Lek' }; tanpa "|" → jenis "Kopi". */
-function pecahJudul(teks: string | undefined, indeks: number) {
+/** "Kopi | Es Kopi Susu Lek" → { label: 'Kopi “Es Kopi Susu Lek”' }; cegah dobel "Milkshake “Milkshake Banana”". */
+function formatJudulMenu(teks: string | undefined, indeks: number) {
   const bagian = String(teks ?? '').split('|').map((x) => x.trim()).filter(Boolean);
-  if (bagian.length >= 2) return { jenis: bagian[0], nama: bagian[1] };
-  if (bagian.length === 1) return { jenis: 'Kopi', nama: bagian[0] };
-  return { jenis: 'Menu', nama: `Pilihan ${indeks + 1}` };
+  if (bagian.length >= 2) {
+    const [jenis, nama] = bagian;
+    if (nama.toLowerCase().includes(jenis.toLowerCase())) return `“${nama}”`;
+    return `${jenis} “${nama}”`;
+  }
+  if (bagian.length === 1) return `“${bagian[0]}”`;
+  return `Menu #${indeks + 1}`;
 }
 
 const Media: React.FC<{ s: SegmenSinematik; gayaBox?: React.CSSProperties }> = ({ s, gayaBox }) => {
@@ -151,7 +159,7 @@ const Keypad: React.FC<{ item: SegmenSinematik[]; merek: PropsSinematik['merek']
 const PotonganMenu: React.FC<{ s: SegmenSinematik; nomor: string; indeks: number; durasi: number }> = ({ s, nomor, indeks, durasi }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const { jenis, nama } = pecahJudul(s.teksLayar, indeks);
+  const label = formatJudulMenu(s.teksLayar, indeks);
   const zoom = interpolate(frame, [0, durasi], [1.04, 1.13], { extrapolateRight: 'clamp' });
   const masuk = spring({ frame, fps, config: { damping: 16, stiffness: 140 } });
   const tutup = interpolate(frame, [0, 5], [0.0, 1], { extrapolateRight: 'clamp' });
@@ -178,7 +186,7 @@ const PotonganMenu: React.FC<{ s: SegmenSinematik; nomor: string; indeks: number
           {nomor}
         </div>
         <div style={{ fontFamily: SERIF_TEGAK, fontWeight: 600, fontSize: 62, lineHeight: 1.1, color: '#fff', textAlign: 'center', padding: '0 70px', textShadow: '0 4px 22px rgba(0,0,0,0.55)' }}>
-          {jenis} “{nama}”
+          {label}
         </div>
       </div>
     </AbsoluteFill>
@@ -192,6 +200,7 @@ const KartuPenutup: React.FC<{ props: PropsSinematik; durasi: number }> = ({ pro
   const nadi = 1 + 0.06 * Math.sin((frame / fps) * Math.PI * 3);
   const { merek, penutup } = props;
   const keluarAkhir = interpolate(frame, [durasi - 6, durasi], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const ajakan = penutup?.ajakan && !penutup.ajakan.includes('|') ? penutup.ajakan : 'Mampir ngopi, yuk';
   return (
     <AbsoluteFill
       style={{
@@ -201,7 +210,7 @@ const KartuPenutup: React.FC<{ props: PropsSinematik; durasi: number }> = ({ pro
     >
       {merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 150, height: 150, objectFit: 'contain', borderRadius: 30 }} /> : null}
       <div style={{ fontFamily: SERIF_TEGAK, fontWeight: 700, fontSize: 104, lineHeight: 1, color: '#3A2616', letterSpacing: -2 }}>{merek.nama}</div>
-      <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 62, color: '#6B4B30' }}>{penutup?.ajakan || 'Mampir ngopi, yuk'}</div>
+      <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 62, color: '#6B4B30' }}>{ajakan}</div>
       <div style={{ width: 120, height: 120, borderRadius: 120, background: '#34C759', display: 'grid', placeItems: 'center', transform: `scale(${nadi})`, boxShadow: '0 16px 34px -10px rgba(52,199,89,0.55)', marginTop: 18 }}>
         <svg width="56" height="56" viewBox="0 0 24 24" fill="#fff"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25c1.1.37 2.3.57 3.6.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.6 21 3 13.4 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1L6.6 10.8z" /></svg>
       </div>
@@ -211,7 +220,7 @@ const KartuPenutup: React.FC<{ props: PropsSinematik; durasi: number }> = ({ pro
 };
 
 export const DialMenu: React.FC<{ props: PropsSinematik }> = ({ props }) => {
-  const item = props.segmen.slice(0, MAKS_ITEM);
+  const item = itemValid(props);
   const { jadwal, penutupMulai, penutupDurasi } = hitungDurasiDial(props);
   const nomorItem = item.map((_, i) => URUTAN_FOTO[i] ?? String(i + 1));
 

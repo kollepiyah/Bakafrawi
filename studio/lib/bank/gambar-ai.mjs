@@ -18,12 +18,12 @@ export const UKURAN_RASIO = { '9:16': [720, 1280], '4:5': [1024, 1280], '1:1': [
 
 export function promptGambar(deskripsi) {
   const teks = String(deskripsi).trim()
-  const adalahStudio = /studio|editorial|minimalis|minimalist|krem|cream|#f3ebdf|splash|floating|melayang|latte art|espresso pour/i.test(teks)
-  const gaya = adalahStudio
-    ? 'High-end commercial editorial studio product photography, soft warm cream aesthetic, ultra clean studio lighting, shallow depth of field, magazine quality.'
-    : 'Photorealistic photo, natural light, warm cinematic color grade, East Java (Sidoarjo) setting and Indonesian people.'
+  const adalahProduk = /kopi|coffee|latte|espresso|milkshake|matcha|minuman|drink|cup|cangkir|gelas|glass|es |iced |tea|teh|cake|kue|cireng|snack|cemilan|croissant|studio|editorial|minimalis|minimalist|krem|cream|#f3ebdf|#f4ece0|splash|floating|pour/i.test(teks)
+  const gaya = adalahProduk
+    ? 'Clean commercial cafe tabletop product photography, single beverage or food item centered on a warm wooden or marble cafe table, soft natural daylight from a side window, warm minimalist cafe bokeh background, appetizing editorial magazine quality. No people, no faces, no street, no motorcycles.'
+    : 'Photorealistic cozy Indonesian coffee shop atmosphere, warm natural cinematic lighting, clean composition.'
   return `${teks}\n\n${gaya} `
-    + 'Absolutely no text, letters, logos, watermarks, signage, or readable screens. No coffee cup brand. Clean uncluttered composition.'
+    + 'Absolutely no text, no letters, no labels, no logos, no watermarks, no signage, no readable screens.'
 }
 
 /** Galat kuota/billing — gambar berikutnya pasti gagal juga, berhenti mencoba. */
