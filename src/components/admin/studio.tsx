@@ -506,7 +506,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     </button>
                   </div>
 
-                  {galatRiset && <p className="text-xs text-red-300">{galatRiset}</p>}
+                  {galatRiset && <p className="text-xs text-red-300 break-words">{galatRiset}</p>}
 
                   {konsepViral.length > 0 && (
                     <div className="grid gap-3 sm:grid-cols-3">
@@ -554,8 +554,28 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
               {/* Panel Tempel Link Referensi Video (Instagram Reels / TikTok) */}
               {bukaRef && (
                 <div className="mt-4 space-y-4 border-t border-border/50 pt-4">
-                  <div className="text-xs text-zinc-400">
-                    Tempelkan tautan <b className="text-foreground">Instagram Reels, TikTok, atau YouTube Shorts</b> yang Anda sukai. AI akan membedah <i>hook</i>, ritme potongan, gaya teks & visualnya untuk ditiru pada merek <b className="text-emas-muda">{merek.find((m) => m.slug === pilihMerek)?.nama ?? pilihMerek}</b>. (Anda juga bisa kirim link langsung lewat Bot Telegram.)
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
+                    <p className="flex-1 min-w-[220px]">
+                      Tempelkan tautan <b className="text-foreground">Instagram Reels, TikTok, atau YouTube Shorts</b>. AI akan membedah <i>hook</i>, ritme potongan, gaya teks & visualnya untuk merek aktif.
+                    </p>
+                    {merekAktif.length > 1 && (
+                      <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-0.5">
+                        {merekAktif.map((m) => (
+                          <button
+                            key={m.slug}
+                            type="button"
+                            onClick={() => { setPilihMerek(m.slug); setUsulan([]); setGalatUsulan(""); }}
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
+                              pilihMerek === m.slug
+                                ? "bg-emas text-background"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {m.nama}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
@@ -584,7 +604,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     </button>
                   </div>
 
-                  {galatRef && <p className="text-xs text-red-300">{galatRef}</p>}
+                  {galatRef && <p className="text-xs text-red-300 break-words">{galatRef}</p>}
 
                   {daftarRef.length > 0 && (
                     <div className="grid gap-3 sm:grid-cols-2">

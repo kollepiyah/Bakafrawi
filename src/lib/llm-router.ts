@@ -126,12 +126,27 @@ async function panggilCloudflare(opsi: OpsiLlm) {
   return { data, pemakaian: { penyedia: "cloudflare" as const, model, input, output, biayaUsd: biaya(input, output, HARGA.cloudflare) } };
 }
 
+/** Claude Structured Outputs mewajibkan `additionalProperties: false` di setiap node `type: "object"`. */
+function rapikanSkemaClaude(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(rapikanSkemaClaude);
+  if (!node || typeof node !== "object") return node;
+  const salin: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    salin[k] = rapikanSkemaClaude(v);
+  }
+  if (salin.type === "object" && salin.additionalProperties === undefined) {
+    salin.additionalProperties = false;
+  }
+  return salin;
+}
+
 async function panggilClaude(opsi: OpsiLlm) {
   const model = process.env.STUDIO_CLAUDE_TEKS || "claude-sonnet-5-5";
+  const skemaClaude = opsi.skema ? (rapikanSkemaClaude(opsi.skema) as Record<string, unknown>) : undefined;
   const res = await new Anthropic().messages.create({
     model,
     max_tokens: opsi.maksToken ?? 8000,
-    output_config: opsi.skema ? { effort: "low", format: { type: "json_schema", schema: opsi.skema } } : undefined,
+    output_config: skemaClaude ? { effort: "low", format: { type: "json_schema", schema: skemaClaude } } : undefined,
     system: opsi.system,
     messages: [{ role: "user", content: opsi.prompt }],
   });
