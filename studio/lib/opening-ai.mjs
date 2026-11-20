@@ -12,9 +12,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { ffmpeg } from './bank/alat.mjs';
 import { adaGambarAi, buatGambarAi } from './bank/gambar-ai.mjs';
-import { musikContoh } from './iklan.mjs';
+import { buatMusikKafe, buatSfxOpening } from './opening-audio.mjs';
 import { bukaPeramban, potret } from './peramban.mjs';
-import { ASET_LOKAL, pilihMusik } from './video.mjs';
 
 const jalankan = promisify(execFile);
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -197,10 +196,38 @@ export function htmlStoryOpening(p, fotoUrl = null) {
   </body></html>`;
 }
 
+/** Unduh foto produk asli (atau buat foto AI bila belum punya foto) ke folder kerja. */
+async function siapkanFotoMenu(menuItem, index, folder, merekNama) {
+  if (menuItem.foto && /^https?:\/\//i.test(menuItem.foto)) {
+    try {
+      const rFoto = await fetch(menuItem.foto);
+      if (rFoto.ok) {
+        const ekst = /\.(png|webp|jpe?g)(\?|$)/i.exec(menuItem.foto)?.[1] || 'jpg';
+        const lokal = path.join(folder, `menu-${index}.${ekst}`);
+        await writeFile(lokal, Buffer.from(await rFoto.arrayBuffer()));
+        return lokal;
+      }
+    } catch (e) {
+      console.log(`⚠️ Foto asli menu #${index + 1} gagal diunduh: ${e.message}`);
+    }
+  }
+  if (adaGambarAi()) {
+    try {
+      const prompt = menuItem.promptLatar || `Aesthetic minimalist cafe photography of ${menuItem.nama} at ${merekNama} coffee shop in a clear glass on a warm wooden table, soft morning daylight, shallow depth of field, no text`;
+      const r = await buatGambarAi(prompt, '9:16', path.join(folder, `menu-ai-${index}`));
+      return r.berkas;
+    } catch (e) {
+      console.log(`⚠️ Foto AI menu #${index + 1} dilewati: ${e.message}`);
+    }
+  }
+  return null;
+}
+
 /**
  * Buat & render 1 konten Story Jam Buka baru oleh AI:
  * - format === 'poster'        → JPEG 1080×1920 via Playwright
- * - format === 'video-animasi' → MP4 8 dtk 1080×1920 via Remotion (OpeningStory)
+ * - format === 'video-animasi' → MP4 9–15 dtk 1080×1920 via Remotion (OpeningStory) dengan 3 menu terlaris,
+ *                                musik kafe adaptif generated, dan efek suara transisi (whoosh/pop/chime).
  */
 export async function renderOpeningAI({ merek, format = 'video-animasi', gaya = 'otomatis', arahan = '', jamBuka = '09:00', daftarMenu = [], folder }) {
   await mkdir(folder, { recursive: true });
@@ -218,28 +245,62 @@ export async function renderOpeningAI({ merek, format = 'video-animasi', gaya = 
     daftarMenu,
   });
 
-  // Prioritas 1: Foto produk ASLI dari database Lek Kopi App; Prioritas 2: Foto AI Cloudflare gratis; Cadangan: ilustrasi minimalis.
-  let berkasLatar = null;
-  if (konsep.fotoAsliUrl) {
-    try {
-      const rFoto = await fetch(konsep.fotoAsliUrl);
-      if (rFoto.ok) {
-        const ekst = /\.(png|webp|jpe?g)(\?|$)/i.exec(konsep.fotoAsliUrl)?.[1] || 'jpg';
-        berkasLatar = path.join(folder, `menu-asli.${ekst}`);
-        await writeFile(berkasLatar, Buffer.from(await rFoto.arrayBuffer()));
-      }
-    } catch (e) {
-      console.log(`⚠️ Foto asli menu gagal diunduh: ${e.message}`);
-    }
+  // Pilih hingga 3 menu terlaris asli dari aplikasi Lek Kopi (untuk format video-animasi 15 detik).
+  const menuValid = Array.isArray(daftarMenu) ? daftarMenu.filter((m) => m && m.nama) : [];
+  let tigaMenu = [];
+  if (menuValid.length >= 2 && format !== 'poster') {
+    const terlaris = menuValid.filter((m) => m.peringkatTerlaris).slice(0, 3);
+    const sisa = menuValid.filter((m) => !terlaris.includes(m));
+    const gabungan = [...terlaris, ...sisa].slice(0, 3);
+    tigaMenu = gabungan.map((m, idx) => ({
+      nama: m.nama,
+      harga: rupiah(m.harga),
+      ket: idx === 0 && konsep.menuNama.toLowerCase() === m.nama.toLowerCase()
+        ? konsep.menuKet
+        : m.peringkatTerlaris
+        ? `Salah satu menu paling laris di ${merek?.nama || 'Lek Kopi'} kemarin.`
+        : `Pilihan segar ${merek?.nama || 'Lek Kopi'} — siap diseduh hari ini.`,
+      lencana: m.peringkatTerlaris ? `#${idx + 1} Terlaris Kemarin` : `Pilihan #${idx + 1}`,
+      foto: m.foto || null,
+    }));
+  } else {
+    tigaMenu = [
+      {
+        nama: konsep.menuNama,
+        harga: konsep.menuHarga,
+        ket: konsep.menuKet,
+        lencana: 'Pilihan Hari Ini',
+        foto: konsep.fotoAsliUrl || null,
+        promptLatar: konsep.promptLatar,
+      },
+    ];
   }
-  if (!berkasLatar && adaGambarAi()) {
-    try {
-      const r = await buatGambarAi(konsep.promptLatar, '9:16', path.join(folder, 'latar-ai'));
-      berkasLatar = r.berkas;
-    } catch (e) {
-      console.log(`⚠️ Latar AI opening dilewati: ${e.message}`);
+
+  const publik = path.join(folder, 'publik');
+  await mkdir(publik, { recursive: true });
+
+  // Siapkan foto untuk setiap menu (foto asli aplikasi → foto AI Cloudflare → ilustrasi minimalis)
+  const itemMenuFinal = [];
+  let berkasLatarPertama = null;
+  for (let i = 0; i < tigaMenu.length; i++) {
+    const m = tigaMenu[i];
+    const berkas = await siapkanFotoMenu(m, i, folder, merek?.nama || 'Lek Kopi');
+    let namaDiPublik;
+    if (berkas) {
+      if (i === 0) berkasLatarPertama = berkas;
+      namaDiPublik = `menu-${i}${path.extname(berkas) || '.jpg'}`;
+      await copyFile(berkas, path.join(publik, namaDiPublik));
     }
+    itemMenuFinal.push({
+      nama: m.nama,
+      harga: m.harga,
+      ket: m.ket,
+      lencana: m.lencana,
+      ...(namaDiPublik ? { foto: namaDiPublik } : {}),
+    });
   }
+
+  const durasiTotal = (2 + itemMenuFinal.length) * 3; // 3 dtk pembuka + 3 dtk/menu + 3 dtk penutup (15 dtk utk 3 menu)
 
   const props = {
     merek: (merek?.nama || 'LEK KOPI').toUpperCase(),
@@ -249,14 +310,14 @@ export async function renderOpeningAI({ merek, format = 'video-animasi', gaya = 
     hariBuka: 'Senin – Sabtu',
     judul: konsep.judul,
     sub: konsep.sub,
-    menuNama: konsep.menuNama,
-    menuHarga: konsep.menuHarga,
-    menuKet: konsep.menuKet,
+    daftarMenu: itemMenuFinal,
+    menuNama: itemMenuFinal[0]?.nama ?? konsep.menuNama,
+    menuHarga: itemMenuFinal[0]?.harga ?? konsep.menuHarga,
+    menuKet: itemMenuFinal[0]?.ket ?? konsep.menuKet,
     situs: merek?.slug === 'lekkopi' ? 'lek-kopi.web.app' : (merek?.profil?.situs || 'bakafrawi.com'),
     alamat: merek?.slug === 'lekkopi' ? 'Panjunan, Waru, Sidoarjo' : 'Sidoarjo',
-    aksen: merek?.profil?.aksen || '#D9A441',
+    aksen: merek?.profil?.aksen || '#D6A668',
     gaya: konsep.gaya,
-    // Tidak selalu tampil tiap hari — bergantian (genap = tampil ikon kecil GoFood/GrabFood/ShopeeFood)
     tampilDelivery: hariEpoch % 2 === 0,
   };
 
@@ -268,7 +329,7 @@ export async function renderOpeningAI({ merek, format = 'video-animasi', gaya = 
         w: 1080,
         h: 1920,
         keluar,
-        html: htmlStoryOpening(props, berkasLatar ? pathToFileURL(berkasLatar).href : null),
+        html: htmlStoryOpening(props, berkasLatarPertama ? pathToFileURL(berkasLatarPertama).href : null),
       });
     } finally {
       await peramban.close();
@@ -276,26 +337,15 @@ export async function renderOpeningAI({ merek, format = 'video-animasi', gaya = 
     return { berkas: keluar, jenis: 'gambar', mime: 'image/jpeg', konsep };
   }
 
-  // Format "video-animasi": render Remotion komposisi OpeningStory (8 detik)
-  const publik = path.join(folder, 'publik');
-  await mkdir(publik, { recursive: true });
-  if (berkasLatar) {
-    const namaLatar = `latar${path.extname(berkasLatar) || '.png'}`;
-    await copyFile(berkasLatar, path.join(publik, namaLatar));
-    props.fotoLatar = namaLatar;
-  }
-
-  // Musik latar santai: pakai koleksi musik Drive bila ada, atau musik lembut bawaan.
-  const dirMusik = path.join(ASET_LOKAL, 'musik');
-  const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
-  if (lagu) {
-    const namaMusik = `musik${path.extname(lagu) || '.mp3'}`;
-    await copyFile(path.join(dirMusik, lagu), path.join(publik, namaMusik));
-    props.musik = namaMusik;
-  } else {
-    await musikContoh(path.join(publik, 'musik.mp3'), 9);
-    props.musik = 'musik.mp3';
-  }
+  // Generate musik kafe adaptif (selalu variatif sesuai tema visual & hari) + SFX transisi halus
+  await buatMusikKafe({
+    gaya: konsep.gaya,
+    hariEpoch,
+    durasiDetik: durasiTotal + 1,
+    keluarMp3: path.join(publik, 'musik.mp3'),
+  });
+  props.musik = 'musik.mp3';
+  props.sfx = await buatSfxOpening(publik);
 
   const berkasProps = path.join(folder, 'opening-props.json');
   await writeFile(berkasProps, JSON.stringify(props));
@@ -306,6 +356,6 @@ export async function renderOpeningAI({ merek, format = 'video-animasi', gaya = 
     { cwd: REMOTION },
   );
   const sampul = path.join(folder, `opening-ai-sampul-${Date.now()}.jpg`);
-  await ffmpeg(['-y', '-ss', '3', '-i', keluar, '-frames:v', '1', '-q:v', '3', sampul]).catch(() => {});
-  return { berkas: keluar, sampul, jenis: 'video', mime: 'video/mp4', durasi: 9, konsep };
+  await ffmpeg(['-y', '-ss', '4', '-i', keluar, '-frames:v', '1', '-q:v', '3', sampul]).catch(() => {});
+  return { berkas: keluar, sampul, jenis: 'video', mime: 'video/mp4', durasi: durasiTotal, konsep };
 }

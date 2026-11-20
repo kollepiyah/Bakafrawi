@@ -6,9 +6,19 @@ import React from 'react';
 import { AbsoluteFill, Audio, Img, interpolate, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 
 export const FPS_OPENING = 30;
-export const DURASI_OPENING = 270; // 9 detik (3 adegan x 3 detik)
+export const DURASI_ADEGAN = 90; // 3 detik per adegan
 
 export type GayaOpening = 'hangat-kafe' | 'terang-modern' | 'minimalis-gelap';
+
+export type ItemMenuOpening = {
+  nama: string;
+  harga: string;
+  ket: string;
+  /** Mis. "#1 TERLARIS KEMARIN" atau "PILIHAN HARI INI" */
+  lencana?: string;
+  /** Nama berkas foto produk di public-dir (opsional). */
+  foto?: string;
+};
 
 export type PropsOpening = {
   merek: string;
@@ -18,6 +28,9 @@ export type PropsOpening = {
   hariBuka: string;
   judul: string;
   sub: string;
+  /** Daftar 1–3 menu pilihan (diutamakan 3 menu terlaris hari sebelumnya dari aplikasi Lek Kopi). */
+  daftarMenu?: ItemMenuOpening[];
+  /** Fallback kompatibilitas 1 menu bila daftarMenu tidak dikirim. */
   menuNama: string;
   menuHarga: string;
   menuKet: string;
@@ -31,7 +44,32 @@ export type PropsOpening = {
   fotoLatar?: string;
   /** Nama berkas musik di public-dir (opsional). */
   musik?: string;
+  /** Efek suara halus (whoosh transisi, pop kartu, chime penutup). */
+  sfx?: { whoosh?: string; pop?: string; chime?: string };
 };
+
+export function daftarMenuEfektif(p: PropsOpening): ItemMenuOpening[] {
+  if (Array.isArray(p.daftarMenu) && p.daftarMenu.length > 0) {
+    return p.daftarMenu.slice(0, 3);
+  }
+  return [
+    {
+      nama: p.menuNama,
+      harga: p.menuHarga,
+      ket: p.menuKet,
+      lencana: 'Pilihan Hari Ini',
+      foto: p.fotoLatar,
+    },
+  ];
+}
+
+export function hitungDurasiOpening(p: PropsOpening): number {
+  const jmlMenu = daftarMenuEfektif(p).length;
+  // Pembuka (3 dtk) + Menu (3 dtk x jumlahMenu) + Penutup (3 dtk)
+  return DURASI_ADEGAN * (2 + jmlMenu);
+}
+
+export const DURASI_OPENING = DURASI_ADEGAN * 5; // default 15 detik (3 menu terlaris)
 
 export const contohOpening: PropsOpening = {
   merek: 'LEK KOPI',
@@ -41,6 +79,26 @@ export const contohOpening: PropsOpening = {
   hariBuka: 'Senin – Sabtu',
   judul: 'WE ARE\nOPEN.',
   sub: 'Seduhan segar sudah siap menemani harimu.',
+  daftarMenu: [
+    {
+      nama: 'Es Kopi Susu Lek',
+      harga: 'Rp12.000',
+      ket: 'Espresso segar & susu creamy manis pas — paling dicari kemarin.',
+      lencana: '#1 Terlaris Kemarin',
+    },
+    {
+      nama: 'Iced Matcha Latte',
+      harga: 'Rp14.000',
+      ket: 'Matcha lembut berpadu susu dingin yang menyegarkan.',
+      lencana: '#2 Terlaris Kemarin',
+    },
+    {
+      nama: 'Iced Americano',
+      harga: 'Rp10.000',
+      ket: 'Kopi hitam dingin ringan & segar, pas buat teman kerja.',
+      lencana: '#3 Terlaris Kemarin',
+    },
+  ],
   menuNama: 'Es Kopi Susu Lek',
   menuHarga: 'Rp12.000',
   menuKet: 'Espresso segar & susu creamy manis pas — favorit di Lek Kopi.',
@@ -297,15 +355,22 @@ const AdeganPembuka: React.FC<{ p: PropsOpening; t: (typeof TEMA)[GayaOpening]; 
   );
 };
 
-// ── ADEGAN 2 (3–6 dtk): 1 MENU ASLI LEK KOPI (Kartu Editorial Bersih) ──
-const AdeganMenu: React.FC<{ p: PropsOpening; t: (typeof TEMA)[GayaOpening]; aksen: string; gelap: boolean }> = ({ p, t, aksen, gelap }) => {
+// ── ADEGAN MENU (3 dtk per menu): KARTU EDITORIAL BERSIH UNTUK TIAP MENU TERLARIS ──
+const AdeganMenu: React.FC<{
+  item: ItemMenuOpening;
+  indeks: number;
+  totalMenu: number;
+  t: (typeof TEMA)[GayaOpening];
+  aksen: string;
+  gelap: boolean;
+}> = ({ item, indeks, totalMenu, t, aksen, gelap }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const op = useOpasitasAdegan(90);
+  const op = useOpasitasAdegan(DURASI_ADEGAN);
 
   const sKartu = spring({ frame: frame - 4, fps, config: { damping: 15, stiffness: 115 } });
   const sIsi = spring({ frame: frame - 16, fps, config: { damping: 15, stiffness: 110 } });
-  const zoomFoto = interpolate(frame, [0, 90], [1.0, 1.06], { extrapolateRight: 'clamp' });
+  const zoomFoto = interpolate(frame, [0, DURASI_ADEGAN], [1.0, 1.07], { extrapolateRight: 'clamp' });
 
   return (
     <AbsoluteFill
@@ -316,6 +381,7 @@ const AdeganMenu: React.FC<{ p: PropsOpening; t: (typeof TEMA)[GayaOpening]; aks
         justifyContent: 'center',
         alignItems: 'center',
         padding: '0 88px',
+        gap: 24,
       }}
     >
       <div
@@ -333,7 +399,7 @@ const AdeganMenu: React.FC<{ p: PropsOpening; t: (typeof TEMA)[GayaOpening]; aks
         {/* Area Visual Menu (Foto Asli Lek Kopi / Foto AI / Ilustrasi Minimalis) */}
         <div
           style={{
-            height: 540,
+            height: 560,
             width: '100%',
             position: 'relative',
             overflow: 'hidden',
@@ -343,9 +409,9 @@ const AdeganMenu: React.FC<{ p: PropsOpening; t: (typeof TEMA)[GayaOpening]; aks
             background: gelap ? 'radial-gradient(circle at 50% 45%, #2A1F18 0%, #19120E 100%)' : 'radial-gradient(circle at 50% 45%, #F6EFE4 0%, #EAE0D0 100%)',
           }}
         >
-          {p.fotoLatar ? (
+          {item.foto ? (
             <Img
-              src={staticFile(p.fotoLatar)}
+              src={staticFile(item.foto)}
               style={{
                 width: '100%',
                 height: '100%',
@@ -374,8 +440,27 @@ const AdeganMenu: React.FC<{ p: PropsOpening; t: (typeof TEMA)[GayaOpening]; aks
               textTransform: 'uppercase',
             }}
           >
-            Pilihan Hari Ini
+            {item.lencana || 'Pilihan Hari Ini'}
           </div>
+
+          {totalMenu > 1 && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 28,
+                right: 28,
+                padding: '8px 18px',
+                borderRadius: 999,
+                background: 'rgba(0,0,0,0.45)',
+                color: '#F5EFE6',
+                fontSize: 19,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+              }}
+            >
+              0{indeks + 1} / 0{totalMenu}
+            </div>
+          )}
         </div>
 
         {/* Detail Menu Ringkas */}
@@ -390,8 +475,8 @@ const AdeganMenu: React.FC<{ p: PropsOpening; t: (typeof TEMA)[GayaOpening]; aks
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-            <span style={{ fontSize: 44, fontWeight: 800, letterSpacing: '-0.02em' }}>{p.menuNama}</span>
-            {p.menuHarga && (
+            <span style={{ fontSize: 44, fontWeight: 800, letterSpacing: '-0.02em' }}>{item.nama}</span>
+            {item.harga && (
               <span
                 style={{
                   padding: '9px 22px',
@@ -403,11 +488,11 @@ const AdeganMenu: React.FC<{ p: PropsOpening; t: (typeof TEMA)[GayaOpening]; aks
                   flexShrink: 0,
                 }}
               >
-                {p.menuHarga}
+                {item.harga}
               </span>
             )}
           </div>
-          <p style={{ margin: 0, fontSize: 28, lineHeight: 1.45, color: t.sub, fontWeight: 500 }}>{p.menuKet}</p>
+          <p style={{ margin: 0, fontSize: 28, lineHeight: 1.45, color: t.sub, fontWeight: 500 }}>{item.ket}</p>
         </div>
       </div>
     </AbsoluteFill>
@@ -608,23 +693,56 @@ export const OpeningStory: React.FC<PropsOpening> = (p) => {
         <div style={{ width: `${progres}%`, height: '100%', background: aksen, borderRadius: 999 }} />
       </div>
 
-      {/* 3 Adegan Rapi & Lega */}
-      <Sequence from={0} durationInFrames={90}>
+      {/* Adegan Pembuka + 1–3 Adegan Menu Terlaris + Penutup Estetik */}
+      <Sequence from={0} durationInFrames={DURASI_ADEGAN}>
         <AdeganPembuka p={p} t={t} aksen={aksen} />
       </Sequence>
-      <Sequence from={90} durationInFrames={90}>
-        <AdeganMenu p={p} t={t} aksen={aksen} gelap={gelap} />
-      </Sequence>
-      <Sequence from={180} durationInFrames={90}>
+      {daftarMenuEfektif(p).map((item, idx, arr) => (
+        <Sequence key={idx} from={DURASI_ADEGAN * (idx + 1)} durationInFrames={DURASI_ADEGAN}>
+          <AdeganMenu item={item} indeks={idx} totalMenu={arr.length} t={t} aksen={aksen} gelap={gelap} />
+        </Sequence>
+      ))}
+      <Sequence from={DURASI_ADEGAN * (1 + daftarMenuEfektif(p).length)} durationInFrames={DURASI_ADEGAN}>
         <AdeganPenutup p={p} t={t} aksen={aksen} gelap={gelap} />
       </Sequence>
 
-      {/* Musik latar lembut opsional */}
+      {/* Efek suara (SFX) halus pada transisi & pop-up kartu */}
+      {p.sfx?.pop && (
+        <Sequence from={8} durationInFrames={12}>
+          <Audio src={staticFile(p.sfx.pop)} volume={0.32} />
+        </Sequence>
+      )}
+      {daftarMenuEfektif(p).map((_, idx) => (
+        <React.Fragment key={`sfx-${idx}`}>
+          {p.sfx?.whoosh && (
+            <Sequence from={DURASI_ADEGAN * (idx + 1) - 5} durationInFrames={16}>
+              <Audio src={staticFile(p.sfx.whoosh)} volume={0.28} />
+            </Sequence>
+          )}
+          {p.sfx?.pop && (
+            <Sequence from={DURASI_ADEGAN * (idx + 1) + 6} durationInFrames={12}>
+              <Audio src={staticFile(p.sfx.pop)} volume={0.3} />
+            </Sequence>
+          )}
+        </React.Fragment>
+      ))}
+      {p.sfx?.whoosh && (
+        <Sequence from={DURASI_ADEGAN * (1 + daftarMenuEfektif(p).length) - 5} durationInFrames={16}>
+          <Audio src={staticFile(p.sfx.whoosh)} volume={0.28} />
+        </Sequence>
+      )}
+      {p.sfx?.chime && (
+        <Sequence from={DURASI_ADEGAN * (1 + daftarMenuEfektif(p).length) + 6} durationInFrames={36}>
+          <Audio src={staticFile(p.sfx.chime)} volume={0.35} />
+        </Sequence>
+      )}
+
+      {/* Musik latar adaptif (sesuai mood tema visual & berganti setiap hari) */}
       {p.musik && (
         <Audio
           src={staticFile(p.musik)}
           volume={(f) =>
-            interpolate(f, [0, 20, durationInFrames - 25, durationInFrames], [0, 0.25, 0.25, 0], {
+            interpolate(f, [0, 20, durationInFrames - 28, durationInFrames], [0, 0.36, 0.36, 0], {
               extrapolateLeft: 'clamp',
               extrapolateRight: 'clamp',
             })

@@ -33,6 +33,35 @@ export async function kirimTeks(chatId, teks, tombol) {
   return panggil('sendMessage', { chat_id: chatId, text: teks.slice(0, 4000), disable_web_page_preview: true, ...(tombol ? { reply_markup: tombol } : {}) });
 }
 
+/** Kirim kabar tayang beserta video/foto aslinya ke Telegram (jatuh ke teks biasa bila media gagal). */
+export async function kirimMediaTayang(chatId, { teks, hasil = [] }) {
+  const video = hasil.find((h) => h.jenis === 'video' && h.url);
+  const gambar = hasil.find((h) => h.jenis === 'gambar' && h.rasio !== 'sampul' && h.url);
+  try {
+    if (video) {
+      return await panggil('sendVideo', {
+        chat_id: chatId,
+        video: video.url,
+        width: 1080,
+        height: 1920,
+        ...(video.durasi ? { duration: video.durasi } : {}),
+        supports_streaming: true,
+        caption: teks.slice(0, 1000),
+      });
+    }
+    if (gambar) {
+      return await panggil('sendPhoto', {
+        chat_id: chatId,
+        photo: gambar.url,
+        caption: teks.slice(0, 1000),
+      });
+    }
+  } catch (e) {
+    console.error('Telegram kirimMediaTayang fallback teks:', e.message);
+  }
+  return kirimTeks(chatId, teks);
+}
+
 /** Kirim hasil Studio (album poster atau video) lalu pesan bertombol untuk persetujuan. */
 export async function kirimHasil(chatId, { tugas, namaProduk, hasil, caption }) {
   const video = hasil.find((h) => h.jenis === 'video');

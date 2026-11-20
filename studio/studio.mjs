@@ -17,7 +17,7 @@ import { ASET_LOKAL, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pi
 import { buatNaskah, buatNaskahVideo } from './lib/naskah.mjs';
 import { renderOpeningAI } from './lib/opening-ai.mjs';
 import { bukaPeramban, potret, potretLayar } from './lib/peramban.mjs';
-import { adaTelegram, kirimHasil, kirimTeks } from './lib/telegram.mjs';
+import { adaTelegram, kirimHasil, kirimMediaTayang, kirimTeks } from './lib/telegram.mjs';
 import { htmlPoster, temaMerek, UKURAN } from './lib/templat.mjs';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -245,9 +245,10 @@ async function tayangkan(tugas, k) {
   if (adalahRutin) {
     const daftarMedia = [...(tugas.hasil ?? []).filter((h) => h.rasio !== 'sampul' && h.url)];
     const aiRutin = tugas.naskah?.aiRutin;
+    const sudahAdaAi = daftarMedia.some((h) => h.sumber === 'opening-ai' || String(h.judul ?? '').startsWith('Opening AI:'));
     let hasilBaru = null;
 
-    if (aiRutin?.aktif) {
+    if (aiRutin?.aktif && !sudahAdaAi) {
       const folderAi = path.join(DIR, 'kerja', `opening-ai-${tugas.id}`);
       try {
         const merekInfo = await bacaMerek(tugas.merek ?? 'lekkopi');
@@ -265,11 +266,12 @@ async function tayangkan(tugas, k) {
         const itemAi = {
           jenis: r.jenis,
           rasio: 'story',
+          sumber: 'opening-ai',
           url: urlAi,
           ...(r.durasi ? { durasi: r.durasi } : {}),
           judul: `Opening AI: ${r.konsep.menuNama}`,
           sasaran: 'story',
-          caption: `${r.konsep.judul.replace(/\n/g, ' ')} — ${r.konsep.menuNama} ${r.konsep.menuHarga}`,
+          caption: `${r.konsep.judul.replace(/\n/g, ' ')} — ${r.konsep.menuNama} ${r.konsep.menuHarga}`.trim(),
         };
         daftarMedia.push(itemAi);
         hasilBaru = [...(tugas.hasil ?? []), itemAi];
@@ -493,7 +495,7 @@ async function akunInstagram(kabar) {
   return peta;
 }
 
-async function putaranTayang(kabar) {
+async function putaranTayang(kabar, chat = null) {
   const akun = await akunInstagram(kabar);
   const merekRutinTayang = new Set();
   for (let i = 0; i < MAKS_TUGAS; i++) {
@@ -513,6 +515,7 @@ async function putaranTayang(kabar) {
       // TikTok pelengkap: gagal di sini tak membatalkan Instagram yang sudah tayang.
       const tt = await drafTiktokTugas(tugas, tayang).catch((e) => ({ galat: String(e.message ?? e).slice(0, 300) }));
       if (tt) tayang.tiktok = tt;
+      const hasilAkhir = hasilBaru ?? tugas.hasil ?? [];
       await perbaruiTugas(tugas.id, { status_tayang: 'tayang', tayang, ...(hasilBaru ? { hasil: hasilBaru } : {}), galat: null });
       if (tugas.produk_slug === 'rutin-buka' || tugas.naskah?.rutin) {
         merekRutinTayang.add(tugas.merek ?? 'lekkopi');
@@ -525,7 +528,13 @@ async function putaranTayang(kabar) {
         ? 'Story Instagram'
         : 'Instagram';
       const teksTt = !tt ? '' : tt.galat ? `\nTikTok: gagal (${tt.galat})` : `\nTikTok ${tt.akun ?? ''}: draf masuk — buka TikTok → Kotak masuk → ketuk Posting, lalu tempel caption.`;
-      await kabar(`✅ ${labelTayang} sudah tayang di ${k.ig_akun ?? 'Instagram'}${tautan ? `\n${tautan}` : ''}${tayang.instagram.story?.galat ? `\n(Story gagal: ${tayang.instagram.story.galat})` : ''}${teksTt}`);
+      const pesanAkhir = `✅ ${labelTayang} sudah tayang di ${k.ig_akun ?? 'Instagram'}${tautan ? `\n${tautan}` : ''}${tayang.instagram.story?.galat ? `\n(Story gagal: ${tayang.instagram.story.galat})` : ''}${teksTt}`;
+      // Kirim beserta video/foto aslinya ke Telegram supaya Kyai bisa melihat hasil yang baru tayang.
+      if (tayang.rutin && chat && adaTelegram() && hasilAkhir.length) {
+        await kirimMediaTayang(chat, { teks: pesanAkhir, hasil: hasilAkhir }).catch(() => kabar(pesanAkhir));
+      } else {
+        await kabar(pesanAkhir);
+      }
     } catch (e) {
       console.error('✖ Tayang gagal:', e);
       await perbaruiTugas(tugas.id, { status_tayang: 'gagal', galat: `Tayang gagal: ${String(e.message ?? e).slice(0, 800)}` });
@@ -577,9 +586,46 @@ async function modeAwan() {
           if (!merekCache.has(slug)) merekCache.set(slug, await bacaMerek(slug));
           const simpan = async (b, jenis) => unggah(`${tugas.id}/${path.basename(b)}`, await readFile(b), jenis);
           const merek = merekCache.get(slug);
-          const { naskah, caption, hasil, namaProduk } = pakaiBank(merek)
-            ? await kerjakanBank(tugas, merek, simpan, kabar)
-            : await kerjakan(tugas, situs, peramban, folder, simpan, merek);
+          let hasilKerja;
+          if (tugas.produk_slug === 'rutin-buka') {
+            // Mode Pratinjau Story Buka (cek dulu di Studio & Telegram sebelum ditayangkan)
+            const aiRutin = tugas.naskah?.aiRutin ?? {};
+            const r = await renderOpeningAI({
+              merek,
+              format: aiRutin.format === 'poster' ? 'poster' : 'video-animasi',
+              gaya: aiRutin.gaya || 'otomatis',
+              arahan: aiRutin.arahan || '',
+              jamBuka: aiRutin.jamBuka || '09:00',
+              daftarMenu: Array.isArray(aiRutin.daftarMenu) ? aiRutin.daftarMenu : (Array.isArray(merek?.profil?.menu_asli) ? merek.profil.menu_asli : []),
+              folder,
+            });
+            const urlAi = await simpan(r.berkas, r.mime);
+            const itemAi = {
+              jenis: r.jenis,
+              rasio: 'story',
+              sumber: 'opening-ai',
+              url: urlAi,
+              ...(r.durasi ? { durasi: r.durasi } : {}),
+              judul: `Opening AI: ${r.konsep.menuNama}`,
+              sasaran: 'story',
+              caption: `${r.konsep.judul.replace(/\n/g, ' ')} — ${r.konsep.menuNama} ${r.konsep.menuHarga}`.trim(),
+            };
+            const hasilGabung = [...(tugas.hasil ?? []), itemAi];
+            if (r.sampul) {
+              hasilGabung.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
+            }
+            hasilKerja = {
+              naskah: { ...tugas.naskah, sumber: r.konsep.sumber, judul: `Story Jam Buka (${merek?.nama ?? slug})` },
+              caption: itemAi.caption || `We are OPEN! ${merek?.nama ?? 'Lek Kopi'} ☕`,
+              hasil: hasilGabung,
+              namaProduk: `${merek?.nama ?? slug} · Story Jam Buka`,
+            };
+          } else {
+            hasilKerja = pakaiBank(merek)
+              ? await kerjakanBank(tugas, merek, simpan, kabar)
+              : await kerjakan(tugas, situs, peramban, folder, simpan, merek);
+          }
+          const { naskah, caption, hasil, namaProduk } = hasilKerja;
           await perbaruiTugas(tugas.id, { status: 'selesai', selesai: new Date().toISOString(), naskah, caption, hasil, galat: null });
           console.log(`✔ Selesai: ${hasil.length} berkas`);
           if (chat && adaTelegram()) {
@@ -597,7 +643,7 @@ async function modeAwan() {
       await peramban.close();
     }
   }
-  await putaranTayang(kabar);
+  await putaranTayang(kabar, chat);
 }
 
 async function modeLokal(berkasTugas) {

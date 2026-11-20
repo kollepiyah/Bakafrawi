@@ -4,7 +4,7 @@ import { Iklan } from './Iklan';
 import { FPS, hitungWaktu, naskahContoh, type Naskah } from './data/script';
 import suaraContoh from './data/suara.json';
 import { contohSinematik, FPS_SINEMATIK, hitungDurasiSinematik, Sinematik } from './Sinematik';
-import { contohOpening, DURASI_OPENING, FPS_OPENING, OpeningStory } from './OpeningStory';
+import { contohOpening, DURASI_OPENING, FPS_OPENING, hitungDurasiOpening, OpeningStory } from './OpeningStory';
 
 // Props bawaan = naskah contoh + narasi hasil `npm run siapkan` (bila sudah dibuat). Mesin Studio
 // menimpa seluruhnya lewat --props; durasi selalu dihitung ulang dari naskah + suara.
@@ -40,6 +40,7 @@ export const Root: React.FC = () => (
       fps={FPS_OPENING}
       durationInFrames={DURASI_OPENING}
       defaultProps={contohOpening}
+      calculateMetadata={({ props }) => ({ durationInFrames: hitungDurasiOpening(props) })}
     />
   </>
 );

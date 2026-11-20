@@ -516,6 +516,65 @@ export async function tayangkanRutinSekarang(slugMerek = "lekkopi", originSitus 
   return { tugas, dipicu, jumlahVideo: jmlTotal };
 }
 
+/** Buat pratinjau Story Jam Buka AI dulu (tidak langsung tayang — masuk Riwayat Studio & dikirim ke Telegram dengan tombol persetujuan). */
+export async function buatPratinjauRutin(slugMerek = "lekkopi", originSitus = "https://bakafrawi.com") {
+  const daftar = await daftarMerek();
+  const m = daftar.find((x) => x.slug === slugMerek);
+  if (!m) throw new Error(`Merek "${slugMerek}" tidak ditemukan.`);
+  const jadwal = normalisasiJadwalRutin(m.profil?.jadwal_rutin, m.slug);
+  const daftarMenu = m.slug === "lekkopi" ? await ambilMenuLekKopi() : [];
+  const menuFinal = daftarMenu.length > 0
+    ? daftarMenu
+    : (Array.isArray(m.profil?.menu_asli) ? (m.profil.menu_asli as typeof daftarMenu) : []);
+
+  const dipilih = pilihVideoBuka(jadwal, new Date());
+  const hasil = dipilih.map((v) => ({
+    jenis: v.jenis,
+    rasio: "story",
+    url: mutlakUrlMedia(v.url, originSitus),
+    durasi: v.durasi ?? 9,
+    judul: v.judul,
+    sasaran: v.sasaran,
+    caption: v.caption ?? "",
+  }));
+
+  const aiRutin = {
+    aktif: true,
+    format: jadwal.aiFormat === "poster" ? "poster" : "video-animasi",
+    gaya: jadwal.aiGaya ?? "otomatis",
+    arahan: jadwal.aiArahan ?? "",
+    jamBuka: jadwal.jam,
+    daftarMenu: menuFinal.slice(0, 40),
+  };
+
+  const [tugas] = (await rest("studio_tugas", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      merek: m.slug,
+      jenis: aiRutin.format === "poster" ? "gambar" : "video",
+      produk_slug: "rutin-buka",
+      arahan: `Pratinjau Story Jam Buka AI (${jadwal.jam} WIB · cek dulu sebelum tayang)`,
+      latar: "polos",
+      status: "antre",
+      status_tayang: "belum",
+      jadwal_tayang: null,
+      caption: `We are OPEN! ${m.nama} ☕`,
+      naskah: {
+        sumber: "jadwal-rutin-ai",
+        judul: `Pratinjau Story Jam Buka (${m.nama})`,
+        sasaran: "story",
+        rutin: true,
+        aiRutin,
+      },
+      tayang: { sasaran: "story", rutin: true },
+      hasil,
+    }),
+  })) as RingkasTugas[];
+  const dipicu = await picuStudio();
+  return { tugas, dipicu };
+}
+
 /** Dipanggil oleh detak 5 menit untuk memastikan semua merek yang jadwal rutinnya aktif selalu memiliki antrean berikutnya. */
 export async function pastikanSemuaJadwalRutin() {
   const daftar = await daftarMerek();

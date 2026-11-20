@@ -23,20 +23,43 @@ async function dataPintuLekKopi(): Promise<DataPintu> {
   return j.data as DataPintu;
 }
 
-export type MenuAsliMerek = { nama: string; harga: number; kategori?: string; foto?: string | null };
+export type MenuAsliMerek = {
+  nama: string;
+  harga: number;
+  kategori?: string;
+  foto?: string | null;
+  /** Urutan terlaris (1, 2, 3, ...) bila masuk daftar terlaris dari pintu-bakafrawi. */
+  peringkatTerlaris?: number;
+};
 
-/** Ambil daftar menu asli & foto produk dari pintu-bakafrawi Lek Kopi (aman mengembalikan [] bila pintu belum siap). */
+/** Ambil daftar menu asli & foto produk dari pintu-bakafrawi Lek Kopi, diurutkan dengan menu terlaris di depan. */
 export async function ambilMenuLekKopi(): Promise<MenuAsliMerek[]> {
   try {
     const data = await dataPintuLekKopi();
-    return (data.menu ?? [])
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const urutanTerlaris = new Map<string, number>();
+    (data.terlaris ?? []).forEach((t, idx) => {
+      const nama = typeof t === "string" ? t : String((t as { nama?: string })?.nama ?? "");
+      if (nama) urutanTerlaris.set(norm(nama), idx + 1);
+    });
+
+    const daftar: MenuAsliMerek[] = (data.menu ?? [])
       .filter((m) => m && m.nama)
-      .map((m) => ({
-        nama: String(m.nama).trim(),
-        harga: Number(m.harga) || 0,
-        kategori: m.kategori ? String(m.kategori).trim() : undefined,
-        foto: String(m.foto || m.gambar || m.image_url || "").trim() || null,
-      }));
+      .map((m) => {
+        const nama = String(m.nama).trim();
+        const peringkat = urutanTerlaris.get(norm(nama));
+        return {
+          nama,
+          harga: Number(m.harga) || 0,
+          kategori: m.kategori ? String(m.kategori).trim() : undefined,
+          foto: String(m.foto || m.gambar || m.image_url || "").trim() || null,
+          ...(peringkat ? { peringkatTerlaris: peringkat } : {}),
+        };
+      });
+
+    // Menu terlaris hari/periode sebelumnya ditaruh paling atas (1, 2, 3...)
+    daftar.sort((a, b) => (a.peringkatTerlaris ?? 999) - (b.peringkatTerlaris ?? 999));
+    return daftar;
   } catch {
     return [];
   }

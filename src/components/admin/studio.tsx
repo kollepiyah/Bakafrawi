@@ -340,6 +340,25 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     setMenyimpanRutin(false);
   }
 
+  async function buatPratinjauStoryBuka() {
+    setMenyimpanRutin(true);
+    setPesanRutin("");
+    try {
+      const tok = await tokenSegar();
+      const res = await fetch("/api/studio/rutin", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ aksi: "pratinjau", merek: merekRutin }),
+      });
+      const j = await res.json().catch(() => ({}));
+      setPesanRutin(j.pesan ?? (j.ok ? "Pratinjau Story Jam Buka sedang dibuat." : "Gagal membuat pratinjau."));
+      if (j.ok) muat();
+    } catch (e) {
+      setPesanRutin(e instanceof Error ? e.message : "Gagal membuat pratinjau Story Jam Buka.");
+    }
+    setMenyimpanRutin(false);
+  }
+
   async function tayangkanStoryBukaSekarang() {
     setMenyimpanRutin(true);
     setPesanRutin("");
@@ -721,67 +740,67 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setBukaJadwal((v) => !v)}
-                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition ${
+                    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
                       bukaJadwal
                         ? "border-amber-400/50 bg-amber-500/10 text-amber-300"
                         : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground"
                     }`}
                   >
-                    <Clock className="size-3.5" />
+                    <Clock className="size-3.5 shrink-0" />
                     <span>Jam Terbaik</span>
-                    {bukaJadwal ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                    {bukaJadwal ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setBukaRiset((v) => !v)}
-                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition ${
+                    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
                       bukaRiset
                         ? "border-emas/50 bg-emas/10 text-emas"
                         : "border-emas/30 text-emas-muda hover:border-emas hover:bg-emas/5"
                     }`}
                   >
-                    <TrendingUp className="size-3.5" />
+                    <TrendingUp className="size-3.5 shrink-0" />
                     <span>Riset Tren Viral</span>
-                    {bukaRiset ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                    {bukaRiset ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setBukaRef((v) => !v)}
-                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition ${
+                    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
                       bukaRef
                         ? "border-sky-400/50 bg-sky-500/10 text-sky-300"
                         : "border-white/10 text-muted-foreground hover:border-sky-400/40 hover:text-sky-300"
                     }`}
                   >
-                    <Link2 className="size-3.5" />
+                    <Link2 className="size-3.5 shrink-0" />
                     <span>Pelajari Link Video</span>
                     {daftarRef.length > 0 && (
                       <span className="rounded-full bg-sky-500/20 px-1.5 text-[10px] text-sky-300">{daftarRef.length}</span>
                     )}
-                    {bukaRef ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                    {bukaRef ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setBukaRutin((v) => !v)}
-                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition ${
+                    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
                       bukaRutin || jadwalRutin.aktif
                         ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-300"
                         : "border-white/10 text-muted-foreground hover:border-emerald-400/40 hover:text-emerald-300"
                     }`}
                   >
-                    <CalendarClock className="size-3.5" />
+                    <CalendarClock className="size-3.5 shrink-0" />
                     <span>Story Jam Buka</span>
                     <span className={`rounded-full px-1.5 text-[10px] ${jadwalRutin.aktif ? "bg-emerald-500/25 text-emerald-200" : "bg-white/10 text-zinc-400"}`}>
                       {jadwalRutin.aktif ? jadwalRutin.jam : "Mati"}
                     </span>
-                    {bukaRutin ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                    {bukaRutin ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
                   </button>
                 </div>
               </div>
@@ -1103,21 +1122,31 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                         </span>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      disabled={menyimpanRutin || (!jadwalRutin.aiAktif && jadwalRutin.video.filter((v) => v.aktif).length === 0)}
-                      onClick={tayangkanStoryBukaSekarang}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-200 hover:bg-emerald-500 hover:text-background disabled:opacity-50"
-                    >
-                      <Play className="size-3" /> Tayangkan Story Buka Sekarang
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={menyimpanRutin}
+                        onClick={buatPratinjauStoryBuka}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emas px-3 py-1.5 text-xs font-semibold text-background hover:bg-emas/90 disabled:opacity-50"
+                      >
+                        <Sparkles className="size-3.5" /> Buat Pratinjau Dulu (Cek di Studio & Telegram)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={menyimpanRutin || (!jadwalRutin.aiAktif && jadwalRutin.video.filter((v) => v.aktif).length === 0)}
+                        onClick={tayangkanStoryBukaSekarang}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500 hover:text-background disabled:opacity-50"
+                      >
+                        <Play className="size-3" /> Langsung Tayangkan Sekarang
+                      </button>
+                    </div>
                   </div>
 
                   {/* Pengaturan Jam Buka, Hari Buka, dan Mode Beberapa Video */}
                   <div className="grid gap-4 sm:grid-cols-3 rounded-xl border border-border/70 bg-white/[0.02] p-3.5 text-xs">
                     <div className="space-y-1.5">
                       <span className="font-medium text-foreground block">Jam Buka (WIB)</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <input
                           type="time"
                           value={jadwalRutin.jam}
@@ -1211,7 +1240,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                         </span>
                       </label>
                       <span className="rounded-full bg-emas/15 px-2 py-0.5 text-[10px] font-medium text-emas-muda">
-                        Latar Foto AI Gratis + Animasi ala Bakafrawi
+                        3 Menu Terlaris Asli + Musik & SFX Adaptif
                       </span>
                     </div>
 
@@ -1229,7 +1258,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                             }
                             className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
                           >
-                            <option value="video-animasi" className="bg-card">🎬 Video Animasi Simpel (Remotion 8 dtk)</option>
+                            <option value="video-animasi" className="bg-card">🎬 Video Animasi 3 Menu Terlaris (15 dtk + Musik & SFX)</option>
                             <option value="poster" className="bg-card">🖼 Poster Story AI (9:16, cepat & ringan)</option>
                           </select>
                         </label>

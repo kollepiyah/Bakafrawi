@@ -1,7 +1,7 @@
 import { permintaanDariAdmin } from "@/lib/admin-server";
 import type { JadwalRutin } from "@/lib/jadwal-tayang-murni";
 import { SUPABASE_URL } from "@/lib/lingkungan";
-import { adaKunciServer, bacaJadwalRutin, simpanJadwalRutin, tayangkanRutinSekarang } from "@/lib/studio-server";
+import { adaKunciServer, bacaJadwalRutin, buatPratinjauRutin, simpanJadwalRutin, tayangkanRutinSekarang } from "@/lib/studio-server";
 
 // Pengaturan jadwal otomatis setiap jam buka (mis. upload video Story Opening Lek Kopi).
 export async function GET(req: Request) {
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   }
   const origin = new URL(req.url).origin;
   const isi = (await req.json()) as {
-    aksi?: "simpan" | "tayang-sekarang" | "izin-unggah";
+    aksi?: "simpan" | "tayang-sekarang" | "pratinjau" | "izin-unggah";
     merek?: string;
     namaBerkas?: string;
     jadwal?: Partial<JadwalRutin>;
@@ -62,6 +62,14 @@ export async function POST(req: Request) {
         uploadUrl: data.url ? `${SUPABASE_URL}/storage/v1${data.url}` : null,
         token: data.token ?? null,
         publicUrl: `${SUPABASE_URL}/storage/v1/object/public/studio/${jalur}`,
+      });
+    }
+    if (isi.aksi === "pratinjau") {
+      const r = await buatPratinjauRutin(merek, origin);
+      return Response.json({
+        ok: true,
+        ...r,
+        pesan: `Pratinjau Story Jam Buka sedang dibuat${r.dipicu ? " sekarang (±1–2 menit)" : " pada putaran mesin berikutnya"}. Hasilnya akan muncul di Riwayat Studio & dikirim ke Telegram untuk Kyai cek dulu (tidak langsung tayang).`,
       });
     }
     if (isi.aksi === "tayang-sekarang") {

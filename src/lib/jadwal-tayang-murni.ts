@@ -61,6 +61,8 @@ export type JadwalRutin = {
   aiGaya?: GayaOpeningAI;
   /** Arahan opsional untuk AI (mis. tonjolkan menu/promo tertentu; kosong = AI pilih otomatis). */
   aiArahan?: string;
+  /** true = buat pratinjau dulu di Studio & Telegram (tidak langsung tayang sebelum disetujui). */
+  perluPersetujuan?: boolean;
   terakhirTayang?: string | null;
   video: VideoRutin[];
 };
@@ -92,6 +94,7 @@ export function jadwalRutinBawaan(merek = "lekkopi"): JadwalRutin {
       aiFormat: "video-animasi",
       aiGaya: "otomatis",
       aiArahan: "",
+      perluPersetujuan: true,
       terakhirTayang: null,
       video: [{ ...VIDEO_OPENING_BAWAAN_LEKKOPI }],
     };
@@ -164,6 +167,7 @@ export function normalisasiJadwalRutin(mentah: unknown, merek = "lekkopi"): Jadw
     aiFormat,
     aiGaya,
     aiArahan: typeof m.aiArahan === "string" ? m.aiArahan.trim().slice(0, 300) : "",
+    perluPersetujuan: typeof m.perluPersetujuan === "boolean" ? m.perluPersetujuan : true,
     terakhirTayang: typeof m.terakhirTayang === "string" ? m.terakhirTayang : null,
     video,
   };

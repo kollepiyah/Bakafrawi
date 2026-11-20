@@ -26,6 +26,20 @@
      headline sapaan harian, kartu rekomendasi menu hari ini, jam buka, & musik santai;
   2) **Poster Story AI (9:16)** — cepat & ringan (`studio/lib/opening-ai.mjs`).
   Tersedia 3 tema visual (`hangat-kafe`, `terang-modern`, `minimalis-gelap`, atau otomatis berganti tiap hari).
+- **Polesan Story Jam Buka AI, Audio Adaptif, Pratinjau dulu, & UI Mobile (21 Nov):**
+  - **3 Menu Terlaris Hari Sebelumnya (15 dtk):** `ambilMenuLekKopi()` (`src/lib/naskah-bank.ts`) kini
+    mengurutkan 3 menu terlaris (`terlaris` dari `pintu-bakafrawi`) lengkap dengan harga & foto produk
+    asli; `OpeningStory` merender 5 adegan (Pembuka → `#1`, `#2`, `#3` Terlaris → Penutup estetik).
+  - **Musik Kafe Adaptif + Efek Suara (SFX):** `studio/lib/opening-audio.mjs` menghasilkan musik kafe
+    berbeda tiap hari mengikuti tema visual (Lo-Fi Jazz / Morning Bossa / Chill Lounge + geser nada
+    harian) serta efek suara transisi (`whoosh`, `pop`, `chime`).
+  - **Mode Pratinjau Dulu & Kirim Video ke Telegram:** tombol baru **Buat Pratinjau Dulu (Cek di Studio
+    & Telegram)** membuat Story Buka masuk ke Riwayat Studio + mengirim video aslinya beserta tombol
+    persetujuan ke Telegram tanpa langsung tayang; kabar tayang otomatis juga mengirim video aslinya
+    (`kirimMediaTayang`).
+  - **Perbaikan UI Mobile Studio:** bar tombol pill di panel atas (`Jam Terbaik`, `Riset Tren Viral`,
+    `Pelajari Link Video`, `Story Jam Buka`) dan baris Jam Buka kini `flex-wrap` + `whitespace-nowrap`
+    sehingga tidak lagi meluber keluar kartu di layar HP.
 - Diuji: 32/32 unit test murni (`npm run uji`), pemeriksaan tipe TypeScript situs & Remotion (`tsc --noEmit`).
 
 ## Tombol "Usulkan arahan" di formulir Studio (19 Nov)
