@@ -116,7 +116,7 @@ async function panggilClaude(opsi: OpsiLlm) {
   const res = await new Anthropic().messages.create({
     model,
     max_tokens: opsi.maksToken ?? 8000,
-    ...(opsi.skema ? { output_config: { effort: "low" as const, format: { type: "json_schema" as const, schema: opsi.skema } } } : {}),
+    output_config: opsi.skema ? { effort: "low", format: { type: "json_schema", schema: opsi.skema } } : undefined,
     system: opsi.system,
     messages: [{ role: "user", content: opsi.prompt }],
   });
