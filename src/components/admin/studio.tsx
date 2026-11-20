@@ -162,7 +162,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     setPesan("Konsep arahan viral berhasil disalin ke formulir!");
   }
 
-  // Usulan arahan dari Claude untuk produk & jenis yang sedang dipilih; diklik → mengisi kolom arahan.
+  // Usulan arahan dari Claude untuk produk & jenis yang sedang dipilih (Bakafrawi & Lek Kopi).
   async function mintaUsulan(e: MouseEvent<HTMLButtonElement>) {
     const form = e.currentTarget.form;
     if (!form) return;
@@ -173,11 +173,15 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     const res = await fetch("/api/studio/arahan", {
       method: "POST",
       headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ produk: d.get("produk"), jenis: d.get("jenis") }),
+      body: JSON.stringify({
+        merek: pilihMerek,
+        produk: merekBank ? pilihMerek : d.get("produk"),
+        jenis: merekBank ? "video" : d.get("jenis"),
+      }),
     }).catch(() => null);
     const j = res ? await res.json().catch(() => ({})) : {};
     setMengusulkan(false);
-    if (!j.ok) return setGalatUsulan(j.pesan ?? "Gagal meminta usulan arahan.");
+    if (!j.ok) return setGalatUsulan(j.pesan ?? "Gagal meminta usulan.");
     setUsulan(j.usulan as UsulanArahan[]);
   }
 
@@ -493,13 +497,9 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
               <div className="grid gap-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <label htmlFor="studio-arahan" className="text-xs font-medium text-muted-foreground">{merekBank ? "Ide video" : "Arahan untuk AI (opsional)"}</label>
-                  {!merekBank && pilihMerek === "bakafrawi" && pilihProduk !== "lek-kopi" ? (
-                    <button type="button" onClick={mintaUsulan} disabled={mengusulkan} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-xs hover:border-emas hover:text-emas disabled:opacity-60">
-                      {mengusulkan ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} Usulkan arahan
-                    </button>
-                  ) : !merekBank && pilihProduk === "lek-kopi" ? (
-                    <span className="text-[11px] text-muted-foreground italic">Saran AI hanya untuk produk Bakafrawi</span>
-                  ) : null}
+                  <button type="button" onClick={mintaUsulan} disabled={mengusulkan} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-xs hover:border-emas hover:text-emas disabled:opacity-60">
+                    {mengusulkan ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} {merekBank ? "Usulkan ide AI" : "Usulkan arahan"}
+                  </button>
                 </div>
                 <textarea
                   id="studio-arahan"
@@ -511,8 +511,8 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   placeholder={merekBank ? "Mis. suasana malam minggu, tonjolkan es kopi susu & latte art, ajak nongkrong" : "Mis. sasar pemilik warung kopi, tonjolkan fitur struk WhatsApp, nada santai"}
                   className="rounded-lg border border-input bg-transparent px-3 py-2 text-sm"
                 />
-                {!merekBank && galatUsulan && <p className="text-xs text-red-300">{galatUsulan}</p>}
-                {!merekBank && usulan.length > 0 && (
+                {galatUsulan && <p className="text-xs text-red-300">{galatUsulan}</p>}
+                {usulan.length > 0 && (
                   <div className="grid gap-2 sm:grid-cols-3">
                     {usulan.map((u) => (
                       <button key={u.judul + u.arahan} type="button" onClick={() => pakaiUsulan(u.arahan)} className="rounded-xl border border-white/10 bg-white/[.03] p-3 text-left text-xs hover:border-emas">

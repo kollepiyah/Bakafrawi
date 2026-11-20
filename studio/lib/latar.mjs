@@ -1,8 +1,9 @@
-// Hapus latar gambar karakter maskot dengan model segmentasi MODNet (Apache-2.0, jalan di mesin
-// sendiri lewat transformers.js — gratis, ±2 dtk/gambar). Pengganti colorkey ffmpeg: gambar Google
-// Flow berlatar abu-abu muda membuat sweter krem ikut bolong (video 19 Nov 2026). Hasil dipangkas ke
-// tepi tubuh supaya karakter tak mengecil oleh ruang kosong di sekelilingnya.
+// Hapus latar gambar & video karakter maskot dengan model segmentasi MODNet (Apache-2.0, jalan di mesin
+// sendiri lewat transformers.js — gratis, AI matting). Menggantikan chromakey ffmpeg yang rentan menghapus
+// pakaian/tubuh karakter jika warnanya mirip latar (mis. baju abu/krem atau latar bukan hijau pekat).
+import { copyFile, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -76,33 +77,104 @@ export function kotakGabung(kotak, lebar, tinggi, tepi = 0.06) {
 }
 
 /**
- * Video karakter dari Veo (latar hijau/polos) → WebM VP9 transparan, dipangkas ke kotak karakter.
- * Kotak dicari MODNet di 3 bingkai (awal/tengah/akhir) supaya tangan yang bergerak tak terpotong;
- * latar dibuang chromakey memakai warna pojok bingkai pertama (hijau terang paling bersih).
- * → { berkas, durasi }
+ * Video karakter dari Veo / MP4 → WebM VP9 transparan dengan segmentasi AI (MODNet).
+ * Menggunakan MODNet per-bingkai untuk menghapus latar belakang secara akurat tanpa
+ * menghapus bagian tubuh/pakaian karakter (Opsi B: segmentasi AI utuh).
+ * → { berkas, durasi, hijau }
  */
-export async function videoTransparan(masuk, keluar, { maks = 10, bolakBalik = true } = {}) {
+export async function videoTransparan(masuk, keluar, { maks = 8, bolakBalik = true, fps = 15 } = {}) {
   const info = await probe(masuk);
   const durasi = Math.min(maks, info.durasi || maks);
-  const kotak = [];
-  let warna = null;
-  for (const t of [0, durasi / 2, Math.max(0, durasi - 0.2)]) {
-    const bingkai = await ffmpegKeluar(['-ss', t.toFixed(2), '-i', masuk, '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', '-']);
-    if (!warna) {
-      const { data } = await sharp(bingkai).extract({ left: 0, top: 0, width: 4, height: 4 }).resize(1, 1).raw().toBuffer({ resolveWithObject: true });
-      warna = [...data.subarray(0, 3)];
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'maskot-modnet-'));
+  const frameDir = path.join(tempDir, 'in');
+  const outDir = path.join(tempDir, 'out');
+  await mkdir(frameDir, { recursive: true });
+  await mkdir(outDir, { recursive: true });
+
+  try {
+    // 1. Ekstrak bingkai video pada fps terukur (15 fps cukup halus untuk maskot loop di sudut)
+    await ffmpeg([
+      '-y',
+      '-t', durasi.toFixed(2),
+      '-i', masuk,
+      '-vf', `scale=-2:min(720\\,ih),fps=${fps}`,
+      path.join(frameDir, 'f_%05d.png'),
+    ]);
+
+    const daftarBerkas = (await readdir(frameDir)).filter((f) => f.endsWith('.png')).sort();
+    if (!daftarBerkas.length) throw new Error('Gagal mengekstrak bingkai video maskot');
+
+    // 2. Deteksi warna latar pojok pertama untuk informasi metadata
+    const bingkai0 = path.join(frameDir, daftarBerkas[0]);
+    const { data: dataWarna } = await sharp(bingkai0).extract({ left: 0, top: 0, width: 4, height: 4 }).resize(1, 1).raw().toBuffer({ resolveWithObject: true });
+    const warna = [...dataWarna.subarray(0, 3)];
+    const hijau = warna[1] > warna[0] + 40 && warna[1] > warna[2] + 40;
+
+    // 3. Proses tiap bingkai lewat MODNet (AI background removal)
+    // Batch 4 bingkai bersamaan untuk efisiensi CPU
+    const batch = 4;
+    for (let i = 0; i < daftarBerkas.length; i += batch) {
+      const potongan = daftarBerkas.slice(i, i + batch);
+      await Promise.all(
+        potongan.map(async (berkas) => {
+          const jalurMasuk = path.join(frameDir, berkas);
+          const jalurKeluar = path.join(outDir, berkas);
+          try {
+            const buf = await topeng(jalurMasuk);
+            await writeFile(jalurKeluar, buf);
+          } catch (err) {
+            // Jika satu bingkai gagal, salin bingkai asli agar tidak bolong
+            await copyFile(jalurMasuk, jalurKeluar);
+          }
+        })
+      );
     }
-    const { info: p } = await sharp(await topeng(bingkai)).trim({ threshold: 10 }).toBuffer({ resolveWithObject: true });
-    kotak.push({ x: -(p.trimOffsetLeft ?? 0), y: -(p.trimOffsetTop ?? 0), w: p.width, h: p.height });
+
+    // 4. Hitung batas potong (bounding box) karakter agar tidak ada ruang kosong berlebih di pinggir
+    const sampel = [
+      daftarBerkas[0],
+      daftarBerkas[Math.floor(daftarBerkas.length / 2)],
+      daftarBerkas[daftarBerkas.length - 1],
+    ].filter(Boolean);
+
+    const kotak = [];
+    for (const b of sampel) {
+      try {
+        const { info: p } = await sharp(path.join(outDir, b)).trim({ threshold: 10 }).toBuffer({ resolveWithObject: true });
+        kotak.push({ x: -(p.trimOffsetLeft ?? 0), y: -(p.trimOffsetTop ?? 0), w: p.width, h: p.height });
+      } catch {}
+    }
+
+    const { lebar: lBaru, tinggi: tBaru } = await probe(path.join(outDir, daftarBerkas[0]));
+    const k = kotak.length ? kotakGabung(kotak, lBaru, tBaru) : { x: 0, y: 0, w: lBaru, h: tBaru };
+
+    // 5. Rakit kembali ke WebM VP9 dengan kanal alfa (transparan)
+    const dasar = `crop=${k.w}:${k.h}:${k.x}:${k.y},scale=-2:min(1100\\,ih),fps=30,format=yuva420p`;
+    const filter = bolakBalik
+      ? `[0:v]${dasar},split[maju][b];[b]reverse[mundur];[maju][mundur]concat=n=2:v=1:a=0[v]`
+      : `[0:v]${dasar}[v]`;
+
+    await ffmpeg([
+      '-y',
+      '-framerate', String(fps),
+      '-i', path.join(outDir, 'f_%05d.png'),
+      '-filter_complex', filter,
+      '-map', '[v]',
+      '-an',
+      '-c:v', 'libvpx-vp9',
+      '-pix_fmt', 'yuva420p',
+      '-b:v', '0',
+      '-crf', '32',
+      '-auto-alt-ref', '0',
+      '-deadline', 'good',
+      '-cpu-used', '4',
+      keluar,
+    ]);
+
+    return { berkas: keluar, durasi: bolakBalik ? durasi * 2 : durasi, hijau };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
   }
-  const k = kotakGabung(kotak, info.lebar, info.tinggi);
-  const hex = `0x${warna.map((x) => x.toString(16).padStart(2, '0')).join('')}`;
-  const hijau = warna[1] > warna[0] + 40 && warna[1] > warna[2] + 40;
-  const dasar = [`crop=${k.w}:${k.h}:${k.x}:${k.y}`, `chromakey=${hex}:0.13:0.06`, ...(hijau ? ['despill=type=green'] : []), 'scale=-2:min(1100\\,ih)', 'fps=30', 'format=yuva420p'].join(',');
-  // Bolak-balik (maju lalu mundur): video Veo 8 dtk diulang tanpa lompatan dari bingkai akhir ke awal.
-  const filter = bolakBalik ? `[0:v]${dasar},split[maju][b];[b]reverse[mundur];[maju][mundur]concat=n=2:v=1:a=0[v]` : `[0:v]${dasar}[v]`;
-  await ffmpeg(['-y', '-t', durasi.toFixed(2), '-i', masuk, '-filter_complex', filter, '-map', '[v]', '-an', '-c:v', 'libvpx-vp9', '-pix_fmt', 'yuva420p', '-b:v', '0', '-crf', '32', '-auto-alt-ref', '0', '-deadline', 'good', '-cpu-used', '4', keluar]);
-  return { berkas: keluar, durasi: bolakBalik ? durasi * 2 : durasi, hijau };
 }
 
 /** ffmpeg yang keluarannya (stdout) dibutuhkan sebagai Buffer, mis. satu bingkai PNG. */
