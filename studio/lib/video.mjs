@@ -299,7 +299,14 @@ export async function renderSinematikRemotion({
     });
   }
 
-  const totalDetik = Number(r.total) || segmen.reduce((a, b) => a + b.durasi, 0) + 2.2;
+  // Untuk editorial-scroll (1 scene laptop 4 blok), ambil 1 media per adegan agar tidak duplikat.
+  const segmenFinal = gaya === 'editorial-scroll'
+    ? segmen.filter((s, i) => i === 0 || segmen[i - 1].adeganKe !== s.adeganKe).slice(0, 4)
+    : segmen;
+
+  const totalDetik = gaya === 'editorial-scroll'
+    ? Math.max(7, segmenFinal.length * 2.4)
+    : (Number(r.total) || segmenFinal.reduce((a, b) => a + b.durasi, 0) + 2.2);
   let musikNama = null;
   if (musik) {
     musikNama = await salin(musik, 'musik');
@@ -322,7 +329,7 @@ export async function renderSinematikRemotion({
     gaya,
     musik: musikNama,
     musikVolume: suara.length ? 0.22 : musikVolume,
-    segmen,
+    segmen: segmenFinal,
     penutup: {
       durasi: Number(r.penutup?.durasi) || 2.2,
       ajakan: ajakanAkhir,

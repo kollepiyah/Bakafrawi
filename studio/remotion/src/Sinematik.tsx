@@ -67,6 +67,14 @@ export const contohSinematik: PropsSinematik = {
 };
 
 export function hitungDurasiSinematik(p: PropsSinematik) {
+  // Mode editorial-scroll = 1 scene tunggal laptop di meja kayu (~9–11 detik total, tanpa penutup terpisah).
+  if (p.gaya === 'editorial-scroll') {
+    const jumlah = Math.max(1, Math.min(4, p.segmen.length));
+    const perBagian = Math.round(2.4 * FPS_SINEMATIK); // 2.4 detik per blok scroll → total ~9.6 detik
+    const jadwal = p.segmen.slice(0, 4).map((_, i) => ({ mulai: i * perBagian, durasi: perBagian }));
+    const total = Math.max(FPS_SINEMATIK * 7, jumlah * perBagian);
+    return { jadwal, penutupMulai: total, penutupDurasi: 0, total };
+  }
   let mulai = 0;
   const jadwal = p.segmen.map((s) => {
     const durasi = Math.max(15, Math.round((Number(s.durasi) || 2.5) * FPS_SINEMATIK));
@@ -275,71 +283,72 @@ const PenutupSinematik: React.FC<{ merek: PropsSinematik['merek']; penutup: NonN
   );
 };
 
-const SECTION_H = 1520;
-const SUB_EDITORIAL = ['RACIKAN KHAS', 'SEDUHAN SEGAR', 'AROMA PILIHAN', 'TEMAN SANTAI', 'MAMPIR MALAM INI'];
+const LAYAR_W = 920;
+const LAYAR_H = 575;
+const NAV_H = 54;
+const BLOK_H = LAYAR_H - NAV_H; // 521px per blok scroll di dalam layar laptop
+const SUB_LAPTOP = ['SPECIALTY COFFEE', 'RACIKAN KHAS', 'SEDUHAN SEGAR', 'MAMPIR MALAM INI'];
+const JUDUL_CADANGAN = [
+  'BANGUNKAN AROMA KOPI',
+  'NIKMATI SEDUHAN TERBAIK',
+  'RACIKAN SEGAR TIAP HARI',
+  'WAKTUNYA NGOPI SANTAI',
+];
 
 /**
- * Halaman Editorial Kontinyu ala website kopi mewah (POUR / PLAY):
- * Seluruh bagian menyambung dalam 1 halaman panjang yang di-scroll mulus tanpa pernah berkedip/fade,
- * dengan sticky navbar, komposisi asimetris kiri-kanan + full-bleed showcase + footer krem menyatu.
+ * 1 SCENE TUNGGAL persis referensi POUR / PLAY:
+ * Laptop MacBook elegan di atas meja kayu hangat dengan lampu studio redup — kamera diam (micro-zoom halus),
+ * sementara halaman website kopi mewah di dalam layar laptop menggulir mulus vertikal dari atas ke bawah.
  */
 const HalamanEditorialScroll: React.FC<{
   props: PropsSinematik;
   jadwal: { mulai: number; durasi: number }[];
-  penutupMulai: number;
-  penutupDurasi: number;
-}> = ({ props, jadwal, penutupMulai, penutupDurasi }) => {
+  total: number;
+}> = ({ props, jadwal, total }) => {
   const frame = useCurrentFrame();
-  const { merek, segmen, penutup } = props;
-  const adaPenutup = Boolean(penutup && penutupDurasi > 0);
+  const { merek } = props;
+  const blok = props.segmen.slice(0, 4);
 
-  // Hitung posisi scroll vertikal kontinyu: berhenti sejenak di tiap bagian, lalu gulir halus (easeInOutCubic).
-  const titik = [
-    ...jadwal.map((j, i) => ({ mulai: j.mulai, durasi: j.durasi, y: i * SECTION_H })),
-    ...(adaPenutup ? [{ mulai: penutupMulai, durasi: penutupDurasi, y: segmen.length * SECTION_H }] : []),
-  ];
+  // Micro-zoom kamera yang sangat halus selama 1 scene penuh (tidak pernah cut/ganti scene!).
+  const skalaKamera = interpolate(frame, [0, total], [1.0, 1.045], { extrapolateRight: 'clamp' });
 
+  // Scroll kontinyu mulus di dalam layar laptop (berhenti tipis di tiap blok lalu meluncur mulus).
   let scrollY = 0;
-  for (let i = 0; i < titik.length - 1; i++) {
-    const a = titik[i];
-    const b = titik[i + 1];
-    const mulaiGulir = a.mulai + Math.round(a.durasi * 0.42);
-    const selesaiGulir = b.mulai + Math.min(10, Math.round(b.durasi * 0.15));
-    if (frame >= selesaiGulir) {
-      scrollY = b.y;
-    } else if (frame > mulaiGulir) {
-      scrollY = interpolate(frame, [mulaiGulir, selesaiGulir], [a.y, b.y], {
-        easing: Easing.inOut(Easing.cubic),
-        extrapolateLeft: 'clamp',
-        extrapolateRight: 'clamp',
-      });
-      break;
-    } else {
-      break;
-    }
+  if (blok.length > 1) {
+    const maksScroll = (blok.length - 1) * BLOK_H;
+    // Gabungan scroll terus-menerus lembut + sedikit perlambatan di tiap blok seperti scroll trackpad asli.
+    const progres = interpolate(frame, [14, total - 18], [0, blok.length - 1], {
+      extrapolateLeft: 'clamp',
+      extrapolateRight: 'clamp',
+    });
+    const idx = Math.min(blok.length - 2, Math.floor(progres));
+    const frac = progres - idx;
+    const halus = Easing.inOut(Easing.sin)(frac);
+    scrollY = Math.min(maksScroll, (idx + halus) * BLOK_H);
   }
 
-  const renderMedia = (s: SegmenSinematik, i: number, gayaBox: React.CSSProperties) => {
-    const j = jadwal[i];
-    const lokal = Math.max(0, frame - j.mulai);
-    const skala = interpolate(lokal, [0, j.durasi], [1.02, 1.09], { extrapolateRight: 'clamp' });
-    const aktif = frame >= j.mulai - 40 && frame <= j.mulai + j.durasi + 40;
+  const renderMediaLayar = (s: SegmenSinematik, i: number, style: React.CSSProperties) => {
+    const j = jadwal[i] ?? { mulai: 0, durasi: total };
     return (
-      <div style={{ overflow: 'hidden', position: 'relative', background: '#E7DAC6', ...gayaBox }}>
-        {s.berkas && aktif ? (
+      <div style={{ overflow: 'hidden', position: 'relative', background: '#E5D6C0', ...style }}>
+        {s.berkas ? (
           s.jenis === 'video' ? (
-            <Sequence from={Math.max(0, j.mulai - 15)} durationInFrames={j.durasi + 45} layout="none">
-              <OffthreadVideo
-                src={staticFile(s.berkas)}
-                startFrom={Math.max(0, Math.round((Number(s.mulaiKlip) || 0) * FPS_SINEMATIK))}
-                muted
-                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${skala})`, filter: 'contrast(1.05) saturate(1.08) sepia(0.06)' }}
-              />
-            </Sequence>
+            <OffthreadVideo
+              src={staticFile(s.berkas)}
+              startFrom={Math.max(0, Math.round((Number(s.mulaiKlip) || 0) * FPS_SINEMATIK))}
+              muted
+              style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'contrast(1.06) saturate(1.1) sepia(0.05)' }}
+            />
           ) : (
             <Img
               src={staticFile(s.berkas)}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${skala})`, filter: 'contrast(1.05) saturate(1.08) sepia(0.06)' }}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                transform: `scale(${interpolate(Math.max(0, frame - j.mulai), [0, j.durasi], [1.02, 1.09], { extrapolateRight: 'clamp' })})`,
+                filter: 'contrast(1.06) saturate(1.1) sepia(0.05)',
+              }}
             />
           )
         ) : null}
@@ -348,147 +357,316 @@ const HalamanEditorialScroll: React.FC<{
   };
 
   return (
-    <AbsoluteFill style={{ background: '#F3EBDF', color: '#1B140F', overflow: 'hidden' }}>
-      {/* Kanvas halaman panjang yang menggulir mulus di belakang sticky navbar */}
-      <div style={{ position: 'absolute', left: 0, right: 0, top: 185, transform: `translateY(${-scrollY}px)` }}>
-        {segmen.map((s, i) => {
-          const mentah = String(s.teksLayar ?? '').trim();
-          const bagian = mentah ? mentah.split('|').map((x) => x.trim()).filter(Boolean) : [];
-          const judul = bagian[0] || '';
-          const sub = bagian[1] || '';
-          const fullBleed = i > 0 && (!judul || i % 3 === 2);
-          const subLabel = SUB_EDITORIAL[i % SUB_EDITORIAL.length];
+    <AbsoluteFill style={{ background: '#1B1511', overflow: 'hidden' }}>
+      {/* Seluruh 1 Scene (Ruangan Kafe + Meja Kayu + Laptop 3D) dengan micro-zoom halus */}
+      <AbsoluteFill style={{ transform: `scale(${skalaKamera})`, transformOrigin: '50% 52%' }}>
+        {/* 1. Dinding latar hangat bokeh + cahaya lampu meja di kanan atas */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background:
+              'radial-gradient(circle at 86% 24%, rgba(255,214,158,0.22) 0%, rgba(255,190,120,0.06) 28%, transparent 52%), linear-gradient(180deg, #473C34 0%, #312822 42%, #211914 58%, #16100C 100%)',
+          }}
+        />
+        {/* Siluet lampu meja minimalis di kanan atas (seperti contoh POUR / PLAY) */}
+        <div
+          style={{
+            position: 'absolute',
+            right: -30,
+            top: 260,
+            width: 170,
+            height: 110,
+            borderRadius: '85px 85px 12px 12px',
+            background: 'linear-gradient(180deg, #161413 0%, #24201D 100%)',
+            boxShadow: '0 40px 120px 30px rgba(255,210,145,0.28)',
+          }}
+        />
+        <div style={{ position: 'absolute', right: 48, top: 365, width: 14, height: 420, background: '#171412' }} />
 
-          // ── SECTION HERO (BAGIAN 1) ──
-          if (i === 0) {
-            const heroJudul = judul || merek.nama;
-            return (
-              <div key={i} style={{ height: SECTION_H, padding: '36px 56px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 36, borderBottom: '1px solid rgba(27,20,15,0.1)' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18 }}>
-                  <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', color: '#8C6239' }}>
-                    {subLabel}
-                  </span>
-                  <div style={{ fontFamily: SERIF, fontSize: heroJudul.length > 20 ? 96 : 118, lineHeight: 0.96, letterSpacing: -2, color: '#1B140F', textTransform: 'uppercase' }}>
-                    {heroJudul}
-                  </div>
-                  {sub ? (
-                    <div style={{ fontFamily: SANS, fontSize: 30, lineHeight: 1.38, color: 'rgba(27,20,15,0.72)', maxWidth: 820 }}>
-                      {sub}
-                    </div>
-                  ) : null}
-                  <div style={{ marginTop: 8 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, border: '2px solid #1B140F', borderRadius: 999, padding: '14px 30px', fontFamily: SANS, fontSize: 22, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' }}>
-                      LIHAT RACIKAN →
-                    </span>
-                  </div>
-                </div>
-                {renderMedia(s, i, { flex: 1, minHeight: 0, borderRadius: 34, boxShadow: '0 32px 64px -22px rgba(27,20,15,0.28)' })}
-              </div>
-            );
-          }
-
-          // ── SECTION FULL-BLEED SHOWCASE (SEPERTI DETIK 00:05 POUR/PLAY — BERSIH TANPA TEKS KOSONG) ──
-          if (fullBleed) {
-            return (
-              <div key={i} style={{ height: SECTION_H, padding: '44px 48px', display: 'flex', flexDirection: 'column', gap: 22, borderBottom: '1px solid rgba(27,20,15,0.1)' }}>
-                <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
-                  {renderMedia(s, i, { width: '100%', height: '100%', borderRadius: 38, boxShadow: '0 32px 64px -22px rgba(27,20,15,0.28)' })}
-                  <div style={{ position: 'absolute', left: 32, top: 32, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ background: 'rgba(243,235,223,0.92)', backdropFilter: 'blur(8px)', color: '#1B140F', borderRadius: 999, padding: '12px 24px', fontFamily: SANS, fontSize: 21, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase' }}>
-                      {judul || merek.nama} →
-                    </span>
-                  </div>
-                  {sub ? (
-                    <div style={{ position: 'absolute', left: 32, right: 32, bottom: 32, background: 'rgba(27,20,15,0.72)', backdropFilter: 'blur(10px)', color: '#F3EBDF', borderRadius: 24, padding: '20px 28px', fontFamily: SANS, fontSize: 28, fontWeight: 600 }}>
-                      {sub}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            );
-          }
-
-          // ── SECTION ASIMETRIS EDITORIAL (NOMOR + JUDUL SERIF + KARTU VISUAL) ──
-          const kanan = i % 2 === 1;
-          return (
-            <div key={i} style={{ height: SECTION_H, padding: '56px 56px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 38, borderBottom: '1px solid rgba(27,20,15,0.1)' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: kanan ? 'flex-start' : 'flex-end', textAlign: kanan ? 'left' : 'right' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
-                  <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 58, color: '#8C6239', lineHeight: 1 }}>{i + 1}.</span>
-                  <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 700, letterSpacing: 2.8, textTransform: 'uppercase', color: 'rgba(27,20,15,0.52)' }}>
-                    {subLabel}
-                  </span>
-                </div>
-                <div style={{ fontFamily: SERIF, fontSize: judul.length > 22 ? 84 : 102, lineHeight: 0.98, letterSpacing: -1.5, color: '#1B140F', textTransform: 'uppercase' }}>
-                  {judul}
-                </div>
-                {sub ? (
-                  <div style={{ fontFamily: SANS, fontSize: 29, lineHeight: 1.4, color: 'rgba(27,20,15,0.7)', maxWidth: 820 }}>
-                    {sub}
-                  </div>
-                ) : null}
-                <div style={{ marginTop: 8 }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#1B140F', color: '#F3EBDF', borderRadius: 999, padding: '14px 28px', fontFamily: SANS, fontSize: 21, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase' }}>
-                    COBA SEKARANG →
-                  </span>
-                </div>
-              </div>
-              {renderMedia(s, i, { flex: 1, minHeight: 0, borderRadius: 36, boxShadow: '0 32px 64px -22px rgba(27,20,15,0.28)' })}
-            </div>
-          );
-        })}
-
-        {/* Footer Penutup Krem Hangat — menyatu mulus di akhir halaman (tidak lompat ke layar hitam!) */}
-        {adaPenutup && penutup ? (
-          <div style={{ height: SECTION_H, padding: '120px 64px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: 28, background: 'linear-gradient(180deg, #F3EBDF 0%, #E9DEC9 100%)' }}>
-            {merek.logo ? (
-              <Img src={staticFile(merek.logo)} style={{ width: 140, height: 140, borderRadius: 30, objectFit: 'contain', boxShadow: '0 20px 44px rgba(27,20,15,0.2)' }} />
-            ) : null}
-            <span style={{ fontFamily: SANS, fontSize: 22, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', color: '#8C6239' }}>
-              SAMPAI JUMPA DI KEDAI
-            </span>
-            <div style={{ fontFamily: SERIF, fontSize: 96, lineHeight: 1.0, color: '#1B140F', textTransform: 'uppercase', maxWidth: 880 }}>
-              {penutup.ajakan || merek.nama}
-            </div>
-            <div style={{ width: 84, height: 2, background: 'rgba(27,20,15,0.25)' }} />
-            <div style={{ fontFamily: SANS, fontSize: 30, fontWeight: 600, color: 'rgba(27,20,15,0.72)' }}>
-              {penutup.info || merek.info || merek.sub || 'Waru, Sidoarjo'}
-            </div>
-            <span style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 10, background: '#1B140F', color: '#F3EBDF', borderRadius: 999, padding: '18px 40px', fontFamily: SANS, fontSize: 24, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' }}>
-              MAMPIR SEKARANG →
-            </span>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Sticky Top Navbar yang selalu diam elegan di atas saat halaman menggulir */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 185,
-          background: 'rgba(243,235,223,0.92)',
-          backdropFilter: 'blur(12px)',
-          padding: '84px 56px 20px',
-          borderBottom: '1.5px solid rgba(27,20,15,0.14)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          fontFamily: SANS,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 42, height: 42, borderRadius: 10, objectFit: 'contain' }} /> : null}
-          <span style={{ fontWeight: 800, fontSize: 30, letterSpacing: 3, textTransform: 'uppercase', color: '#1B140F' }}>
-            {merek.nama}
-          </span>
+        {/* 2. Permukaan meja kayu walnut hangat di separuh bawah */}
+        <div
+          style={{
+            position: 'absolute',
+            left: -60,
+            right: -60,
+            top: 1020,
+            bottom: -60,
+            background:
+              'linear-gradient(180deg, #563B29 0%, #442C1D 24%, #331F14 62%, #22140C 100%)',
+            borderTop: '2px solid rgba(255,220,185,0.16)',
+            boxShadow: 'inset 0 28px 60px rgba(0,0,0,0.35)',
+          }}
+        >
+          {/* Serat kayu halus */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              opacity: 0.16,
+              backgroundImage:
+                'repeating-linear-gradient(178deg, rgba(255,215,175,0.14) 0px, rgba(255,215,175,0.14) 2px, transparent 2px, transparent 22px)',
+            }}
+          />
+          {/* Bayangan laptop jatuh di atas meja kayu */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 70,
+              right: 40,
+              top: 190,
+              height: 290,
+              background: 'radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.28) 55%, transparent 78%)',
+              transform: 'rotate(-2deg)',
+            }}
+          />
         </div>
-        <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: 2.2, textTransform: 'uppercase', color: 'rgba(27,20,15,0.58)' }}>
-          {merek.sub || 'MENU · SUASANA · WARU'}
-        </span>
-      </div>
+
+        {/* 3. MOCKUP LAPTOP MACBOOK 3D DI TENGAH MEJA */}
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 495,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            perspective: 1850,
+          }}
+        >
+          {/* Tutup & Layar Laptop (perspektif sedikit miring ke kanan persis video contoh) */}
+          <div
+            style={{
+              width: LAYAR_W + 30,
+              padding: '15px 15px 18px',
+              borderRadius: '26px 26px 8px 8px',
+              background: 'linear-gradient(145deg, #25272C 0%, #0E0F12 100%)',
+              border: '3px solid #6F737B',
+              boxShadow: '0 34px 72px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,255,255,0.25)',
+              transform: 'rotateY(-9deg) rotateX(3deg) rotateZ(-2.2deg)',
+              transformStyle: 'preserve-3d',
+              position: 'relative',
+            }}
+          >
+            {/* Camera Notch MacBook */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 14,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 112,
+                height: 20,
+                borderRadius: '0 0 10px 10px',
+                background: '#0A0B0D',
+                zIndex: 30,
+              }}
+            />
+
+            {/* AREA LAYAR WEBSITE (920 × 575, overflow hidden, latar krem #F4ECE0) */}
+            <div
+              style={{
+                width: LAYAR_W,
+                height: LAYAR_H,
+                borderRadius: 12,
+                overflow: 'hidden',
+                position: 'relative',
+                background: '#F4ECE0',
+                color: '#1A130E',
+              }}
+            >
+              {/* Kanvas Website Panjang yang Menggulir Mulus */}
+              <div style={{ position: 'absolute', left: 0, right: 0, top: NAV_H, transform: `translateY(${-scrollY}px)` }}>
+                {blok.map((s, i) => {
+                  const mentah = String(s.teksLayar ?? '').trim();
+                  const bagian = mentah ? mentah.split('|').map((x) => x.trim()).filter(Boolean) : [];
+                  const judul = bagian[0] || JUDUL_CADANGAN[i % JUDUL_CADANGAN.length];
+                  const sub = bagian[1] || (i === blok.length - 1 ? (merek.info || 'Buka tiap hari · Waru, Sidoarjo') : `Nikmati racikan kopi segar khas ${merek.nama}.`);
+                  const subLabel = SUB_LAPTOP[i % SUB_LAPTOP.length];
+
+                  // BLOK 3 (indeks 2): Full-bleed showcase kopi lebar penuh (persis detik 00:05 POUR / PLAY!)
+                  if (i === 2 && blok.length >= 3) {
+                    return (
+                      <div key={i} style={{ width: LAYAR_W, height: BLOK_H, position: 'relative' }}>
+                        {renderMediaLayar(s, i, { width: '100%', height: '100%' })}
+                        <div style={{ position: 'absolute', left: 38, top: 34 }}>
+                          <span style={{ background: '#1A130E', color: '#F4ECE0', borderRadius: 999, padding: '10px 22px', fontFamily: SANS, fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                            {judul.slice(0, 22)} →
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // BLOK 1, 2, 4: Layout Asimetris 2 Kolom Kiri (Tipografi Serif) + Kanan (Visual Kopi)
+                  const adalahHero = i === 0;
+                  const adalahAkhir = i === blok.length - 1;
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        width: LAYAR_W,
+                        height: BLOK_H,
+                        padding: '32px 42px',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1.12fr',
+                        gap: 30,
+                        alignItems: 'center',
+                        background: i % 2 === 1 ? '#EFE5D6' : '#F4ECE0',
+                        borderBottom: '1px solid rgba(26,19,14,0.08)',
+                      }}
+                    >
+                      {/* Kolom Kiri: Nomor, Sublabel, Judul Serif Besar, Deskripsi, Tombol Pil */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                          {!adalahHero ? (
+                            <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 34, color: '#8C6239', lineHeight: 1 }}>
+                              {i + 1}.
+                            </span>
+                          ) : null}
+                          <span style={{ fontFamily: SANS, fontSize: 12, fontWeight: 700, letterSpacing: 2.4, textTransform: 'uppercase', color: '#8C6239' }}>
+                            {subLabel}
+                          </span>
+                        </div>
+
+                        <div
+                          style={{
+                            fontFamily: SERIF,
+                            fontSize: judul.length > 22 ? 52 : 64,
+                            lineHeight: 0.96,
+                            letterSpacing: -1,
+                            color: '#1A130E',
+                            textTransform: 'uppercase',
+                          }}
+                        >
+                          {judul}
+                        </div>
+
+                        <div style={{ fontFamily: SANS, fontSize: 16, lineHeight: 1.45, color: 'rgba(26,19,14,0.68)', maxWidth: 340 }}>
+                          {sub}
+                        </div>
+
+                        <div style={{ marginTop: 10 }}>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              background: adalahHero ? 'transparent' : '#1A130E',
+                              color: adalahHero ? '#1A130E' : '#F4ECE0',
+                              border: '1.5px solid #1A130E',
+                              borderRadius: 999,
+                              padding: '10px 22px',
+                              fontFamily: SANS,
+                              fontSize: 13,
+                              fontWeight: 700,
+                              letterSpacing: 1.4,
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            {adalahAkhir ? 'MAMPIR SEKARANG →' : adalahHero ? 'TEMUKAN KOPIMU →' : 'LIHAT MENU →'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Kolom Kanan: Visual Kopi / Video */}
+                      {renderMediaLayar(s, i, {
+                        width: '100%',
+                        height: BLOK_H - 64,
+                        borderRadius: 22,
+                        boxShadow: '0 22px 44px -16px rgba(26,19,14,0.28)',
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Sticky Navbar Website di dalam Layar Laptop */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: NAV_H,
+                  padding: '0 34px',
+                  background: 'rgba(244,236,224,0.94)',
+                  borderBottom: '1px solid rgba(26,19,14,0.1)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontFamily: SANS,
+                  zIndex: 20,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'contain' }} /> : null}
+                  <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: 2.5, textTransform: 'uppercase', color: '#1A130E' }}>
+                    {merek.nama}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 18, fontSize: 11, fontWeight: 600, letterSpacing: 1.6, textTransform: 'uppercase', color: 'rgba(26,19,14,0.62)' }}>
+                  <span>MENU</span>
+                  <span>RACIKAN</span>
+                  <span>SUASANA</span>
+                  <span>WARU</span>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, border: '1px solid rgba(26,19,14,0.35)', borderRadius: 999, padding: '5px 12px', color: '#1A130E' }}>
+                  ORDER
+                </span>
+              </div>
+
+              {/* Refleksi kaca halus di atas layar laptop */}
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  pointerEvents: 'none',
+                  background: 'linear-gradient(122deg, rgba(255,255,255,0.11) 0%, rgba(255,255,255,0.03) 34%, transparent 52%)',
+                  zIndex: 25,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Deck Keyboard & Body Aluminium MacBook 3D di bawah layar */}
+          <div
+            style={{
+              width: LAYAR_W + 76,
+              height: 255,
+              marginTop: -12,
+              marginLeft: 52,
+              borderRadius: '8px 8px 34px 34px',
+              background: 'linear-gradient(180deg, #7C8088 0%, #595C63 22%, #3D4046 82%, #25272C 100%)',
+              border: '2px solid #8A8E96',
+              boxShadow: '0 28px 56px rgba(0,0,0,0.68)',
+              transform: 'rotateY(-9deg) rotateX(62deg) rotateZ(-2.2deg)',
+              transformOrigin: 'top center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '22px 64px 20px',
+            }}
+          >
+            {/* Engsel gelap */}
+            <div style={{ width: '72%', height: 10, borderRadius: 6, background: '#111215' }} />
+            {/* Grid Keyboard */}
+            <div style={{ width: '100%', height: 112, borderRadius: 10, background: '#1A1B1F', padding: 10, display: 'grid', gridTemplateRows: 'repeat(4, 1fr)', gap: 6 }}>
+              {[0, 1, 2, 3].map((row) => (
+                <div key={row} style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 1fr)', gap: 5 }}>
+                  {Array.from({ length: 13 }).map((_, col) => (
+                    <div key={col} style={{ background: '#0E0F12', borderRadius: 4, borderTop: '1px solid rgba(255,255,255,0.08)' }} />
+                  ))}
+                </div>
+              ))}
+            </div>
+            {/* Trackpad */}
+            <div style={{ width: 250, height: 64, borderRadius: 10, background: 'rgba(0,0,0,0.16)', border: '1px solid rgba(255,255,255,0.12)' }} />
+          </div>
+        </div>
+      </AbsoluteFill>
     </AbsoluteFill>
   );
 };
@@ -501,9 +679,9 @@ export const Sinematik: React.FC<PropsSinematik> = (props) => {
   const editorial = props.gaya === 'editorial-scroll';
 
   return (
-    <AbsoluteFill style={{ background: editorial ? '#F3EBDF' : '#0E0B09' }}>
+    <AbsoluteFill style={{ background: editorial ? '#1B1511' : '#0E0B09' }}>
       {editorial ? (
-        <HalamanEditorialScroll props={props} jadwal={jadwal} penutupMulai={penutupMulai} penutupDurasi={penutupDurasi} />
+        <HalamanEditorialScroll props={props} jadwal={jadwal} total={total} />
       ) : (
         <>
           {props.segmen.map((s, i) => (
@@ -521,12 +699,14 @@ export const Sinematik: React.FC<PropsSinematik> = (props) => {
         </>
       )}
 
-      {/* Bilah progres tipis di atas layar */}
-      <div style={{ position: 'absolute', top: 44, left: 48, right: 48, height: 5, borderRadius: 99, background: editorial ? 'rgba(27,20,15,0.14)' : 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
-        <div style={{ width: `${Math.min(100, (frame / total) * 100)}%`, height: '100%', background: editorial ? '#1B140F' : aksen, borderRadius: 99 }} />
-      </div>
+      {/* Bilah progres tipis di atas layar (disembunyikan pada editorial laptop agar bersih 100% sinematik) */}
+      {!editorial ? (
+        <div style={{ position: 'absolute', top: 44, left: 48, right: 48, height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
+          <div style={{ width: `${Math.min(100, (frame / total) * 100)}%`, height: '100%', background: aksen, borderRadius: 99 }} />
+        </div>
+      ) : null}
 
-      {/* Watermark merek halus di pojok kiri atas (khusus non-editorial; editorial sudah punya sticky navbar) */}
+      {/* Watermark merek halus di pojok kiri atas (khusus non-editorial; editorial sudah tampil di layar laptop) */}
       {!editorial && frame < penutupMulai ? (
         <div style={{ position: 'absolute', top: 72, left: 52, display: 'flex', alignItems: 'center', gap: 12, opacity: 0.85 }}>
           {props.merek.logo ? (

@@ -89,7 +89,7 @@ export async function tulisNaskahBank(
     data.gambarAi = Math.max(Number(data.gambarAi) || 0, 4);
   }
   const sudutTambahan = adalahEditorial
-    ? `MODE EDITORIAL SCROLL (ala majalah/website kopi mewah): buat tepat 5 adegan ringkas (durasi 2–2.5 detik per adegan, total 10–13 detik). WAJIB isi "teks_layar" pada adegan 1, 2, 4, 5 dengan format "JUDUL 2–3 KATA | subteks pendek 5–9 kata" (bahasa Indonesia keren, JANGAN kosong/generik). Adegan 3 boleh "tanpa" teks sebagai jeda visual full-bleed. Pakai tag "ai" (3–4 adegan) dengan "bidikan" fotografi studio kopi minimalis mewah berlatar krem hangat (#F3EBDF): mis. tuangan espresso emas, percikan es kopi susu creamy, latte art melayang, biji kopi panggang estetik — TANPA tulisan di gambar; sisanya 1–2 klip [VIDEO] terbaik dari bank.`
+    ? `MODE EDITORIAL LAPTOP 1-SCENE (persis referensi POUR/PLAY): buat TEPAT 4 adegan untuk 4 blok gulir di dalam layar laptop (durasi 2.2–2.5 detik per blok, total ±9.6 detik). WAJIB isi "teks_layar" pada blok 1, 2, 4 dengan format "JUDUL 2–3 KATA | subteks pendek 6–10 kata" (bahasa Indonesia keren untuk menu/suasana Lek Kopi); blok 3 cukup judul 2 kata sebagai showcase full-bleed. Pakai tag "ai" untuk 3–4 blok dengan "bidikan" fotografi studio kopi minimalis mewah berlatar krem hangat (#F4ECE0): mis. biji kopi & percikan espresso emas, tuangan pour-over di gelas kaca estetik, latte art creamy melayang di cangkir — TANPA tulisan di gambar.`
     : `Ikuti persis tema permintaan ini: "${permintaan}". Pilih tag & bidikan yang paling sesuai temanya (utamakan rekaman video).`;
   const ide = { judul: permintaan, alasan: "permintaan Kyai", sudut: sudutTambahan };
   const { data: mentah, pemakaian } = await panggilLlmJson<Naskah>({
