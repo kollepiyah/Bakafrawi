@@ -88,8 +88,39 @@ export async function renderKonten(konten, bank, folderHasil, opsi = {}) {
   const catatan = [`huruf: ${paket.tebal} · ${paket.judul}`]
   const pakaiAI = [] // pemilih klip & pemeriksa — dijumlah ke hasil.pemakaian
 
-  // 0. Adegan bertag "ai": gambar Gemini jadi media tiruan bertag ai/<n>, dihidupkan zoompan
-  //    seperti foto bank (argSegmen). Batasnya sudah dijaga naskah (rapikanNaskah).
+  // 0a. Foto produk ASLI dari aplikasi kedai (adegan.foto_url): diunduh langsung & diprioritaskan daripada gambar AI.
+  const mediaProduk = []
+  let jumlahFotoApp = 0
+  const adeganDenganProduk = []
+  for (let i = 0; i < naskah.adegan.length; i++) {
+    const a = naskah.adegan[i]
+    if (a.foto_url && /^https?:\/\//i.test(a.foto_url)) {
+      try {
+        const res = await fetch(a.foto_url, { signal: AbortSignal.timeout(12_000) })
+        if (res.ok) {
+          const ct = res.headers.get('content-type') || ''
+          const ext = ct.includes('png') ? '.png' : ct.includes('webp') ? '.webp' : '.jpg'
+          const berkas = path.join(kerja, `produk-${i}${ext}`)
+          await writeFile(berkas, Buffer.from(await res.arrayBuffer()))
+          const tagBaru = `produk/${i}`
+          mediaProduk.push({ path: berkas, tag: tagBaru, jenis: 'foto', ai: true, kurasi: { kualitas: 5, deskripsi: a.teks_layar || a.bidikan || '' } })
+          adeganDenganProduk.push({ ...a, tag: tagBaru })
+          jumlahFotoApp++
+          continue
+        }
+      } catch (e) {
+        catatan.push(`foto produk adegan ${i + 1} gagal diunduh: ${String(e.message ?? e).slice(0, 80)}`)
+      }
+    }
+    adeganDenganProduk.push(a)
+  }
+  if (jumlahFotoApp) {
+    naskah = { ...naskah, adegan: adeganDenganProduk }
+    bank = [...bank, ...mediaProduk]
+    catatan.push(`${jumlahFotoApp} foto produk asli dari aplikasi dipakai`)
+  }
+
+  // 0b. Adegan bertag "ai": gambar AI jadi media tiruan bertag ai/<n>, dihidupkan zoompan/Ken Burns.
   const ai = await siapkanAdeganAi(naskah.adegan, bank, kerja,
     opsi.buatGambar ?? (adaGambarAi() ? buatGambarAi : null))
   if (ai.jumlah || ai.catatan.length) {
@@ -136,8 +167,8 @@ export async function renderKonten(konten, bank, folderHasil, opsi = {}) {
       const pk = await pilihKlip(naskah, daftar)
       pakaiAI.push(pk.pakai)
       saran = petakanSaran(pk.data, daftar, naskah.adegan.length)
-      // Adegan gambar AI tidak diatur sutradara: klipnya sudah pasti gambar itu sendiri.
-      naskah.adegan.forEach((a, i) => { if (String(a.tag).startsWith('ai/')) saran[i] = [] })
+      // Adegan gambar AI & foto produk asli tidak diatur sutradara: klipnya sudah pasti gambar itu sendiri.
+      naskah.adegan.forEach((a, i) => { if (/^(ai|produk)\//.test(String(a.tag))) saran[i] = [] })
     } catch (e) {
       catatan.push(`pemilih klip AI gagal: ${e.message}`)
     }

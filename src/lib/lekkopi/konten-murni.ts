@@ -110,7 +110,7 @@ export interface DataKonten {
   terlaris: { nama: string; qty: number }[]
   turun: { nama: string; dulu: number; kini: number }[]
   jamSepi: string[]
-  menu: { nama: string; harga: number; harga_online: number }[]
+  menu: { nama: string; harga: number; harga_online: number; foto?: string | null; gambar?: string | null; image_url?: string | null; kategori?: string | null }[]
   promo: string[]
   tagBank: string[]
   /** Batas gambar AI per konten dari Pengaturan; 0 = sakelar Gambar AI mati. */
@@ -234,6 +234,8 @@ export interface Adegan {
   bidikan?: string
   durasi?: number
   gaya_teks?: typeof GAYA_TEKS[number]
+  /** URL foto produk asli dari aplikasi kedai (pintu-bakafrawi); bila terisi, Studio memakainya langsung. */
+  foto_url?: string
 }
 
 export interface Naskah {

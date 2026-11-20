@@ -108,6 +108,28 @@ ATURAN VISUAL WAJIB (SANGAT PENTING):
   }, opsi.catatan ? "revisi naskah" : "naskah");
   const { naskah, perbaikan } = rapikanNaskah(mentah, data.tagBank, mode, data.gambarAi ?? 0);
   if (!naskah.adegan.length) throw new Error("Naskah dari AI tidak berisi adegan.");
+
+  // Cocokkan tiap adegan dengan foto produk ASLI dari aplikasi Lek Kopi (bila pintu-bakafrawi mengirim URL foto).
+  const menuBerfoto = (data.menu ?? [])
+    .map((m) => ({ nama: m.nama, url: String(m.foto || m.gambar || m.image_url || "").trim() }))
+    .filter((m) => /^https?:\/\//i.test(m.url));
+  if (menuBerfoto.length > 0 && (adalahDial || adalahEditorial)) {
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    let cocokFoto = 0;
+    for (const a of naskah.adegan) {
+      const sasaran = norm(`${a.teks_layar ?? ""} ${a.bidikan ?? ""}`);
+      const temu = menuBerfoto.find((m) => {
+        const nm = norm(m.nama);
+        return nm.length >= 3 && sasaran.includes(nm);
+      });
+      if (temu) {
+        a.foto_url = temu.url;
+        cocokFoto++;
+      }
+    }
+    if (cocokFoto > 0) perbaikan.push(`${cocokFoto} adegan memakai foto asli dari aplikasi ${merek.nama}`);
+  }
+
   // Catatan biaya ikut tersimpan di naskah → dijumlah di Deck. Revisi menambah ke catatan lama.
   const lama = ((opsi.naskahLama as unknown as { pemakaian?: PemakaianLlm[] } | undefined)?.pemakaian ?? []);
   (naskah as Naskah & { pemakaian?: PemakaianLlm[] }).pemakaian = [...lama, pemakaian];
