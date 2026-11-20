@@ -47,8 +47,8 @@ async function kabarNaskah(id: string, merek: Merek, teks: string, perbaikan: st
 /** Catat permintaan; naskahnya ditulis terpisah (isiNaskah) supaya pemanggil bisa menjawab cepat. */
 export async function pesanNaskah(isi: { merek: string; permintaan: string }) {
   const merek = await merekAda(isi.merek);
-  const permintaan = isi.permintaan.trim();
-  if (!permintaan) throw new Error("Tulis dulu ide/permintaan videonya.");
+  // Ide opsional: bila kosong (atau cuma prefiks gaya), AI otomatis memilih menu/konsep terbaik dari data kedai.
+  const permintaan = isi.permintaan.trim() || "Pilih otomatis menu andalan & konsep paling menarik minggu ini";
   const [t] = (await rest("studio_tugas?select=id", {
     method: "POST",
     headers: { Prefer: "return=representation" },

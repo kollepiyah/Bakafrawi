@@ -860,7 +860,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
               </label>
               <div className="grid gap-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label htmlFor="studio-arahan" className="text-xs font-medium text-muted-foreground">{merekBank ? "Ide video" : "Arahan untuk AI (opsional)"}</label>
+                  <label htmlFor="studio-arahan" className="text-xs font-medium text-muted-foreground">{merekBank ? "Ide video (opsional — kosongkan agar AI memilih otomatis)" : "Arahan untuk AI (opsional)"}</label>
                   <button type="button" onClick={mintaUsulan} disabled={mengusulkan} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-xs hover:border-emas hover:text-emas disabled:opacity-60">
                     {mengusulkan ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} {merekBank ? "Usulkan ide AI" : "Usulkan arahan"}
                   </button>
@@ -871,8 +871,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   key={merekBank ? "ide" : "arahan"}
                   name="arahan"
                   rows={2}
-                  required={merekBank}
-                  placeholder={merekBank ? "Mis. suasana malam minggu, tonjolkan es kopi susu & latte art, ajak nongkrong" : "Mis. sasar pemilik warung kopi, tonjolkan fitur struk WhatsApp, nada santai"}
+                  placeholder={merekBank ? "Opsional: mis. suasana malam minggu, es kopi susu (kosongkan agar AI pilih menu terbaik otomatis)" : "Mis. sasar pemilik warung kopi, tonjolkan fitur struk WhatsApp, nada santai"}
                   className="rounded-lg border border-input bg-transparent px-3 py-2 text-sm"
                 />
                 {galatUsulan && <p className="text-xs text-red-300">{galatUsulan}</p>}

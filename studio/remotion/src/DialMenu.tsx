@@ -11,14 +11,14 @@ import type { PropsSinematik, SegmenSinematik } from './Sinematik';
 const FPS = 30;
 const SERIF_TEGAK = cormorant('normal', { weights: ['500', '600', '700'], subsets: ['latin'] }).fontFamily;
 
-export const INTRO_DIAL = 3 * FPS;
-const PENUTUP_DIAL = Math.round(1.6 * FPS);
-const MAKS_ITEM = 8;
+export const INTRO_DIAL = Math.round(3.4 * FPS); // 3.4 dtk keypad + efek tekan hijau (persis Happy Cake)
+const DURASI_PER_MENU = 26; // ~0.87 dtk per menu — cepat, punchy, & langsung loop ke keypad awal!
+const MAKS_ITEM = 10;
 
 const TOMBOL = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
 const HURUF: Record<string, string> = { '2': 'ABC', '3': 'DEF', '4': 'GHI', '5': 'JKL', '6': 'MNO', '7': 'PQRS', '8': 'TUV', '9': 'WXYZ' };
-// Tombol diisi foto menu secara berurutan 1, 2, 3, 4, 5, 6, ... agar nomor tidak loncat.
-const URUTAN_FOTO = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+// Semua 10 angka (1..9, 0) diisi lingkaran foto menu persis Happy Cake (hanya * dan # tetap simbol).
+const URUTAN_FOTO = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 
 /** Hanya ambil segmen yang punya teks menu valid (cegah "Menu Pilihan 7" atau logo tersesat). */
 const itemValid = (p: PropsSinematik) =>
@@ -27,14 +27,13 @@ const itemValid = (p: PropsSinematik) =>
 export function hitungDurasiDial(p: PropsSinematik) {
   const item = itemValid(p);
   let mulai = INTRO_DIAL;
-  const jadwal = item.map((s) => {
-    const durasi = Math.min(66, Math.max(48, Math.round((Number(s.durasi) || 1.8) * FPS)));
-    const j = { mulai, durasi };
-    mulai += durasi;
+  const jadwal = item.map(() => {
+    const j = { mulai, durasi: DURASI_PER_MENU };
+    mulai += DURASI_PER_MENU;
     return j;
   });
-  const penutupDurasi = p.penutup ? PENUTUP_DIAL : 0;
-  return { jadwal, penutupMulai: mulai, penutupDurasi, total: Math.max(INTRO_DIAL + FPS, mulai + penutupDurasi) };
+  // Tanpa penutup lambat agar langsung loop mulus ke keypad awal seperti Happy Cake (±9–11 detik total).
+  return { jadwal, penutupMulai: mulai, penutupDurasi: 0, total: Math.max(INTRO_DIAL + FPS, mulai) };
 }
 
 /** "Kopi | Es Kopi Susu Lek" → { label: 'Kopi “Es Kopi Susu Lek”' }; cegah dobel "Milkshake “Milkshake Banana”". */
@@ -71,14 +70,20 @@ const KISI_ATAS = 585;
 const Keypad: React.FC<{ item: SegmenSinematik[]; merek: PropsSinematik['merek'] }> = ({ item, merek }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  // Peta tombol → indeks item yang tampil di tombol itu.
-  const peta = new Map<string, number>();
-  item.forEach((_, i) => { if (URUTAN_FOTO[i]) peta.set(URUTAN_FOTO[i], i); });
+  // Isi penuh ke-10 tombol angka (1..9, 0) secara berurutan; bila item < 10, ulang melingkar agar keypad penuh meriah.
+  const peta = new Map<string, { urutan: number; segmen: SegmenSinematik }>();
+  if (item.length > 0) {
+    URUTAN_FOTO.forEach((t, i) => {
+      peta.set(t, { urutan: i, segmen: item[i % item.length] });
+    });
+  }
 
   const masukHeader = spring({ frame, fps, config: { damping: 18, stiffness: 120 } });
-  const tekan = interpolate(frame, [64, 70, 78], [1, 0.9, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const keluar = interpolate(frame, [INTRO_DIAL - 9, INTRO_DIAL], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const zoomKeluar = interpolate(frame, [INTRO_DIAL - 9, INTRO_DIAL], [1, 1.07], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const tekan = interpolate(frame, [78, 84, 92], [1, 0.9, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const skalaRing = interpolate(frame, [80, 98], [1, 1.48], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const opRing = interpolate(frame, [80, 86, 98], [0, 0.55, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const keluar = interpolate(frame, [INTRO_DIAL - 7, INTRO_DIAL], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const zoomKeluar = interpolate(frame, [INTRO_DIAL - 7, INTRO_DIAL], [1, 1.06], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <AbsoluteFill
@@ -95,9 +100,9 @@ const Keypad: React.FC<{ item: SegmenSinematik[]; merek: PropsSinematik['merek']
           opacity: masukHeader, transform: `translateY(${(1 - masukHeader) * -30}px)`,
         }}
       >
-        {merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 120, height: 120, objectFit: 'contain', borderRadius: 26 }} /> : null}
-        <div style={{ fontFamily: SERIF_TEGAK, fontWeight: 700, fontSize: 104, lineHeight: 1, letterSpacing: -2, color: '#3A2616' }}>{merek.nama}</div>
-        <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 60, color: '#6B4B30', marginTop: 4 }}>Dial a cup</div>
+        {merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 112, height: 112, objectFit: 'contain', borderRadius: 24 }} /> : null}
+        <div style={{ fontFamily: SERIF_TEGAK, fontWeight: 700, fontSize: 100, lineHeight: 1, letterSpacing: -2, color: '#3A2616' }}>{merek.nama}</div>
+        <div style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 58, color: '#6B4B30', marginTop: 4 }}>Dial a cup</div>
       </div>
 
       {/* Papan tombol */}
@@ -108,10 +113,10 @@ const Keypad: React.FC<{ item: SegmenSinematik[]; merek: PropsSinematik['merek']
         }}
       >
         {TOMBOL.map((t, k) => {
-          const idx = peta.get(t);
-          const mulai = 12 + (idx ?? 0) * 7;
-          const p = idx === undefined ? 1 : spring({ frame: frame - mulai, fps, config: { damping: 13, stiffness: 150 } });
-          const sudahFoto = idx !== undefined && frame >= mulai;
+          const entri = peta.get(t);
+          const mulai = 6 + (entri?.urutan ?? 0) * 7;
+          const p = !entri ? 1 : spring({ frame: frame - mulai, fps, config: { damping: 13, stiffness: 170 } });
+          const sudahFoto = Boolean(entri) && frame >= mulai;
           return (
             <div
               key={k}
@@ -119,12 +124,12 @@ const Keypad: React.FC<{ item: SegmenSinematik[]; merek: PropsSinematik['merek']
                 width: UKURAN, height: UKURAN, borderRadius: UKURAN, position: 'relative', overflow: 'hidden',
                 background: '#FFFEFA', boxShadow: '0 14px 30px -12px rgba(58,38,22,0.28)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                transform: sudahFoto ? `scale(${0.6 + 0.4 * Math.min(1.12, p)})` : 'scale(1)',
+                transform: sudahFoto ? `scale(${0.65 + 0.35 * Math.min(1.1, p)})` : 'scale(1)',
               }}
             >
-              {sudahFoto && idx !== undefined ? (
+              {sudahFoto && entri ? (
                 <div style={{ position: 'absolute', inset: 0, opacity: Math.min(1, p) }}>
-                  <Media s={item[idx]} />
+                  <Media s={entri.segmen} />
                 </div>
               ) : (
                 <>
@@ -137,12 +142,18 @@ const Keypad: React.FC<{ item: SegmenSinematik[]; merek: PropsSinematik['merek']
         })}
       </div>
 
-      {/* Tombol telepon hijau */}
+      {/* Tombol telepon hijau + efek pulse ring saat ditekan (persis Happy Cake detik 00:03) */}
       <div
         style={{
-          position: 'absolute', left: 0, right: 0, top: KISI_ATAS + 4 * UKURAN + 3 * JARAK + 58, display: 'flex', justifyContent: 'center',
+          position: 'absolute', left: 0, right: 0, top: KISI_ATAS + 4 * UKURAN + 3 * JARAK + 58, display: 'flex', justifyContent: 'center', alignItems: 'center',
         }}
       >
+        <div
+          style={{
+            position: 'absolute', width: UKURAN, height: UKURAN, borderRadius: UKURAN,
+            border: '6px solid #34C759', opacity: opRing, transform: `scale(${skalaRing})`,
+          }}
+        />
         <div
           style={{
             width: UKURAN, height: UKURAN, borderRadius: UKURAN, background: '#34C759', display: 'grid', placeItems: 'center',
@@ -173,7 +184,7 @@ const PotonganMenu: React.FC<{ s: SegmenSinematik; nomor: string; indeks: number
       <AbsoluteFill style={{ background: 'linear-gradient(180deg, rgba(20,12,6,0.62) 0%, rgba(20,12,6,0.12) 26%, rgba(20,12,6,0) 55%, rgba(20,12,6,0.30) 100%)' }} />
       <div
         style={{
-          position: 'absolute', left: 0, right: 0, top: 205, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22,
+          position: 'absolute', left: 0, right: 0, top: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18,
           opacity: masuk, transform: `translateY(${geser}px)`,
         }}
       >

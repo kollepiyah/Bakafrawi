@@ -302,7 +302,7 @@ export async function renderSinematikRemotion({
   // editorial-scroll (1 scene laptop 4 blok) & dial-menu (keypad + potongan menu): 1 media unik per adegan.
   const satuMediaPerAdegan = gaya === 'editorial-scroll' || gaya === 'dial-menu';
   const segmenFinal = gaya === 'dial-menu'
-    ? segmen.filter((s, i) => (i === 0 || segmen[i - 1].adeganKe !== s.adeganKe) && String(s.teksLayar ?? '').trim()).slice(0, 6)
+    ? segmen.filter((s, i) => (i === 0 || segmen[i - 1].adeganKe !== s.adeganKe) && String(s.teksLayar ?? '').trim()).slice(0, 10)
     : satuMediaPerAdegan
     ? segmen.filter((s, i) => i === 0 || segmen[i - 1].adeganKe !== s.adeganKe).slice(0, 4)
     : segmen;
@@ -310,7 +310,7 @@ export async function renderSinematikRemotion({
   const totalDetik = gaya === 'editorial-scroll'
     ? Math.max(7, segmenFinal.length * 2.4)
     : gaya === 'dial-menu'
-    ? 3 + segmenFinal.length * 1.9 + 1.6
+    ? 3.4 + segmenFinal.length * (26 / 30)
     : (Number(r.total) || segmenFinal.reduce((a, b) => a + b.durasi, 0) + 2.2);
   let musikNama = null;
   if (musik) {

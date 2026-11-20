@@ -87,13 +87,13 @@ export async function tulisNaskahBank(
   const adalahDial = /\[Gaya:\s*dial-menu\]/i.test(permintaan);
   if (adalahEditorial || adalahDial) {
     // Gaya referensi (laptop POUR/PLAY atau keypad Happy Cake) butuh visual produk bersih & seragam (gratis via Cloudflare FLUX.2).
-    data.gambarAi = Math.max(Number(data.gambarAi) || 0, adalahDial ? 6 : 4);
+    data.gambarAi = Math.max(Number(data.gambarAi) || 0, adalahDial ? 8 : 4);
   }
-  const sudutDial = `MODE DIAL-MENU (ala "Dial a slice" Happy Cake): buat TEPAT 5 adegan, satu adegan = satu menu minuman/cemilan andalan Lek Kopi (durasi 1.8 detik per adegan).
+  const sudutDial = `MODE DIAL-MENU (persis "Dial a slice" Happy Cake, cepat ±10 detik): buat TEPAT 7 adegan, satu adegan = satu menu minuman/cemilan andalan Lek Kopi (durasi 0.9 detik per adegan).
 ATURAN VISUAL WAJIB (SANGAT PENTING):
 - DILARANG memakai tag "suasana", "racik", atau "logo"! Jangan pernah tampilkan foto jendela kedai, barista, atau logo pada mode ini.
-- Gunakan tag "ai" untuk setiap menu agar ke-5 foto produk seragam, close-up di atas meja kayu/marmer kafe yang hangat & menggugah selera (persis gaya foto kue seragam Happy Cake).
-- Tulis "bidikan" dalam BAHASA INGGRIS yang spesifik menggambarkan bentuk & warna minumannya (mis. "Close-up of iced palm sugar milk coffee (es kopi susu gula aren) in a clear glass with ice cubes and creamy swirl on a wooden cafe table, warm sunlight" atau "Close-up of refreshing iced green pandan melon drink with ice cubes in a tall glass on a marble cafe table, no people, no text") — JANGAN hanya menulis nama menu Indonesia di bidikan!
+- Gunakan tag "ai" untuk setiap menu agar ke-7 foto produk seragam, close-up gelas/piring di tengah meja kayu/marmer kafe yang hangat & menggugah selera (persis gaya foto kue seragam Happy Cake).
+- Tulis "bidikan" dalam BAHASA INGGRIS yang spesifik menggambarkan bentuk & warna minumannya (mis. "Close-up of iced palm sugar milk coffee (es kopi susu gula aren) in a clear glass with ice cubes and creamy swirl centered on a warm wooden cafe table, soft window daylight, bokeh cafe background" atau "Close-up of refreshing iced green pandan melon drink with ice cubes in a tall glass centered on a marble cafe table, no people, no text").
 - WAJIB isi "teks_layar" tiap adegan dengan format "Jenis | Nama Menu" tanpa mengulang kata yang sama (mis. "Kopi | Es Kopi Susu Lek", "Kopi | Latte Art", "Minuman | Banana Milkshake", "Minuman | Es Ijo Segar", "Cemilan | Cireng Crispy"). Tanpa narasi.`;
   const sudutTambahan = adalahDial ? sudutDial : adalahEditorial
     ? `MODE EDITORIAL LAPTOP 1-SCENE (persis referensi POUR/PLAY): buat TEPAT 4 adegan untuk 4 blok gulir di dalam layar laptop (durasi 2.2–2.5 detik per blok, total ±9.6 detik). WAJIB isi "teks_layar" pada blok 1, 2, 4 dengan format "JUDUL 2–3 KATA | subteks pendek 6–10 kata" (bahasa Indonesia keren untuk menu/suasana Lek Kopi); blok 3 cukup judul 2 kata sebagai showcase full-bleed. Pakai tag "ai" untuk 3–4 blok dengan "bidikan" fotografi studio kopi minimalis mewah berlatar krem hangat (#F4ECE0): mis. biji kopi & percikan espresso emas, tuangan pour-over di gelas kaca estetik, latte art creamy melayang di cangkir — TANPA tulisan di gambar.`
