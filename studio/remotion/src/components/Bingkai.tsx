@@ -4,46 +4,79 @@ import { AbsoluteFill, Img, interpolate, spring, staticFile, useCurrentFrame, us
 import type { Naskah } from '../data/script';
 import { SANS } from './dasar';
 
-export const Latar: React.FC<{ merek: Naskah['merek'] }> = ({ merek }) => (
-  <AbsoluteFill style={{ background: merek.latar }}>
+export const Latar: React.FC<{ merek: Naskah['merek']; gaya?: string }> = ({ merek, gaya }) => {
+  const gelap = gaya === 'dark-keynote';
+  return (
     <AbsoluteFill
       style={{
-        backgroundImage: `linear-gradient(${merek.kisi} 2px, transparent 2px), linear-gradient(90deg, ${merek.kisi} 2px, transparent 2px)`,
-        backgroundSize: '72px 72px',
-        backgroundPosition: '-1px -1px',
-        // Kisi memudar ke tepi supaya mata tertuju ke tengah.
-        WebkitMaskImage: 'radial-gradient(ellipse 80% 70% at 50% 40%, black 40%, transparent 100%)',
+        background: gelap
+          ? `radial-gradient(circle at 80% 12%, ${merek.kedua}26 0%, transparent 48%), radial-gradient(circle at 18% 85%, ${merek.utama}55 0%, transparent 50%), linear-gradient(165deg, #0D111C 0%, #07090F 100%)`
+          : merek.latar,
       }}
-    />
-  </AbsoluteFill>
-);
+    >
+      <AbsoluteFill
+        style={{
+          backgroundImage: `linear-gradient(${gelap ? 'rgba(255,255,255,0.045)' : merek.kisi} 2px, transparent 2px), linear-gradient(90deg, ${gelap ? 'rgba(255,255,255,0.045)' : merek.kisi} 2px, transparent 2px)`,
+          backgroundSize: '72px 72px',
+          backgroundPosition: '-1px -1px',
+          // Kisi memudar ke tepi supaya mata tertuju ke tengah.
+          WebkitMaskImage: 'radial-gradient(ellipse 80% 70% at 50% 40%, black 40%, transparent 100%)',
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
 
 /** Bilah progres tegak di kiri: terisi sesuai waktu, dengan titik tiap pergantian adegan. */
-export const Progres: React.FC<{ waktu: { mulai: number; durasi: number }[]; total: number; warna: string }> = ({ waktu, total, warna }) => {
+export const Progres: React.FC<{ waktu: { mulai: number; durasi: number }[]; total: number; warna: string; gelap?: boolean }> = ({ waktu, total, warna, gelap }) => {
   const frame = useCurrentFrame();
   const atas = 230, tinggi = 1460;
   const isi = interpolate(frame, [0, total], [0, tinggi], { extrapolateRight: 'clamp' });
   return (
-    <div style={{ position: 'absolute', left: 34, top: atas, width: 8, height: tinggi, borderRadius: 8, background: '#E4E4E7' }}>
+    <div style={{ position: 'absolute', left: 34, top: atas, width: 8, height: tinggi, borderRadius: 8, background: gelap ? 'rgba(255,255,255,0.14)' : '#E4E4E7' }}>
       <div style={{ position: 'absolute', left: 0, top: 0, width: 8, height: isi, borderRadius: 8, background: warna }} />
       {waktu.map((w, i) => {
         const y = (w.mulai / total) * tinggi;
         const lewat = frame >= w.mulai;
-        return <div key={i} style={{ position: 'absolute', left: -6, top: y - 10, width: 20, height: 20, borderRadius: 10, background: lewat ? warna : '#fff', border: `3px solid ${lewat ? warna : '#D4D4D8'}` }} />;
+        return <div key={i} style={{ position: 'absolute', left: -6, top: y - 10, width: 20, height: 20, borderRadius: 10, background: lewat ? warna : (gelap ? '#111827' : '#fff'), border: `3px solid ${lewat ? warna : (gelap ? 'rgba(255,255,255,0.28)' : '#D4D4D8')}` }} />;
       })}
     </div>
   );
 };
 
 /** Lencana langkah (kiri atas) — nomor + nama langkah, berganti dengan pegas tiap adegan. */
-export const Lencana: React.FC<{ nomor: number; teks: string; warna: string; mulai: number }> = ({ nomor, teks, warna, mulai }) => {
+export const Lencana: React.FC<{ nomor: number; teks: string; warna: string; mulai: number; gelap?: boolean }> = ({ nomor, teks, warna, mulai, gelap }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const p = spring({ frame: frame - mulai - 4, fps, config: { damping: 15, stiffness: 160 } });
   return (
     <div style={{ position: 'absolute', left: 80, top: 92, display: 'flex', alignItems: 'center', gap: 16, fontFamily: SANS, transform: `translateY(${(1 - p) * -30}px)`, opacity: p }}>
-      <div style={{ width: 62, height: 62, borderRadius: 31, background: warna, color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 32 }}>{nomor}</div>
-      <div style={{ background: '#fff', border: '2px solid #E4E4E7', borderRadius: 999, padding: '12px 28px', fontWeight: 700, fontSize: 32, color: '#18181B' }}>{teks}</div>
+      <div style={{ width: 62, height: 62, borderRadius: 31, background: warna, color: gelap ? '#0B0B0F' : '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 32 }}>{nomor}</div>
+      <div style={{ background: gelap ? 'rgba(255,255,255,0.08)' : '#fff', border: `2px solid ${gelap ? 'rgba(255,255,255,0.18)' : '#E4E4E7'}`, borderRadius: 999, padding: '12px 28px', fontWeight: 700, fontSize: 32, color: gelap ? '#F8FAFC' : '#18181B' }}>{teks}</div>
+    </div>
+  );
+};
+
+/** Pita judul menetap di atas untuk gaya `split-hook` (gaya Reels edukasi/SaaS viral). */
+export const PitaHook: React.FC<{ teks: string; warna: string; aksen: string }> = ({ teks, warna, aksen }) => (
+  <div style={{ position: 'absolute', left: 76, right: 64, top: 174, display: 'flex', justifyContent: 'center' }}>
+    <div style={{ background: warna, color: '#fff', border: `2px solid ${aksen}`, borderRadius: 18, padding: '12px 26px', fontFamily: SANS, fontWeight: 800, fontSize: 28, textAlign: 'center', boxShadow: '0 14px 32px rgba(0,0,0,0.22)' }}>
+      <span style={{ color: aksen, marginRight: 10 }}>⚡</span>{teks}
+    </div>
+  </div>
+);
+
+/** Kartu notifikasi gaya chat WA untuk preset `pov-chat`. */
+export const NotifPov: React.FC<{ pengirim: string; pesan: string; aksen: string }> = ({ pengirim, pesan, aksen }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const p = spring({ frame: frame - 4, fps, config: { damping: 15, stiffness: 150 } });
+  return (
+    <div style={{ position: 'absolute', left: 82, right: 64, top: 172, opacity: p, transform: `translateY(${(1 - p) * -22}px)` }}>
+      <div style={{ background: '#111827', color: '#F9FAFB', borderRadius: 22, padding: '14px 24px', borderLeft: `6px solid ${aksen}`, boxShadow: '0 18px 36px rgba(15,23,42,0.24)', fontFamily: SANS }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: aksen, marginBottom: 4 }}>POV · {pengirim}</div>
+        <div style={{ fontSize: 26, fontWeight: 600, lineHeight: 1.25 }}>{pesan}</div>
+      </div>
     </div>
   );
 };

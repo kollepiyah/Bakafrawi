@@ -7,6 +7,7 @@ import { rapikanRiwayat, type GiliranBot } from "./bot-murni";
 import { ringkasanAplikasi } from "./aplikasi-server";
 import { usulkanIde } from "./naskah-bank";
 import { usulkanArahan } from "./usul-arahan";
+import { bedahDanSimpanReferensi, daftarReferensiMerek } from "./referensi-video";
 import { JADWAL_OPTIMAL, statusWaktuSekarang } from "./riset-reels-murni";
 import { isiNaskah, naskahMenungguTerakhir, pesanNaskah } from "./studio-naskah";
 import { aturTayang, buatTugas, daftarMerek, daftarTugasBot, ubahCaption, type AksiTayang } from "./studio-server";
@@ -116,6 +117,32 @@ const ALAT: Anthropic.Tool[] = [
       additionalProperties: false,
       required: ["id", "catatan"],
       properties: { id: { type: "string" }, catatan: { type: "string", description: "catatan revisi dari Kyai" } },
+    },
+  },
+  {
+    name: "pelajari_link_video",
+    description: "Bedah tautan video referensi Instagram Reels / TikTok / YouTube Shorts yang dikirim Kyai menjadi Blueprint Gaya (hook, pacing, visual, teks, arahan tiru) lalu simpan ke perpustakaan referensi merek (bakafrawi atau lekkopi).",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["merek", "url", "catatan"],
+      properties: {
+        merek: { type: "string", description: "bakafrawi atau lekkopi" },
+        url: { type: "string", description: "tautan lengkap https://..." },
+        catatan: { type: "string", description: "bagian yang disukai/ingin ditiru; kosong bila tidak ada" },
+      },
+    },
+  },
+  {
+    name: "lihat_referensi_video",
+    description: "Lihat daftar link video referensi yang sudah dipelajari Studio untuk satu merek (bakafrawi atau lekkopi).",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["merek"],
+      properties: { merek: { type: "string" } },
     },
   },
   {
@@ -248,6 +275,18 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
       if (!id) return "Tidak ada naskah yang menunggu persetujuan.";
       await isiNaskah(id, String(isi.catatan));
       return JSON.stringify({ ok: true, id, catatan: "naskah revisi sudah dikirim ke chat" });
+    }
+    case "pelajari_link_video": {
+      const ref = await bedahDanSimpanReferensi({
+        merek: String(isi.merek || "bakafrawi"),
+        url: String(isi.url),
+        catatan: String(isi.catatan ?? "") || undefined,
+      });
+      return JSON.stringify({ ok: true, id: ref.id, blueprint: ref.analisis });
+    }
+    case "lihat_referensi_video": {
+      const daftar = await daftarReferensiMerek(String(isi.merek || "bakafrawi"), 8);
+      return JSON.stringify(daftar.map((r) => ({ id: r.id, judul: r.caption, url: r.permalink, preset: r.analisis?.presetCocok, arahanTiru: r.analisis?.arahanTiru })));
     }
     case "lihat_agenda": {
       const dari = awalHariWIB(String(isi.dari));

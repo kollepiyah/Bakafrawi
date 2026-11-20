@@ -2,6 +2,7 @@
 // (adegan datar) dirapikan jadi props `Naskah`, narasi edge-tts + waktu tiap kata dibuat per adegan,
 // aset disalin ke folder publik tugas, lalu `remotion render` dijalankan dengan --public-dir.
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ffmpeg, jalankan, probe } from './bank/alat.mjs';
@@ -117,7 +118,7 @@ const angka01 = (v, bawaan) => (Number.isFinite(Number(v)) ? Math.min(1, Math.ma
  * Adegan yang datanya kurang diganti `daftar` dari fitur produk; penutup selalu ada di akhir dengan
  * kontak dari situs (bukan dari Claude, supaya nomor/alamat tak pernah dikarang). Murni.
  */
-export function keNaskah(k, { nama, logo, utama = WARNA.utama, kedua = WARNA.kedua, layar = [], info, fitur = [] }) {
+export function keNaskah(k, { nama, logo, utama = WARNA.utama, kedua = WARNA.kedua, layar = [], info, fitur = [], gaya = 'clean-ui' }) {
   const daftarFitur = fitur.map((f) => teks(f, 48)).filter(Boolean).slice(0, 3);
   const keDaftar = (a, badge) => ({ jenis: 'daftar', narasi: a.narasi, kunci: a.kunci, durasi: DURASI.daftar, badge: teks(badge || a.badge, 26) || 'Fitur Utama', labelAngka: '', angka: nama, catatan: '', daftar: daftarFitur.length ? daftarFitur : [nama] });
   const adegan = (k.adegan ?? []).filter((a) => teks(a?.narasi)).slice(0, 7).map((a) => {
@@ -157,8 +158,14 @@ export function keNaskah(k, { nama, logo, utama = WARNA.utama, kedua = WARNA.ked
   // Penutup: tepat satu, di akhir, dengan kontak dari situs.
   const isi = adegan.filter((a) => a.jenis !== 'penutup');
   const tutup = adegan.find((a) => a.jenis === 'penutup') ?? { jenis: 'penutup', narasi: `Coba ${nama} sekarang. Hubungi kami lewat link di bio!`, kunci: [nama], durasi: DURASI.penutup, judul: `Coba ${nama} sekarang`, tombol: `Coba ${nama}` };
+  const palet = gaya === 'dark-keynote'
+    ? { latar: '#07090F', kisi: 'rgba(255,255,255,0.05)', tinta: '#F8FAFC' }
+    : gaya === 'pov-chat'
+    ? { latar: '#F7F4EE', kisi: '#E7E1D6', tinta: '#141210' }
+    : { latar: WARNA.latar, kisi: WARNA.kisi, tinta: WARNA.tinta };
   return {
-    merek: { nama, logo, utama, kedua, latar: WARNA.latar, kisi: WARNA.kisi, tinta: WARNA.tinta },
+    merek: { nama, logo, utama, kedua, ...palet },
+    gaya,
     layar,
     adegan: [...isi, { ...tutup, info }],
   };
@@ -230,4 +237,111 @@ export async function renderIklan({ naskah, aset, folder, musik = null, suara = 
   const sampul = path.join(folder, 'sampul.jpg');
   await ffmpeg(['-y', '-ss', '1.5', '-i', keluar, '-frames:v', '1', '-q:v', '3', sampul]);
   return { berkas: keluar, sampul, durasi: detik };
+}
+
+/** Apakah mesin Remotion siap dipakai (dependensi studio/remotion sudah terpasang)? */
+export function remotionSiap() {
+  return existsSync(CLI);
+}
+
+/**
+ * Render video bank media (Lek Kopi / merek sinematik) lewat Remotion komposisi `Sinematik`.
+ * Menggabungkan klip video asli + foto bank + gambar AI (Ken Burns) + tipografi editorial + musik.
+ * → { berkas, sampul, durasi }
+ */
+export async function renderSinematikRemotion({
+  rencana: r,
+  merek = {},
+  logo = null,
+  musik = null,
+  musikVolume = 0.72,
+  suara = [],
+  gaya = 'sinematik-kafe',
+  folder,
+  keluar,
+  log = console.log,
+}) {
+  const publik = path.join(folder, 'publik-sinematik');
+  await mkdir(publik, { recursive: true });
+
+  // Salin tiap berkas sumber sekali saja ke folder publik Remotion.
+  const petaBerkas = new Map();
+  let nomor = 0;
+  const salin = async (sumber, prefiks) => {
+    if (!sumber) return null;
+    if (petaBerkas.has(sumber)) return petaBerkas.get(sumber);
+    const ext = path.extname(sumber) || '.mp4';
+    const nama = `${prefiks}-${nomor++}${ext}`;
+    await copyFile(sumber, path.join(publik, nama));
+    petaBerkas.set(sumber, nama);
+    return nama;
+  };
+
+  const logoNama = logo ? await salin(logo, 'logo') : undefined;
+  const segmen = [];
+  for (let i = 0; i < r.segmen.length; i++) {
+    const s = r.segmen[i];
+    const adegan = r.adegan[s.adegan] ?? {};
+    const berkasNama = await salin(s.sumber, s.jenis === 'video' ? 'klip' : 'foto');
+    // Tampilkan teks layar & suara di potongan pertama tiap adegan.
+    const pertamaDiAdegan = i === 0 || r.segmen[i - 1].adegan !== s.adegan;
+    const suaraNama = pertamaDiAdegan && suara[s.adegan] ? await salin(suara[s.adegan], 'suara') : null;
+    segmen.push({
+      berkas: berkasNama,
+      jenis: s.jenis === 'video' ? 'video' : 'foto',
+      durasi: Number(s.durasi) || 2.5,
+      mulaiKlip: Number(s.mulaiKlip) || 0,
+      teksLayar: pertamaDiAdegan ? (adegan.teksLayar ?? '') : '',
+      gayaTeks: pertamaDiAdegan ? (adegan.gayaTeks ?? null) : 'tanpa',
+      adeganKe: s.adegan,
+      suaraBerkas: suaraNama,
+      narasi: adegan.suara ?? '',
+    });
+  }
+
+  const totalDetik = Number(r.total) || segmen.reduce((a, b) => a + b.durasi, 0) + 2.2;
+  let musikNama = null;
+  if (musik) {
+    musikNama = await salin(musik, 'musik');
+  } else {
+    // Bila bank belum punya musik, buatkan lo-fi hangat bebas hak cipta agar video tidak bisu.
+    const musikLokal = path.join(publik, 'musik-lofi.mp3');
+    await musikContoh(musikLokal, totalDetik + 1.5, 92);
+    musikNama = 'musik-lofi.mp3';
+  }
+
+  const ajakanAkhir = r.adegan.at(-1)?.teksLayar || `Mampir ke ${merek.nama || 'Lek Kopi'}`;
+  const propsData = {
+    merek: {
+      nama: merek.nama || 'Lek Kopi',
+      sub: merek.sub || '',
+      aksen: merek.aksen || '#D9A441',
+      ...(logoNama ? { logo: logoNama } : {}),
+      info: merek.info || '',
+    },
+    gaya,
+    musik: musikNama,
+    musikVolume: suara.length ? 0.22 : musikVolume,
+    segmen,
+    penutup: {
+      durasi: Number(r.penutup?.durasi) || 2.2,
+      ajakan: ajakanAkhir,
+      info: merek.info || merek.sub || '',
+    },
+  };
+
+  const propsPath = path.join(folder, 'props-sinematik.json');
+  await writeFile(propsPath, JSON.stringify(propsData));
+  log(`🎬 Remotion Sinematik (${gaya}): ${segmen.length} potongan, ${totalDetik.toFixed(1)} dtk`);
+  await jalankan(
+    process.execPath,
+    [CLI, 'render', 'src/index.ts', 'Sinematik', keluar, `--props=${propsPath}`, `--public-dir=${publik}`, '--log=error'],
+    { cwd: REMOTION },
+  );
+
+  // Ekstrak sampul JPG untuk thumbnail di Studio & Deck Dashboard.
+  const sampul = path.join(folder, 'sampul-sinematik.jpg');
+  const detikSampul = Math.min(1.2, Math.max(0.3, totalDetik * 0.15));
+  await ffmpeg(['-y', '-ss', detikSampul.toFixed(2), '-i', keluar, '-frames:v', '1', '-q:v', '3', sampul]).catch(() => null);
+  return { berkas: keluar, sampul: existsSync(sampul) ? sampul : null, durasi: totalDetik };
 }

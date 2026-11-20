@@ -19,6 +19,7 @@ import {
   daftarKlip, daftarTransisi, jumlahShot, petakanSaran, pilihShot, rencana,
 } from './rakit.mjs'
 import { suaraAdegan } from './suara.mjs'
+import { remotionSiap, renderSinematikRemotion } from '../video.mjs'
 
 const MAKS_PERIKSA = 2
 
@@ -142,42 +143,76 @@ export async function renderKonten(konten, bank, folderHasil, opsi = {}) {
     }
   }
 
+  let sampulAkhir = null
+  const pakaiRemotion = opsi.mesin !== 'ffmpeg' && process.env.STUDIO_BANK_MESIN !== 'ffmpeg' && remotionSiap()
+
   for (let percobaan = 0; ; percobaan++) {
     // 2. Pilih klip per potongan (tempo dari gaya) — klip yang ditolak pemeriksa tidak dipakai lagi.
     media = pilihShot(naskah.adegan, bank, benih(konten.id) + percobaan, jumlahShot(durasi, gaya, { tetap: sinematik }), dilarang, saran)
     r = rencana(naskah.adegan, durasi, media, { logo, latarPenutup: process.env.STUDIO_LATAR_PENUTUP, tetap: sinematik })
 
     await siapkan([...new Set(r.segmen.map((s) => s.sumber))])
-    const transisi = sinematik ? daftarTransisi(r, gaya.sinematik.transisi) : []
-    const segBerkas = []
-    for (const s of r.segmen) {
-      if (s.jenis === 'video') s.hdr = await cekHdr(s.sumber)
-      const nama = `seg_${s.indeks}.mp4`
-      // Sinematik: segmen diperpanjang sebesar transisi sesudahnya (xfade memakan ekor segmen ini).
-      const tambah = transisi[s.indeks]?.durasi ?? 0
-      const sPanjang = tambah ? {
-        ...s, durasi: Math.round((s.durasi + tambah) * 1000) / 1000, tambal: true,
-        ulang: s.ulang || (s.jenis === 'video' && panjangKlip.get(s.sumber) < s.mulaiKlip + s.durasi + tambah),
-      } : s
-      await ffmpeg(argSegmen(sPanjang, nama, gaya), { cwd: kerja })
-      segBerkas.push(nama)
-    }
-    if (sinematik) {
-      await ffmpeg(argSambung(segBerkas, r.segmen.map((s) => s.durasi), transisi, 'gambar.mp4'), { cwd: kerja })
-    } else {
-      await writeFile(path.join(kerja, 'daftar.txt'), daftarConcat(segBerkas))
-      await ffmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', 'daftar.txt', '-c', 'copy', 'gambar.mp4'], { cwd: kerja })
+
+    let suksesRemotion = false
+    if (pakaiRemotion) {
+      try {
+        const resRem = await renderSinematikRemotion({
+          rencana: r,
+          merek: opsi.merekInfo ?? {},
+          logo,
+          musik,
+          musikVolume: gaya.sinematik.musikVolume,
+          suara,
+          gaya: opsi.gayaPreset || 'sinematik-kafe',
+          folder: kerja,
+          keluar,
+        })
+        if (resRem.sampul) {
+          const tujuanSampul = `${keluar}.jpg`
+          await cp(resRem.sampul, tujuanSampul)
+          sampulAkhir = tujuanSampul
+        }
+        if (percobaan === 0) catatan.push(`mesin: Remotion Sinematik (${opsi.gayaPreset || 'sinematik-kafe'})`)
+        suksesRemotion = true
+      } catch (e) {
+        catatan.push(`Remotion gagal (${String(e.message ?? e).slice(0, 100)}), beralih ke FFmpeg`)
+      }
     }
 
-    // 3. Suara + gambar. Subtitle memakai nama relatif: path Windows ber-titik
-    //    dua (D:) merusak sintaks filter `subtitles=`.
-    await writeFile(path.join(kerja, 'sub.ass'), buatAss(r, { gaya }))
-    if (sinematik) {
-      await ffmpeg(argMusik({ musik, total: r.total, keluar: 'audio.wav', volume: gaya.sinematik.musikVolume }), { cwd: kerja })
-    } else {
-      await ffmpeg(argSuara({ suara: suara.map((f) => path.basename(f)), r, musik, keluar: 'audio.wav', gaya }), { cwd: kerja })
+    if (!suksesRemotion) {
+      const transisi = sinematik ? daftarTransisi(r, gaya.sinematik.transisi) : []
+      const segBerkas = []
+      for (const s of r.segmen) {
+        if (s.jenis === 'video') s.hdr = await cekHdr(s.sumber)
+        const nama = `seg_${s.indeks}.mp4`
+        // Sinematik: segmen diperpanjang sebesar transisi sesudahnya (xfade memakan ekor segmen ini).
+        const tambah = transisi[s.indeks]?.durasi ?? 0
+        const sPanjang = tambah ? {
+          ...s, durasi: Math.round((s.durasi + tambah) * 1000) / 1000, tambal: true,
+          ulang: s.ulang || (s.jenis === 'video' && panjangKlip.get(s.sumber) < s.mulaiKlip + s.durasi + tambah),
+        } : s
+        await ffmpeg(argSegmen(sPanjang, nama, gaya), { cwd: kerja })
+        segBerkas.push(nama)
+      }
+      if (sinematik) {
+        await ffmpeg(argSambung(segBerkas, r.segmen.map((s) => s.durasi), transisi, 'gambar.mp4'), { cwd: kerja })
+      } else {
+        await writeFile(path.join(kerja, 'daftar.txt'), daftarConcat(segBerkas))
+        await ffmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', 'daftar.txt', '-c', 'copy', 'gambar.mp4'], { cwd: kerja })
+      }
+
+      // 3. Suara + gambar. Subtitle memakai nama relatif: path Windows ber-titik
+      //    dua (D:) merusak sintaks filter `subtitles=`.
+      await writeFile(path.join(kerja, 'sub.ass'), buatAss(r, { gaya }))
+      if (sinematik) {
+        await ffmpeg(argMusik({ musik, total: r.total, keluar: 'audio.wav', volume: gaya.sinematik.musikVolume }), { cwd: kerja })
+      } else {
+        await ffmpeg(argSuara({ suara: suara.map((f) => path.basename(f)), r, musik, keluar: 'audio.wav', gaya }), { cwd: kerja })
+      }
+      await ffmpeg(argAkhir({ video: 'gambar.mp4', audio: 'audio.wav', total: r.total, ass: 'sub.ass', logo, keluar, huruf: 'huruf', penutup: r.penutup?.mulai ?? null }), { cwd: kerja })
+      const tujuanSampul = `${keluar}.jpg`
+      await ffmpeg(['-y', '-ss', '1.2', '-i', keluar, '-frames:v', '1', '-q:v', '3', tujuanSampul]).then(() => { sampulAkhir = tujuanSampul }).catch(() => null)
     }
-    await ffmpeg(argAkhir({ video: 'gambar.mp4', audio: 'audio.wav', total: r.total, ass: 'sub.ass', logo, keluar, huruf: 'huruf', penutup: r.penutup?.mulai ?? null }), { cwd: kerja })
 
     // 4. Pemeriksa AI.
     if (opsi.periksa === false || !aiSiap()) break
@@ -200,7 +235,7 @@ export async function renderKonten(konten, bank, folderHasil, opsi = {}) {
 
   await rm(kerja, { recursive: true, force: true })
   return {
-    berkas: keluar, durasi: r.total, media: media.flat().map((m) => m.path), catatan, mode: sinematik ? 'sinematik' : 'narasi',
+    berkas: keluar, sampul: sampulAkhir, durasi: r.total, media: media.flat().map((m) => m.path), catatan, mode: sinematik ? 'sinematik' : 'narasi',
     pemakaian: jumlahPemakaian(pakaiAI),
   }
 }

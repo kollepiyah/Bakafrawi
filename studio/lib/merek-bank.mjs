@@ -89,11 +89,24 @@ export async function indeksBankMerek(merek, ctx) {
   return { total: ada.size, baru: baru.length, hilang: hilang.length };
 }
 
-/** Render video dari naskah tugas (status sudah disetujui) → { berkas, durasi, catatan }. */
+/** Render video dari naskah tugas (status sudah disetujui) → { berkas, sampul, durasi, catatan }. */
 export async function renderBankMerek(tugas, merek, ctx) {
   if (!tugas.naskah?.adegan?.length) throw new Error('Tugas ini belum punya naskah.');
   const bank = (await bacaBank(merek.slug)).map((b) => ({ ...b, path: path.join(ctx.folder.bank, b.path) }));
   if (!bank.some((b) => b.jenis === 'foto' || b.jenis === 'video')) throw new Error(`Bank media ${merek.nama} kosong.`);
   const profilGaya = await bacaGaya(merek.slug);
-  return renderKonten({ id: tugas.id, naskah_json: tugas.naskah }, bank, ctx.folder.hasil, { profilGaya, siapkan: ctx.siapkan });
+  const cocokGaya = String(tugas.arahan ?? '').match(/\[Gaya:\s*([a-z0-9-]+)\]/i);
+  const gayaPreset = cocokGaya ? cocokGaya[1].toLowerCase() : 'sinematik-kafe';
+  const merekInfo = {
+    nama: merek.nama,
+    sub: merek.profil?.situs || 'Waru · Sidoarjo',
+    aksen: merek.profil?.warna_aksen || '#D9A441',
+    info: merek.profil?.info || merek.profil?.situs || '',
+  };
+  return renderKonten({ id: tugas.id, naskah_json: tugas.naskah }, bank, ctx.folder.hasil, {
+    profilGaya,
+    siapkan: ctx.siapkan,
+    merekInfo,
+    gayaPreset,
+  });
 }

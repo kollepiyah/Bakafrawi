@@ -12,10 +12,11 @@ import { panggilLlmJson } from "./llm-router";
 export async function risetKonsepReels(produk: Produk, topikKhusus?: string): Promise<KonsepReelsViral[]> {
   const { data } = await panggilLlmJson<unknown>({
     system: SISTEM_RISET_REELS,
-    prompt: promptRisetReels(produk, topikKhusus),
+    prompt: `${promptRisetReels(produk, topikKhusus)}\n\nGunakan pencarian Google terkini untuk menangkap tren format Instagram Reels & TikTok Indonesia terbaru (2026) yang cocok dengan bidang ini (hook, gaya visual, ritme edit, tren storytelling).`,
     skema: SKEMA_RISET_REELS,
     maksToken: 4000,
-  });
+    pakaiSearch: true,
+  }, "riset tren");
   const hasil = rapikanRisetReels(data);
   if (!hasil.length) throw new Error("AI tidak memberikan konsep Reels.");
   return hasil;

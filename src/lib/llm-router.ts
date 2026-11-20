@@ -24,6 +24,8 @@ export type OpsiLlm = {
   skema?: Record<string, unknown>;
   suhu?: number;
   maksToken?: number;
+  /** Aktifkan Google Search Grounding (khusus Gemini) untuk riset tren live & analisis link. */
+  pakaiSearch?: boolean;
   /** Jawaban yang tidak lolos dianggap gagal → lanjut ke penyedia berikutnya. */
   valid?: (data: unknown) => boolean;
 };
@@ -39,47 +41,60 @@ const HARGA: Record<string, { input: number; output: number }> = {
 const biaya = (input: number, output: number, h: { input: number; output: number }) =>
   Math.round(((input * h.input + output * h.output) / 1e6) * 1e6) / 1e6;
 
-/** Buang pagar ```json bila penyedia menambahkannya. */
+/** Buang pagar ```json dan teks pembuka/penutup bila penyedia menambahkannya. */
 function ekstrakJson(teks: string): string {
   const t = teks.trim();
   const m = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  if (m) return m[1].trim();
-  const awal = t.search(/[[{]/);
-  return awal > 0 ? t.slice(awal) : t;
+  const bersih = m ? m[1].trim() : t;
+  const awal = bersih.search(/[[{]/);
+  if (awal < 0) return bersih;
+  const buka = bersih[awal];
+  const tutup = buka === "{" ? "}" : "]";
+  const akhir = bersih.lastIndexOf(tutup);
+  return akhir > awal ? bersih.slice(awal, akhir + 1) : bersih.slice(awal);
 }
 
 const teksSkema = (skema?: Record<string, unknown>) =>
-  skema ? `\n\nJawab HANYA dengan JSON valid (tanpa markdown) yang mengikuti JSON Schema ini:\n${JSON.stringify(skema)}` : "";
+  skema ? `\n\nJawab HANYA dengan JSON valid (tanpa markdown, tanpa komentar) yang mengikuti JSON Schema ini:\n${JSON.stringify(skema)}` : "";
 
 async function panggilGemini(opsi: OpsiLlm) {
   const kunci = process.env.GEMINI_API_KEY!;
   const model = process.env.STUDIO_GEMINI_TEKS || "gemini-flash-latest";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-  const kirim = async (pakaiSkema: boolean) => {
+  const kirim = async (pakaiSkema: boolean, search: boolean) => {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": kunci },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: opsi.system + (pakaiSkema ? "" : teksSkema(opsi.skema)) }] },
+        system_instruction: { parts: [{ text: opsi.system + (pakaiSkema && !search ? "" : teksSkema(opsi.skema)) }] },
         contents: [{ role: "user", parts: [{ text: opsi.prompt }] }],
+        ...(search ? { tools: [{ google_search: {} }] } : {}),
         generationConfig: {
           temperature: opsi.suhu ?? 0.8,
           maxOutputTokens: opsi.maksToken ?? 8000,
-          responseMimeType: "application/json",
-          ...(pakaiSkema && opsi.skema ? { responseJsonSchema: opsi.skema } : {}),
+          ...(!search ? { responseMimeType: "application/json" } : {}),
+          ...(pakaiSkema && !search && opsi.skema ? { responseJsonSchema: opsi.skema } : {}),
         },
       }),
     });
     if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
     return res.json();
   };
-  // Skema terstruktur dulu; bila skema ditolak (fitur JSON Schema tertentu), ulang dengan skema di prompt.
+  // Bila pakaiSearch aktif: coba Google Search Grounding dulu; bila ditolak, lanjut mode JSON biasa.
   let j;
-  try {
-    j = await kirim(true);
-  } catch (e) {
-    if (!opsi.skema || !String(e).includes("Gemini 400")) throw e;
-    j = await kirim(false);
+  if (opsi.pakaiSearch) {
+    try {
+      j = await kirim(false, true);
+    } catch {
+      j = await kirim(true, false).catch(() => kirim(false, false));
+    }
+  } else {
+    try {
+      j = await kirim(true, false);
+    } catch (e) {
+      if (!opsi.skema || !String(e).includes("Gemini 400")) throw e;
+      j = await kirim(false, false);
+    }
   }
   const teks = (j.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("") || "{}";
   const u = j.usageMetadata ?? {};

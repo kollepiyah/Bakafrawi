@@ -135,12 +135,16 @@ async function kerjakanBank(tugas, merek, simpan, kabar) {
   const ctx = await bankMerek(merek, kabar);
   const r = await renderBankMerek(tugas, merek, ctx);
   const url = await simpan(r.berkas, 'video/mp4');
+  const hasil = [{ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url }];
+  if (r.sampul) {
+    hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
+  }
   // Biaya AI mesin (pemilih klip, pemeriksa, gambar AI) ditambahkan ke catatan biaya naskah → tampil di Deck.
   const pakai = r.pemakaian && r.pemakaian.biayaUsd > 0 ? [{ tahap: 'render video', penyedia: 'claude', model: 'studio', input: r.pemakaian.input, output: r.pemakaian.output, biayaUsd: r.pemakaian.biayaUsd }] : [];
   return {
     naskah: { ...tugas.naskah, catatan: r.catatan, pemakaian: [...(tugas.naskah?.pemakaian ?? []), ...pakai] },
     caption: tugas.caption ?? '',
-    hasil: [{ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url }],
+    hasil,
     namaProduk: merek.nama,
   };
 }
@@ -169,19 +173,25 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   const gambar = layar ?? produk.logo?.src;
   const logo = merek?.profil?.logo ?? (merek?.slug === 'bakafrawi' || !merek ? LOGO : '');
   const umum = { naskah, produk, logo, kontak, tema };
-  const pakaiAi = tugas.latar === 'ai';
+  const cocokGaya = String(tugas.arahan ?? '').match(/\[Gaya:\s*([a-z0-9-]+)\]/i);
+  const gayaPilihan = cocokGaya ? cocokGaya[1].toLowerCase() : '';
+  const pakaiAi = tugas.latar === 'ai' || gayaPilihan === 'photo-floating';
   const hasil = [];
   const berkas = (n) => path.join(folder, n);
 
   if (tugas.jenis === 'gambar') {
+    const gayaPoster = ['modern-clean', 'before-after', 'bold-typo', 'photo-floating'].includes(gayaPilihan) ? gayaPilihan : 'modern-clean';
+    if (gayaPoster !== 'modern-clean') catatan.push(`gaya poster: ${gayaPoster}`);
     for (const rasio of ['feed', 'potret', 'story']) {
       const foto = pakaiAi ? await fotoAi(naskah.adegan?.[0], RASIO_AI[rasio], berkas(`latar-${rasio}.png`), catatan) : null;
       const keluar = berkas(`poster-${rasio}.jpg`);
-      await potret(peramban, { ...UKURAN[rasio], keluar, html: htmlPoster({ ...umum, rasio, foto, gambar: gambar && mutlak(gambar, situs), gambarIkon: !layar }) });
+      await potret(peramban, { ...UKURAN[rasio], keluar, html: htmlPoster({ ...umum, rasio, foto, gaya: gayaPoster, gambar: gambar && mutlak(gambar, situs), gambarIkon: !layar }) });
       hasil.push({ jenis: 'gambar', rasio, url: await simpan(keluar, 'image/jpeg') });
     }
   } else {
     // Video iklan Remotion (pilihan Kyai 19 Nov 2026). Logo = logo produk, cadangannya logo merek.
+    const gayaVideo = ['clean-ui', 'dark-keynote', 'pov-chat', 'split-hook'].includes(gayaPilihan) ? gayaPilihan : 'clean-ui';
+    if (gayaVideo !== 'clean-ui') catatan.push(`gaya video: ${gayaVideo}`);
     const logoVideo = await ambilLokal(produk.logo?.src ? mutlak(produk.logo.src, situs) : logo, berkas('logo-sumber'));
     const props = keNaskah(naskah, {
       nama: produk.nama,
@@ -189,6 +199,7 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       utama: merek?.profil?.warna_utama || WARNA.utama,
       kedua: tema.aksen,
       layar: layarApp,
+      gaya: gayaVideo,
       info: [tema.situs, kontak.whatsappTampil && `WA ${kontak.whatsappTampil}`].filter(Boolean).join(' · '),
       fitur: produk.fitur.map((f) => f.judul),
     });

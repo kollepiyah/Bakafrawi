@@ -10,10 +10,13 @@ import {
   Clock,
   Copy,
   Download,
+  ExternalLink,
   Flame,
   ImageIcon,
   Lightbulb,
+  Link2,
   Loader2,
+  Palette,
   RefreshCw,
   Send,
   Sparkles,
@@ -29,6 +32,24 @@ import { situsBawaan } from "@/content/situs";
 import { teksNaskah, type Naskah } from "@/lib/lekkopi/konten-murni";
 import type { UsulanArahan } from "@/lib/usul-arahan-murni";
 import type { KonsepReelsViral, SlotWaktu } from "@/lib/riset-reels-murni";
+import type { ReferensiTersimpan } from "@/lib/referensi-video";
+
+const PRESET_VIDEO = [
+  { kode: "otomatis", label: "Otomatis (sesuai AI / referensi)" },
+  { kode: "sinematik-kafe", label: "Sinematik Kafe / Remotion + B-roll AI" },
+  { kode: "clean-ui", label: "Clean Motion UI + Maskot" },
+  { kode: "dark-keynote", label: "Dark Tech / Apple Keynote" },
+  { kode: "pov-chat", label: "POV / Storytelling & Chat WA" },
+  { kode: "split-hook", label: "Split-Screen / Fast Hook" },
+];
+
+const PRESET_POSTER = [
+  { kode: "otomatis", label: "Otomatis (sesuai AI)" },
+  { kode: "modern-clean", label: "Modern Clean Editorial" },
+  { kode: "before-after", label: "Before vs After (Masalah vs Solusi)" },
+  { kode: "bold-typo", label: "Bold Typography / Karosel IG" },
+  { kode: "photo-floating", label: "Foto Suasana AI + UI Melayang" },
+];
 
 type Hasil = { jenis: "gambar" | "video"; rasio: string; url: string; durasi?: number };
 type Tugas = {
@@ -73,6 +94,8 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [merek, setMerek] = useState<{ slug: string; nama: string; aktif: boolean; profil: { bahan?: string[] } }[]>([]);
   const [pilihMerek, setPilihMerek] = useState("bakafrawi");
   const [pilihProduk, setPilihProduk] = useState("maktaba-pos");
+  const [pilihJenis, setPilihJenis] = useState<"gambar" | "video">("gambar");
+  const [pilihGaya, setPilihGaya] = useState("otomatis");
   const [daftar, setDaftar] = useState<Tugas[]>([]);
   const [pesan, setPesan] = useState("");
   const [sibuk, setSibuk] = useState(false);
@@ -87,6 +110,12 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [galatRiset, setGalatRiset] = useState("");
   const [bukaRiset, setBukaRiset] = useState(false);
   const [bukaJadwal, setBukaJadwal] = useState(false);
+  const [bukaRef, setBukaRef] = useState(false);
+  const [urlRef, setUrlRef] = useState("");
+  const [catatanRef, setCatatanRef] = useState("");
+  const [membedahRef, setMembedahRef] = useState(false);
+  const [galatRef, setGalatRef] = useState("");
+  const [daftarRef, setDaftarRef] = useState<ReferensiTersimpan[]>([]);
   const [topikRiset, setTopikRiset] = useState("");
   const [infoJadwal, setInfoJadwal] = useState<{
     label: string;
@@ -130,7 +159,64 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       .catch(() => {});
   }, [sesi]);
 
-  // Riset konsep Reels viral dari Claude
+  // Muat daftar link video referensi yang sudah dipelajari untuk merek aktif
+  const muatReferensi = useCallback(async () => {
+    if (!sesi?.access_token) return;
+    const res = await fetch(`/api/studio/referensi?merek=${encodeURIComponent(pilihMerek)}`, {
+      headers: { Authorization: `Bearer ${sesi.access_token}` },
+    }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    if (j.ok && Array.isArray(j.daftar)) setDaftarRef(j.daftar as ReferensiTersimpan[]);
+  }, [sesi, pilihMerek]);
+
+  useEffect(() => {
+    const t = setTimeout(muatReferensi, 0);
+    return () => clearTimeout(t);
+  }, [muatReferensi]);
+
+  async function bedahLinkReferensi() {
+    if (!urlRef.trim()) return setGalatRef("Tempelkan tautan Instagram Reels / TikTok terlebih dahulu.");
+    setMembedahRef(true);
+    setGalatRef("");
+    try {
+      const res = await fetch("/api/studio/referensi", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ merek: pilihMerek, url: urlRef.trim(), catatan: catatanRef.trim() }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (j.ok && j.referensi) {
+        setUrlRef("");
+        setCatatanRef("");
+        setPesan(`Referensi "${j.referensi.caption}" berhasil dipelajari & disimpan!`);
+        muatReferensi();
+      } else {
+        setGalatRef(j.pesan ?? "Gagal membedah link video.");
+      }
+    } catch (e) {
+      setGalatRef(e instanceof Error ? e.message : "Terjadi kesalahan saat membedah link.");
+    }
+    setMembedahRef(false);
+  }
+
+  async function hapusReferensi(id: string) {
+    await fetch(`/api/studio/referensi?merek=${encodeURIComponent(pilihMerek)}&id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}` },
+    }).catch(() => null);
+    muatReferensi();
+  }
+
+  function tiruReferensi(r: ReferensiTersimpan) {
+    const b = r.analisis;
+    if (!b || !kolomArahan.current) return;
+    if (b.presetCocok) setPilihGaya(b.presetCocok);
+    kolomArahan.current.value = `${b.arahanTiru}\n(Referensi gaya: ${b.judul} — Hook: ${b.hook3Detik} | Pacing: ${b.pacing})`;
+    kolomArahan.current.focus();
+    setPesan(`Pola referensi "${b.judul}" diterapkan ke formulir!`);
+  }
+
+  // Riset konsep Reels viral (Gemini Google Search)
   async function mintaRisetViral() {
     setMerisetViral(true);
     setGalatRiset("");
@@ -197,14 +283,17 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     const d = new FormData(form);
     setSibuk(true);
     setPesan("");
+    const arahanMentah = String(d.get("arahan") ?? "").trim();
+    const prefiksGaya = pilihGaya !== "otomatis" ? `[Gaya: ${pilihGaya}] ` : "";
+    const arahanAkhir = prefiksGaya + arahanMentah;
     // Merek bank media (Lek Kopi): naskah ditulis server dulu, video dibuat setelah naskah disetujui.
     if (merekBank) {
-      const j = await kirimNaskah({ aksi: "buat", merek: pilihMerek, permintaan: String(d.get("arahan") ?? "") });
+      const j = await kirimNaskah({ aksi: "buat", merek: pilihMerek, permintaan: arahanAkhir });
       setSibuk(false);
       if (j.ok) form.reset();
       return void muat();
     }
-    const { error } = await supabase().from("studio_tugas").insert({ merek: d.get("merek") ?? "bakafrawi", jenis: d.get("jenis"), produk_slug: d.get("produk"), arahan: String(d.get("arahan") ?? ""), latar: d.get("latar") ? "ai" : "polos" });
+    const { error } = await supabase().from("studio_tugas").insert({ merek: d.get("merek") ?? "bakafrawi", jenis: d.get("jenis"), produk_slug: d.get("produk"), arahan: arahanAkhir, latar: d.get("latar") ? "ai" : "polos" });
     if (error) {
       setSibuk(false);
       return setPesan(`Gagal membuat tugas: ${error.message}`);
@@ -310,8 +399,25 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     }`}
                   >
                     <TrendingUp className="size-3.5" />
-                    <span>Riset Konsep Viral</span>
+                    <span>Riset Tren Viral</span>
                     {bukaRiset ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBukaRef((v) => !v)}
+                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition ${
+                      bukaRef
+                        ? "border-sky-400/50 bg-sky-500/10 text-sky-300"
+                        : "border-white/10 text-muted-foreground hover:border-sky-400/40 hover:text-sky-300"
+                    }`}
+                  >
+                    <Link2 className="size-3.5" />
+                    <span>Pelajari Link Video</span>
+                    {daftarRef.length > 0 && (
+                      <span className="rounded-full bg-sky-500/20 px-1.5 text-[10px] text-sky-300">{daftarRef.length}</span>
+                    )}
+                    {bukaRef ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
                   </button>
                 </div>
               </div>
@@ -444,6 +550,87 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   )}
                 </div>
               )}
+
+              {/* Panel Tempel Link Referensi Video (Instagram Reels / TikTok) */}
+              {bukaRef && (
+                <div className="mt-4 space-y-4 border-t border-border/50 pt-4">
+                  <div className="text-xs text-zinc-400">
+                    Tempelkan tautan <b className="text-foreground">Instagram Reels, TikTok, atau YouTube Shorts</b> yang Anda sukai. AI akan membedah <i>hook</i>, ritme potongan, gaya teks & visualnya untuk ditiru pada merek <b className="text-emas-muda">{merek.find((m) => m.slug === pilihMerek)?.nama ?? pilihMerek}</b>. (Anda juga bisa kirim link langsung lewat Bot Telegram.)
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <input
+                      type="url"
+                      value={urlRef}
+                      onChange={(e) => setUrlRef(e.target.value)}
+                      placeholder="https://www.instagram.com/reel/... atau https://www.tiktok.com/..."
+                      className="h-10 rounded-lg border border-input bg-transparent px-3 text-xs"
+                    />
+                    <input
+                      type="text"
+                      value={catatanRef}
+                      onChange={(e) => setCatatanRef(e.target.value)}
+                      placeholder="Catatan opsional (mis. suka transisi cepat & teks stabilo)"
+                      className="h-10 rounded-lg border border-input bg-transparent px-3 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={bedahLinkReferensi}
+                      disabled={membedahRef}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-500 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-400 disabled:opacity-60"
+                    >
+                      {membedahRef ? <Loader2 className="size-3.5 animate-spin" /> : <Link2 className="size-3.5" />}
+                      Bedah & Simpan
+                    </button>
+                  </div>
+
+                  {galatRef && <p className="text-xs text-red-300">{galatRef}</p>}
+
+                  {daftarRef.length > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {daftarRef.map((r) => {
+                        const b = r.analisis;
+                        if (!b) return null;
+                        return (
+                          <div key={r.id} className="flex flex-col justify-between rounded-xl border border-border/80 bg-white/[0.02] p-3.5 text-xs">
+                            <div className="space-y-1.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <span className="inline-block rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-300 mr-1.5">
+                                    {b.platform}
+                                  </span>
+                                  <span className="font-semibold text-foreground">{b.judul}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {r.permalink && (
+                                    <a href={r.permalink} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-emas" title="Buka video asli">
+                                      <ExternalLink className="size-3.5" />
+                                    </a>
+                                  )}
+                                  <button type="button" onClick={() => hapusReferensi(r.id)} className="text-muted-foreground hover:text-red-400" title="Hapus referensi">
+                                    <Trash2 className="size-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-zinc-400">{b.ringkas}</p>
+                              <p className="text-[11px] text-zinc-300"><b>Hook:</b> {b.hook3Detik}</p>
+                              <p className="text-[11px] text-zinc-400"><b>Visual & Teks:</b> {b.gayaVisual} · {b.gayaTeks}</p>
+                              <p className="text-[10px] text-emas-muda">Preset cocok: <b>{b.presetCocok}</b> · Pacing: {b.pacing}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => tiruReferensi(r)}
+                              className="mt-3 w-full rounded-lg border border-sky-400/40 bg-sky-500/10 py-1.5 text-center text-xs font-medium text-sky-300 hover:bg-sky-500 hover:text-white transition"
+                            >
+                              Tiru Gaya Ini →
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <form onSubmit={buat} className="mb-8 grid gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6">
@@ -482,12 +669,36 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                 </label>
                 <label className="grid gap-1.5">
                   <span className="text-xs font-medium text-muted-foreground">Jenis</span>
-                  <select name="jenis" className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
+                  <select
+                    name="jenis"
+                    value={pilihJenis}
+                    onChange={(e) => {
+                      setPilihJenis(e.target.value as "gambar" | "video");
+                      setPilihGaya("otomatis");
+                    }}
+                    className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+                  >
                     <option value="gambar" className="bg-card">Poster (1:1, 4:5, 9:16)</option>
-                    <option value="video" className="bg-card">Video Reels/TikTok (animasi aplikasi + karakter)</option>
+                    <option value="video" className="bg-card">Video Reels/TikTok (Remotion + animasi)</option>
                   </select>
                 </label>
               </div>
+              {/* Preset Gaya Desain — tersedia sama untuk Bakafrawi & Lek Kopi */}
+              <label className="grid gap-1.5 sm:w-1/2">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Palette className="size-3.5 text-emas" /> Gaya Desain {merekBank || pilihJenis === "video" ? "Video" : "Poster"}
+                </span>
+                <select
+                  name="gaya"
+                  value={pilihGaya}
+                  onChange={(e) => setPilihGaya(e.target.value)}
+                  className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+                >
+                  {(merekBank || pilihJenis === "video" ? PRESET_VIDEO : PRESET_POSTER).map((g) => (
+                    <option key={g.kode} value={g.kode} className="bg-card">{g.label}</option>
+                  ))}
+                </select>
+              </label>
               <label hidden={merekBank} className="flex items-start gap-2 text-sm">
                 <input type="checkbox" name="latar" className="mt-0.5 size-4 accent-[#c9a24b]" />
                 <span>

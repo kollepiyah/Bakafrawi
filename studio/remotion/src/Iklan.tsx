@@ -2,7 +2,7 @@
 // bilah progres, lencana langkah & nama merek. Narasi per adegan + musik yang mengecil saat narasi.
 import React from 'react';
 import { AbsoluteFill, Audio, interpolate, Sequence, staticFile, useCurrentFrame } from 'remotion';
-import { Latar, Lencana, Merek, Progres } from './components/Bingkai';
+import { Latar, Lencana, Merek, NotifPov, PitaHook, Progres } from './components/Bingkai';
 import { Caption } from './components/Caption';
 import { tataLetak, useKeluar } from './components/dasar';
 import { MascotOverlay } from './components/Maskot';
@@ -64,18 +64,25 @@ function volumeMusik(frame: number, kata: { mulai: number; selesai: number }[]) 
 
 export const Iklan: React.FC<Naskah> = (naskah) => {
   const frame = useCurrentFrame();
-  const { merek, adegan, suara, maskot, musik } = naskah;
+  const { merek, adegan, suara, maskot, musik, gaya } = naskah;
+  const gelap = gaya === 'dark-keynote';
+  const hookAdegan = adegan.find((a) => a.jenis === 'hook');
+  const judulHook = hookAdegan && hookAdegan.jenis === 'hook' ? hookAdegan.judul : merek.nama;
   const { adegan: waktu, total } = hitungWaktu(naskah);
-  const letak = tataLetak(Boolean(maskot));
+  const letakDasar = tataLetak(Boolean(maskot));
+  // Beri sedikit ruang atas bila pita split-hook atau notif POV aktif di adegan langkah.
+  const adaPitaAtas = gaya === 'split-hook' || gaya === 'pov-chat';
+  const letak = adaPitaAtas ? { ...letakDasar, visualAtas: letakDasar.visualAtas + 55 } : letakDasar;
   const kini = waktu.findLastIndex((w) => frame >= w.mulai);
   const penutup = adegan[kini]?.jenis === 'penutup';
+  const diHook = adegan[kini]?.jenis === 'hook';
   let langkah = 0;
   const nomor = adegan.map((a) => ('badge' in a ? ++langkah : 0));
   const kataGlobal = adegan.flatMap((a, i) => (suara?.[i]?.kata ?? []).map((k) => ({ mulai: waktu[i].mulai / FPS + JEDA_AWAL + k.mulai, selesai: waktu[i].mulai / FPS + JEDA_AWAL + k.selesai })));
 
   return (
-    <AbsoluteFill style={{ background: merek.latar }}>
-      <Latar merek={merek} />
+    <AbsoluteFill style={{ background: gelap ? '#07090F' : merek.latar }}>
+      <Latar merek={merek} gaya={gaya} />
       {adegan.map((a, i) => (
         <Sequence key={i} from={waktu[i].mulai} durationInFrames={waktu[i].durasi} name={`${i + 1}. ${a.jenis}`}>
           <Panggung a={a} merek={merek} durasi={waktu[i].durasi} atas={letak.visualAtas} bawah={letak.visualBawah} jumlah={adegan.length} layar={naskah.layar ?? []} />
@@ -102,20 +109,22 @@ export const Iklan: React.FC<Naskah> = (naskah) => {
             mulaiDetik={JEDA_AWAL}
             kunci={a.kunci}
             y={a.jenis === 'penutup' && !maskot ? 1520 : letak.caption}
-            utama={merek.utama}
+            utama={gelap ? merek.kedua : merek.utama}
             kedua={merek.kedua}
-            tinta={merek.tinta}
-            terang={a.jenis === 'penutup'}
+            tinta={gelap ? '#F8FAFC' : merek.tinta}
+            terang={gelap || a.jenis === 'penutup'}
           />
         </Sequence>
       ))}
-      {!penutup ? <Progres waktu={waktu} total={total} warna={merek.utama} /> : null}
+      {!penutup ? <Progres waktu={waktu} total={total} warna={gelap ? merek.kedua : merek.utama} gelap={gelap} /> : null}
       {adegan.map((a, i) => ('badge' in a ? (
         <Sequence key={`b${i}`} from={waktu[i].mulai} durationInFrames={waktu[i].durasi} layout="none">
-          <Lencana nomor={nomor[i]} teks={a.badge} warna={merek.utama} mulai={0} />
+          <Lencana nomor={nomor[i]} teks={a.badge} warna={gelap ? merek.kedua : merek.utama} mulai={0} gelap={gelap} />
         </Sequence>
       ) : null))}
-      {adegan[kini]?.jenis !== 'hook' ? <Merek merek={merek} terang={penutup} /> : null}
+      {!penutup && !diHook && gaya === 'split-hook' ? <PitaHook teks={judulHook} warna={merek.utama} aksen={merek.kedua} /> : null}
+      {!penutup && !diHook && gaya === 'pov-chat' ? <NotifPov pengirim={merek.nama} pesan={judulHook} aksen={merek.kedua} /> : null}
+      {!diHook ? <Merek merek={merek} terang={gelap || penutup} /> : null}
       {musik ? <Audio src={staticFile(musik)} volume={(f) => volumeMusik(f, kataGlobal)} loop /> : null}
     </AbsoluteFill>
   );

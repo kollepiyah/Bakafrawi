@@ -23,8 +23,11 @@ export type Adegan =
   | (Dasar & { jenis: 'daftar'; badge: string; labelAngka: string; angka: string; catatan: string; daftar: string[] })
   | (Dasar & { jenis: 'penutup'; judul: string; tombol: string; info: string });
 
+export type GayaVideo = 'clean-ui' | 'dark-keynote' | 'pov-chat' | 'split-hook' | string;
+
 export type Naskah = {
   merek: { nama: string; logo?: string; utama: string; kedua: string; latar: string; kisi: string; tinta: string };
+  gaya?: GayaVideo;
   adegan: Adegan[];
   layar?: Layar[];
   maskot?: string; // berkas di public/ (.webm transparan / .png); kosong = tata letak tanpa maskot

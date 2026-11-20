@@ -49,7 +49,9 @@ export async function dataKontenMerek(merek: Merek): Promise<DataKonten> {
     tagBank: [...new Set(bank.map((b) => b.tag))].sort(),
     isiBank,
     gaya: gaya[0]?.profil?.naskah ?? null,
-    gambarAi: Number(merek.profil.gambar_ai_maks) || 0,
+    // Aktifkan B-roll gambar AI gratis (maks 2 adegan) secara bawaan agar video tidak hanya bergantung
+    // pada foto bank — tetap bisa dimatikan dengan mengatur gambar_ai_maks = 0 di profil merek.
+    gambarAi: merek.profil.gambar_ai_maks !== undefined ? Number(merek.profil.gambar_ai_maks) : 2,
     kontenTerakhir: terakhir.map((t) => t.judul).filter((j): j is string => Boolean(j)),
   };
 }
