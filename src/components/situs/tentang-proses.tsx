@@ -1,6 +1,7 @@
 import type { Situs } from "@/content/skema";
 import { Bagian, KepalaBagian, Label } from "./bagian";
 import { Muncul } from "./muncul";
+import { SegelLogo } from "./segel-logo";
 
 export function Proses({ proses }: { proses: Situs["proses"] }) {
   return (
@@ -39,16 +40,22 @@ export function Tentang({ situs }: { situs: Situs }) {
             </p>
           ))}
         </Muncul>
-        <Muncul jeda={0.1} className="rounded-2xl border border-border bg-gradient-to-br from-card to-[#15191f] p-7 shadow-[0_24px_60px_-28px_rgba(0,0,0,.85)]">
-          <h3 className="mb-4 font-semibold">Sekilas</h3>
-          <dl>
-            {fakta.map((f) => (
-              <div key={f.label} className="flex justify-between gap-4 border-b border-border py-3.5 text-[0.95rem] last:border-0 last:pb-0">
-                <dt className="text-redup">{f.label}</dt>
-                <dd className="text-right font-medium">{f.isi}</dd>
-              </div>
-            ))}
-          </dl>
+        <Muncul jeda={0.1} className="grid gap-6">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-border bg-gradient-to-br from-card/90 to-[#0e1117] px-6 py-7 shadow-[0_24px_60px_-28px_rgba(0,0,0,.85)]">
+            <SegelLogo />
+            <p className="mt-3 text-center text-xs text-redup">Klik segel untuk memutar · Identitas resmi {situs.nama}</p>
+          </div>
+          <div className="rounded-2xl border border-border bg-gradient-to-br from-card to-[#15191f] p-7 shadow-[0_24px_60px_-28px_rgba(0,0,0,.85)]">
+            <h3 className="mb-4 font-semibold">Sekilas</h3>
+            <dl>
+              {fakta.map((f) => (
+                <div key={f.label} className="flex justify-between gap-4 border-b border-border py-3.5 text-[0.95rem] last:border-0 last:pb-0">
+                  <dt className="text-redup">{f.label}</dt>
+                  <dd className="text-right font-medium">{f.isi}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         </Muncul>
       </div>
     </Bagian>

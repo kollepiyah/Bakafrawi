@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { IKON_LAYANAN, JENIS_SOSIAL, nomorWaInternasional, type Situs } from "@/content/skema";
 import { namaSosial } from "@/components/situs/ikon-sosial";
-import { DaftarObjek, Kolom, KolomDaftar, Pilihan } from "./kolom";
+import { DaftarObjek, Kolom, KolomDaftar, KolomGambar, Pilihan } from "./kolom";
 import type { Ubah } from "./editor";
 
 type Props = { draf: Situs; ubah: Ubah };
@@ -35,6 +35,12 @@ export function BagianUmum({ draf, ubah }: Props) {
         <Kolom label="Judul besar" value={draf.hero.judul} onChange={(v) => ubah((d) => void (d.hero.judul = v))} />
         <KolomDaftar label="Kata emas di akhir judul" value={draf.hero.sorot} onChange={(v) => ubah((d) => void (d.hero.sorot = v))} petunjuk="Satu kata per baris; ditampilkan miring berwarna emas." />
         <Kolom label="Paragraf pembuka" baris={3} value={draf.hero.isi} onChange={(v) => ubah((d) => void (d.hero.isi = v))} />
+        <KolomGambar
+          label="Foto kartu lanyard 3D (opsional)"
+          value={draf.hero.fotoKartu}
+          onChange={(v) => ubah((d) => void (d.hero.fotoKartu = v))}
+          petunjuk="Foto portrait untuk kartu gantung 3D di halaman depan (mis. foto profil atau studio). Jika kosong, otomatis menampilkan emblem Bakafrawi."
+        />
       </Kartu>
       <Kartu judul="Angka statistik">
         <DaftarObjek

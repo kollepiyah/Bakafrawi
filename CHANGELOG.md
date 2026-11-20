@@ -1,5 +1,24 @@
 # CHANGELOG — bakafrawi.com
 
+## Pembaruan Tampilan Situs Utama — Konsep A Interaktif (21 Nov)
+
+- **Kartu Lanyard 3D Interaktif di Hero (`src/components/situs/kartu-lanyard.tsx`):** kartu Studio Pass
+  Bakafrawi yang bisa ditarik, digoyang, dan otomatis membal balik dengan fisika pegas 3D (`motion/react`),
+  efek kilau holografik mengikuti arah tarikan/kursor, tali gantungan elastis, dan dukungan **unggah foto
+  portrait custom lewat Admin → Situs → Hero** (`hero.fotoKartu`, otomatis kembali ke emblem bawaan jika
+  kosong), lengkap dengan layout Hero 2 kolom (`src/components/situs/hero.tsx`).
+- **Animasi Logo Kaligrafi Bakafrawi (`intro-splash.tsx` & `segel-logo.tsx`):**
+  - *Splash Intro* singkat (±0,9 detik, sekali per sesi tab) dengan pendar emas logo kaligrafi lalu tirai
+    terangkat halus membuka halaman utama.
+  - *Segel Kaligrafi Orbital* interaktif di bagian **Tentang** (`tentang-proses.tsx`): teks melingkar
+    dan cincin orbit berputar pelan; medali logo bisa diklik untuk berputar 360°.
+- **Floating Glass Pill Navbar & Scroll Progress (`src/components/situs/navbar.tsx`):** saat halaman
+  di-scroll, bilah navigasi melayang menjadi kapsul kaca gelap (`backdrop-blur-xl`, `rounded-full`)
+  dilengkapi garis indikator progres baca emas tipis di bagian bawah.
+- **Kartu Bento Spotlight (`src/components/situs/kartu-spotlight.tsx`):** diterapkan pada bagian
+  **Layanan** (`layanan.tsx`) dan **Produk** (`kartu-produk.tsx`) — cahaya emas lembut mengikuti gerak
+  kursor di atas kartu dengan elevasi halus, tetap terhubung penuh ke CMS `/admin`.
+
 ## Jadwal Otomatis Jam Buka (Story Opening Lek Kopi) & Jadwal Tayang Custom (20 Nov)
 
 - **Jadwal Otomatis Setiap Jam Buka (Story & Opening):** panel baru **Story Jam Buka** di Studio

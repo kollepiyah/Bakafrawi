@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { motion, useScroll, useSpring } from "motion/react";
 import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -17,22 +18,31 @@ const menu = [
 export function Navbar({ nama }: { nama: string }) {
   const [tergulir, setTergulir] = useState(false);
   const [buka, setBuka] = useState(false);
+  const { scrollYProgress } = useScroll();
+  const progres = useSpring(scrollYProgress, { stiffness: 180, damping: 28, restDelta: 0.001 });
 
   useEffect(() => {
-    const cek = () => setTergulir(window.scrollY > 20);
+    const cek = () => setTergulir(window.scrollY > 24);
     cek();
     window.addEventListener("scroll", cek, { passive: true });
     return () => window.removeEventListener("scroll", cek);
   }, []);
 
   return (
-    <header
-      className={cn(
-        "fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300",
-        tergulir ? "border-border bg-background/75 backdrop-blur-xl" : "border-transparent",
-      )}
-    >
-      <div className="wadah flex h-[72px] items-center justify-between">
+    <header className="fixed inset-x-0 top-0 z-50 transition-all duration-300">
+      {/* Garis progres baca emas tipis di puncak layar */}
+      <motion.div
+        style={{ scaleX: progres, transformOrigin: "0% 50%" }}
+        className="pointer-events-none fixed inset-x-0 top-0 z-50 h-[2px] bg-gradient-to-r from-emas/40 via-emas to-emas-muda"
+      />
+      <div
+        className={cn(
+          "mx-auto flex items-center justify-between transition-all duration-300",
+          tergulir
+            ? "mt-3 h-[60px] max-w-4xl rounded-full border border-white/12 bg-background/80 px-5 shadow-[0_18px_40px_-18px_rgba(0,0,0,0.9)] backdrop-blur-xl sm:px-6"
+            : "wadah h-[74px] border-b border-transparent",
+        )}
+      >
         <a href="#beranda" className="flex items-center gap-2.5 text-lg font-bold">
           <Image src="/logo.png" alt="" width={34} height={34} priority />
           {nama}

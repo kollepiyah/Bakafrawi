@@ -2,13 +2,15 @@ import Image from "next/image";
 import { ArrowUpRight, Check } from "lucide-react";
 import type { Produk } from "@/content/situs";
 import { TombolTautan } from "./bagian";
+import { KartuSpotlight } from "./kartu-spotlight";
 import { Muncul } from "./muncul";
 
 export function KartuProduk({ produk }: { produk: Produk }) {
   const adaTautanUtama = produk.tautan.some((t) => t.utama);
   return (
     <div className="mt-14 first:mt-12">
-      <Muncul className="relative grid gap-10 overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card to-[#15191f] p-7 shadow-[0_24px_60px_-28px_rgba(0,0,0,.85)] sm:p-10 lg:grid-cols-2 lg:gap-12 lg:p-12">
+      <KartuSpotlight className="bg-gradient-to-br from-card to-[#15191f] p-7 shadow-[0_24px_60px_-28px_rgba(0,0,0,.85)] sm:p-10 lg:p-12">
+        <div className="grid gap-10 lg:grid-cols-2 lg:gap-12">
         <div className="pointer-events-none absolute -top-28 -right-20 size-96 rounded-full bg-[radial-gradient(circle,rgba(201,162,75,.12),transparent_65%)]" />
         <div className="relative">
           <div className="mb-5 flex items-center gap-3">
@@ -60,7 +62,8 @@ export function KartuProduk({ produk }: { produk: Produk }) {
             </li>
           ))}
         </ul>
-      </Muncul>
+        </div>
+      </KartuSpotlight>
 
       {produk.layarDesktop?.map((g) => (
         <Muncul key={g.src} className="mx-auto mt-10 max-w-4xl">
