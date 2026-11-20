@@ -444,6 +444,15 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
               )}
             </div>
 
+            {insight?.galatInsight && (
+              <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-[11px] text-amber-200 break-words">
+                <b className="text-amber-300">Info tayangan Instagram:</b> {insight.galatInsight}
+                <span className="block mt-1 text-amber-200/80">
+                  Pastikan token Instagram di Studio → Sambungan memiliki izin <code>instagram_business_manage_insights</code> / <code>instagram_manage_insights</code>.
+                </span>
+              </div>
+            )}
+
             {!insight || insight.posts.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border/60 py-6 text-center text-xs text-muted-foreground space-y-2">
                 <p>{insight?.pesan ?? "Belum ada konten yang dipublikasikan ke Instagram."}</p>
@@ -469,7 +478,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
                         <Miniatur gambar={p.thumbnail} video={p.videoUrl} adalahVideo={adalahVideo} besar />
                         <div className="min-w-0 space-y-1">
                           <p className="text-xs font-semibold text-foreground truncate">
-                            {p.merek && p.merek !== "bakafrawi" ? `${p.merek} · ` : ""}{p.produk === p.merek ? "Video bank media" : p.produk} · {adalahVideo ? "Reels" : "Feed"}
+                            {p.merek && p.merek !== "bakafrawi" ? `${p.merek} · ` : ""}{p.produk === p.merek ? (adalahVideo ? "Video" : "Postingan") : p.produk} · {adalahVideo ? "Reels" : "Feed"}
                           </p>
                           <p className="text-[11px] text-muted-foreground truncate max-w-sm">
                             {p.caption ? p.caption.slice(0, 60) + "…" : "Tanpa caption"}

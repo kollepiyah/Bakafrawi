@@ -32,6 +32,7 @@ export type RingkasInsight = {
   totalViews: number;
   posts: PostInsight[];
   pesan?: string;
+  galatInsight?: string | null;
 };
 
 type KredensialIg = {
@@ -96,28 +97,38 @@ async function tarikMetrikMedia(host: string, token: string, mediaId: string) {
   let reach: number | null = null;
   let saved: number | null = null;
   let shares: number | null = null;
+  let galat: string | null = null;
 
   // Coba kombinasi metrik dari yang paling lengkap hingga satuan (beda versi API & jenis media).
   const paketMetrik = [
     "views,reach,saved,shares",
-    "plays,reach,saved,shares",
     "views",
-    "plays",
-    "impressions,reach",
     "reach",
+    "plays",
+    "ig_reels_aggregated_all_plays_count",
   ];
 
   for (const metrik of paketMetrik) {
     const url = `https://${host}/${VERSI()}/${mediaId}/insights?metric=${metrik}&access_token=${token}`;
-    const res = await fetch(url, { cache: "no-store" }).catch(() => null);
-    if (!res || !res.ok) continue;
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(6000) }).catch(() => null);
+    if (!res) continue;
     const j = await res.json().catch(() => null);
+    if (!res.ok) {
+      if (!galat && j?.error?.message) galat = String(j.error.message);
+      // Bila error permission/OAuth (#10 / #200 / #190), hentikan percobaan metrik lain agar cepat.
+      if (j?.error?.code === 10 || j?.error?.code === 190 || j?.error?.code === 200) break;
+      continue;
+    }
     if (!Array.isArray(j?.data)) continue;
 
     for (const item of j.data) {
       const val = Number(item.values?.[0]?.value ?? item.total_value?.value);
       if (!Number.isFinite(val)) continue;
-      if (item.name === "views" || (item.name === "plays" && views == null) || (item.name === "impressions" && views == null)) {
+      if (
+        item.name === "views" ||
+        (item.name === "plays" && views == null) ||
+        (item.name === "ig_reels_aggregated_all_plays_count" && views == null)
+      ) {
         views = val;
       }
       if (item.name === "reach") reach = val;
@@ -130,7 +141,7 @@ async function tarikMetrikMedia(host: string, token: string, mediaId: string) {
   // Bila Instagram tidak mengembalikan 'views' tetapi ada 'reach', gunakan reach sebagai estimasi tayangan.
   if (views == null && reach != null) views = reach;
 
-  return { views, reach, saved, shares };
+  return { views, reach, saved, shares, galat };
 }
 
 export async function ambilInsightInstagram(): Promise<RingkasInsight> {
@@ -160,6 +171,7 @@ export async function ambilInsightInstagram(): Promise<RingkasInsight> {
 
     const mediaSudah = new Set<string>();
     const posts: PostInsight[] = [];
+    let galatInsightPertama: string | null = null;
 
     // 2. Proses tugas yang ditayangkan dari Studio
     if (tugasList && tugasList.length > 0) {
@@ -198,11 +210,13 @@ export async function ambilInsightInstagram(): Promise<RingkasInsight> {
                 likes = Number(j.like_count) || likes;
                 comments = Number(j.comments_count) || comments;
                 if (j.permalink) permalink = j.permalink;
-                if (j.thumbnail_url) thumbnail = j.thumbnail_url;
+                // Pertahankan sampul Studio (frame detik 1.5); hanya pakai thumbnail IG bila belum ada.
+                if (!thumbnail && j.thumbnail_url) thumbnail = j.thumbnail_url;
                 else if (!thumbnail && j.media_type === "IMAGE" && j.media_url) thumbnail = j.media_url;
               }
 
               const m = await tarikMetrikMedia(host, token, mediaId);
+              if (m.galat && !galatInsightPertama) galatInsightPertama = m.galat;
               if (m.views != null) views = m.views;
               if (m.reach != null) reach = m.reach;
               if (m.saved != null) saved = m.saved;
@@ -264,6 +278,7 @@ export async function ambilInsightInstagram(): Promise<RingkasInsight> {
             const ref = refPerMedia.get(m.id);
             const adalahVideo = m.media_type === "VIDEO" || m.media_product_type === "REELS";
             const metrik = await tarikMetrikMedia(host, token, m.id);
+            if (metrik.galat && !galatInsightPertama) galatInsightPertama = metrik.galat;
             const views = metrik.views ?? (ref?.statistik?.tayangan != null ? Number(ref.statistik.tayangan) : null);
 
             return {
@@ -332,6 +347,7 @@ export async function ambilInsightInstagram(): Promise<RingkasInsight> {
       totalComments,
       totalViews,
       posts,
+      galatInsight: totalViews === 0 ? galatInsightPertama : null,
       ...(posts.length === 0
         ? { pesan: tersambung ? "Belum ada konten yang diposting ke Instagram." : "Instagram belum tersambung." }
         : {}),
