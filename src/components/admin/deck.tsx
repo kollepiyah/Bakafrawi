@@ -98,11 +98,11 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
   const [tampilSemuaRun, setTampilSemuaRun] = useState(false);
   const [tabAktif, setTabAktif] = useState<"mesin" | "insight">("mesin");
 
-  const muat = useCallback(async () => {
+  const muat = useCallback(async (segar = false) => {
     setSedangMuat(true);
     setGalat("");
     try {
-      const j = (await apiAdmin(sesi)("/api/deck")) as DeckResponse;
+      const j = (await apiAdmin(sesi)(segar ? "/api/deck?segar=1" : "/api/deck")) as DeckResponse;
       if (!j.ok) {
         setGalat(j.pesan ?? "Gagal memuat status Studio.");
         setSedangMuat(false);
@@ -121,13 +121,13 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
   }, [sesi]);
 
   useEffect(() => {
-    const t = setTimeout(muat, 0);
+    const t = setTimeout(() => { void muat(false); }, 0);
     return () => clearTimeout(t);
   }, [muat]);
 
   // Auto-refresh tiap 30 detik
   useEffect(() => {
-    const iv = setInterval(muat, 30_000);
+    const iv = setInterval(() => { void muat(false); }, 30_000);
     return () => clearInterval(iv);
   }, [muat]);
 
@@ -143,7 +143,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
     return (
       <div className="flex items-center justify-between rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
         <span>{galat}</span>
-        <button onClick={muat} className="underline hover:text-white">Coba lagi</button>
+        <button onClick={() => void muat(true)} className="underline hover:text-white">Coba lagi</button>
       </div>
     );
   }
@@ -254,7 +254,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
           )}
 
           <button
-            onClick={muat}
+            onClick={() => void muat(true)}
             disabled={sedangMuat}
             title="Segarkan data status & insight"
             className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:border-emas hover:text-foreground disabled:opacity-50"

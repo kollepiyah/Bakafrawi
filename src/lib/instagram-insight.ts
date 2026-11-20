@@ -3,6 +3,10 @@ import { rest } from "./db-server";
 
 const VERSI = () => process.env.IG_API_VERSI || "v27.0";
 
+// Cache 3 menit di server agar auto-refresh Beranda (tiap 30 dtk) tidak memicu rate-limit Meta Graph API.
+let cacheInsight: { waktu: number; data: RingkasInsight } | null = null;
+const TTL_CACHE_MS = 3 * 60_000;
+
 export type PostInsight = {
   id: string;
   merek: string;
@@ -99,18 +103,16 @@ async function tarikMetrikMedia(host: string, token: string, mediaId: string) {
   let shares: number | null = null;
   let galat: string | null = null;
 
-  // Coba kombinasi metrik dari yang paling lengkap hingga satuan (beda versi API & jenis media).
+  // Coba kombinasi ringkas (maks 3 percobaan) agar tidak memicu rate-limit Meta Graph API.
   const paketMetrik = [
     "views,reach,saved,shares",
     "views",
     "reach",
-    "plays",
-    "ig_reels_aggregated_all_plays_count",
   ];
 
   for (const metrik of paketMetrik) {
     const url = `https://${host}/${VERSI()}/${mediaId}/insights?metric=${metrik}&access_token=${token}`;
-    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(6000) }).catch(() => null);
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(9000) }).catch(() => null);
     if (!res) continue;
     const j = await res.json().catch(() => null);
     if (!res.ok) {
@@ -144,7 +146,10 @@ async function tarikMetrikMedia(host: string, token: string, mediaId: string) {
   return { views, reach, saved, shares, galat };
 }
 
-export async function ambilInsightInstagram(): Promise<RingkasInsight> {
+export async function ambilInsightInstagram(paksaSegar = false): Promise<RingkasInsight> {
+  if (!paksaSegar && cacheInsight && Date.now() - cacheInsight.waktu < TTL_CACHE_MS) {
+    return cacheInsight.data;
+  }
   try {
     // 1. Kredensial Instagram semua merek + tugas tayang + cache studio_referensi
     const [kredList, tugasList, refList] = await Promise.all([
@@ -339,7 +344,7 @@ export async function ambilInsightInstagram(): Promise<RingkasInsight> {
     const totalComments = posts.reduce((a, b) => a + b.comments, 0);
     const totalViews = posts.reduce((a, b) => a + (b.views ?? 0), 0);
 
-    return {
+    const hasilAkhir: RingkasInsight = {
       tersambung,
       akun,
       totalTayang: posts.length,
@@ -347,11 +352,13 @@ export async function ambilInsightInstagram(): Promise<RingkasInsight> {
       totalComments,
       totalViews,
       posts,
-      galatInsight: totalViews === 0 ? galatInsightPertama : null,
+      galatInsight: galatInsightPertama,
       ...(posts.length === 0
         ? { pesan: tersambung ? "Belum ada konten yang diposting ke Instagram." : "Instagram belum tersambung." }
         : {}),
     };
+    cacheInsight = { waktu: Date.now(), data: hasilAkhir };
+    return hasilAkhir;
   } catch (e) {
     return {
       tersambung: false,

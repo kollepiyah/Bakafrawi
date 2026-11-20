@@ -6,11 +6,12 @@ import { ambilInsightInstagram } from "@/lib/instagram-insight";
 // Data untuk dashboard deck: workflow runs GitHub Actions + tugas Studio + Insight Instagram + biaya AI.
 export async function GET(req: Request) {
   if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
+  const segar = new URL(req.url).searchParams.get("segar") === "1";
   try {
     const [workflows, tugas, insight, biaya] = await Promise.all([
       ambilWorkflowRuns(10),
       daftarTugas(10),
-      ambilInsightInstagram(),
+      ambilInsightInstagram(segar),
       ringkasBiayaBulanIni().catch(() => null),
     ]);
     return Response.json({ ok: true, workflows, tugas, insight, biaya });
