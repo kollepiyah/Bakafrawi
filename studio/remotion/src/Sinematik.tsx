@@ -5,6 +5,7 @@ import React from 'react';
 import {
   AbsoluteFill,
   Audio,
+  Easing,
   Img,
   interpolate,
   OffthreadVideo,
@@ -274,38 +275,203 @@ const PenutupSinematik: React.FC<{ merek: PropsSinematik['merek']; penutup: NonN
   );
 };
 
-/** Adegan bergaya editorial majalah / landing page scroll krem hangat (ala referensi POUR / PLAY). */
-const AdeganEditorialScroll: React.FC<{
-  s: SegmenSinematik;
-  durasi: number;
-  indeks: number;
-  totalSegmen: number;
-  merek: PropsSinematik['merek'];
-}> = ({ s, durasi, indeks, totalSegmen, merek }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const p = spring({ frame, fps, config: { damping: 18, stiffness: 110, mass: 0.9 } });
-  const keluar = interpolate(frame, [durasi - 10, durasi], [0, -140], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const opKeluar = interpolate(frame, [durasi - 9, durasi], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const geserY = interpolate(p, [0, 1], [160, 0]) + keluar;
-  const skalaMedia = interpolate(frame, [0, durasi], [1.03, 1.1], { extrapolateRight: 'clamp' });
+const SECTION_H = 1520;
+const SUB_EDITORIAL = ['RACIKAN KHAS', 'SEDUHAN SEGAR', 'AROMA PILIHAN', 'TEMAN SANTAI', 'MAMPIR MALAM INI'];
 
-  const teksMentah = String(s.teksLayar ?? '').trim();
-  const bagian = teksMentah ? teksMentah.split('|').map((x) => x.trim()).filter(Boolean) : [];
-  const judulUtama = bagian[0] || (indeks === 0 ? merek.nama : `Pilihan ${indeks + 1}`);
-  const judulAksen = bagian[1] || '';
-  const nomor = `${indeks + 1}.`;
+/**
+ * Halaman Editorial Kontinyu ala website kopi mewah (POUR / PLAY):
+ * Seluruh bagian menyambung dalam 1 halaman panjang yang di-scroll mulus tanpa pernah berkedip/fade,
+ * dengan sticky navbar, komposisi asimetris kiri-kanan + full-bleed showcase + footer krem menyatu.
+ */
+const HalamanEditorialScroll: React.FC<{
+  props: PropsSinematik;
+  jadwal: { mulai: number; durasi: number }[];
+  penutupMulai: number;
+  penutupDurasi: number;
+}> = ({ props, jadwal, penutupMulai, penutupDurasi }) => {
+  const frame = useCurrentFrame();
+  const { merek, segmen, penutup } = props;
+  const adaPenutup = Boolean(penutup && penutupDurasi > 0);
+
+  // Hitung posisi scroll vertikal kontinyu: berhenti sejenak di tiap bagian, lalu gulir halus (easeInOutCubic).
+  const titik = [
+    ...jadwal.map((j, i) => ({ mulai: j.mulai, durasi: j.durasi, y: i * SECTION_H })),
+    ...(adaPenutup ? [{ mulai: penutupMulai, durasi: penutupDurasi, y: segmen.length * SECTION_H }] : []),
+  ];
+
+  let scrollY = 0;
+  for (let i = 0; i < titik.length - 1; i++) {
+    const a = titik[i];
+    const b = titik[i + 1];
+    const mulaiGulir = a.mulai + Math.round(a.durasi * 0.42);
+    const selesaiGulir = b.mulai + Math.min(10, Math.round(b.durasi * 0.15));
+    if (frame >= selesaiGulir) {
+      scrollY = b.y;
+    } else if (frame > mulaiGulir) {
+      scrollY = interpolate(frame, [mulaiGulir, selesaiGulir], [a.y, b.y], {
+        easing: Easing.inOut(Easing.cubic),
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+      });
+      break;
+    } else {
+      break;
+    }
+  }
+
+  const renderMedia = (s: SegmenSinematik, i: number, gayaBox: React.CSSProperties) => {
+    const j = jadwal[i];
+    const lokal = Math.max(0, frame - j.mulai);
+    const skala = interpolate(lokal, [0, j.durasi], [1.02, 1.09], { extrapolateRight: 'clamp' });
+    const aktif = frame >= j.mulai - 40 && frame <= j.mulai + j.durasi + 40;
+    return (
+      <div style={{ overflow: 'hidden', position: 'relative', background: '#E7DAC6', ...gayaBox }}>
+        {s.berkas && aktif ? (
+          s.jenis === 'video' ? (
+            <Sequence from={Math.max(0, j.mulai - 15)} durationInFrames={j.durasi + 45} layout="none">
+              <OffthreadVideo
+                src={staticFile(s.berkas)}
+                startFrom={Math.max(0, Math.round((Number(s.mulaiKlip) || 0) * FPS_SINEMATIK))}
+                muted
+                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${skala})`, filter: 'contrast(1.05) saturate(1.08) sepia(0.06)' }}
+              />
+            </Sequence>
+          ) : (
+            <Img
+              src={staticFile(s.berkas)}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${skala})`, filter: 'contrast(1.05) saturate(1.08) sepia(0.06)' }}
+            />
+          )
+        ) : null}
+      </div>
+    );
+  };
 
   return (
-    <AbsoluteFill style={{ background: '#F3EBDF', color: '#1B140F', opacity: Math.min(p, opKeluar) }}>
-      {/* Header tipis ala website editorial mewah */}
+    <AbsoluteFill style={{ background: '#F3EBDF', color: '#1B140F', overflow: 'hidden' }}>
+      {/* Kanvas halaman panjang yang menggulir mulus di belakang sticky navbar */}
+      <div style={{ position: 'absolute', left: 0, right: 0, top: 185, transform: `translateY(${-scrollY}px)` }}>
+        {segmen.map((s, i) => {
+          const mentah = String(s.teksLayar ?? '').trim();
+          const bagian = mentah ? mentah.split('|').map((x) => x.trim()).filter(Boolean) : [];
+          const judul = bagian[0] || '';
+          const sub = bagian[1] || '';
+          const fullBleed = i > 0 && (!judul || i % 3 === 2);
+          const subLabel = SUB_EDITORIAL[i % SUB_EDITORIAL.length];
+
+          // ── SECTION HERO (BAGIAN 1) ──
+          if (i === 0) {
+            const heroJudul = judul || merek.nama;
+            return (
+              <div key={i} style={{ height: SECTION_H, padding: '36px 56px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 36, borderBottom: '1px solid rgba(27,20,15,0.1)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18 }}>
+                  <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', color: '#8C6239' }}>
+                    {subLabel}
+                  </span>
+                  <div style={{ fontFamily: SERIF, fontSize: heroJudul.length > 20 ? 96 : 118, lineHeight: 0.96, letterSpacing: -2, color: '#1B140F', textTransform: 'uppercase' }}>
+                    {heroJudul}
+                  </div>
+                  {sub ? (
+                    <div style={{ fontFamily: SANS, fontSize: 30, lineHeight: 1.38, color: 'rgba(27,20,15,0.72)', maxWidth: 820 }}>
+                      {sub}
+                    </div>
+                  ) : null}
+                  <div style={{ marginTop: 8 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, border: '2px solid #1B140F', borderRadius: 999, padding: '14px 30px', fontFamily: SANS, fontSize: 22, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                      LIHAT RACIKAN →
+                    </span>
+                  </div>
+                </div>
+                {renderMedia(s, i, { flex: 1, minHeight: 0, borderRadius: 34, boxShadow: '0 32px 64px -22px rgba(27,20,15,0.28)' })}
+              </div>
+            );
+          }
+
+          // ── SECTION FULL-BLEED SHOWCASE (SEPERTI DETIK 00:05 POUR/PLAY — BERSIH TANPA TEKS KOSONG) ──
+          if (fullBleed) {
+            return (
+              <div key={i} style={{ height: SECTION_H, padding: '44px 48px', display: 'flex', flexDirection: 'column', gap: 22, borderBottom: '1px solid rgba(27,20,15,0.1)' }}>
+                <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+                  {renderMedia(s, i, { width: '100%', height: '100%', borderRadius: 38, boxShadow: '0 32px 64px -22px rgba(27,20,15,0.28)' })}
+                  <div style={{ position: 'absolute', left: 32, top: 32, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ background: 'rgba(243,235,223,0.92)', backdropFilter: 'blur(8px)', color: '#1B140F', borderRadius: 999, padding: '12px 24px', fontFamily: SANS, fontSize: 21, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                      {judul || merek.nama} →
+                    </span>
+                  </div>
+                  {sub ? (
+                    <div style={{ position: 'absolute', left: 32, right: 32, bottom: 32, background: 'rgba(27,20,15,0.72)', backdropFilter: 'blur(10px)', color: '#F3EBDF', borderRadius: 24, padding: '20px 28px', fontFamily: SANS, fontSize: 28, fontWeight: 600 }}>
+                      {sub}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          }
+
+          // ── SECTION ASIMETRIS EDITORIAL (NOMOR + JUDUL SERIF + KARTU VISUAL) ──
+          const kanan = i % 2 === 1;
+          return (
+            <div key={i} style={{ height: SECTION_H, padding: '56px 56px 56px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 38, borderBottom: '1px solid rgba(27,20,15,0.1)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: kanan ? 'flex-start' : 'flex-end', textAlign: kanan ? 'left' : 'right' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
+                  <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 58, color: '#8C6239', lineHeight: 1 }}>{i + 1}.</span>
+                  <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 700, letterSpacing: 2.8, textTransform: 'uppercase', color: 'rgba(27,20,15,0.52)' }}>
+                    {subLabel}
+                  </span>
+                </div>
+                <div style={{ fontFamily: SERIF, fontSize: judul.length > 22 ? 84 : 102, lineHeight: 0.98, letterSpacing: -1.5, color: '#1B140F', textTransform: 'uppercase' }}>
+                  {judul}
+                </div>
+                {sub ? (
+                  <div style={{ fontFamily: SANS, fontSize: 29, lineHeight: 1.4, color: 'rgba(27,20,15,0.7)', maxWidth: 820 }}>
+                    {sub}
+                  </div>
+                ) : null}
+                <div style={{ marginTop: 8 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: '#1B140F', color: '#F3EBDF', borderRadius: 999, padding: '14px 28px', fontFamily: SANS, fontSize: 21, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                    COBA SEKARANG →
+                  </span>
+                </div>
+              </div>
+              {renderMedia(s, i, { flex: 1, minHeight: 0, borderRadius: 36, boxShadow: '0 32px 64px -22px rgba(27,20,15,0.28)' })}
+            </div>
+          );
+        })}
+
+        {/* Footer Penutup Krem Hangat — menyatu mulus di akhir halaman (tidak lompat ke layar hitam!) */}
+        {adaPenutup && penutup ? (
+          <div style={{ height: SECTION_H, padding: '120px 64px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', gap: 28, background: 'linear-gradient(180deg, #F3EBDF 0%, #E9DEC9 100%)' }}>
+            {merek.logo ? (
+              <Img src={staticFile(merek.logo)} style={{ width: 140, height: 140, borderRadius: 30, objectFit: 'contain', boxShadow: '0 20px 44px rgba(27,20,15,0.2)' }} />
+            ) : null}
+            <span style={{ fontFamily: SANS, fontSize: 22, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', color: '#8C6239' }}>
+              SAMPAI JUMPA DI KEDAI
+            </span>
+            <div style={{ fontFamily: SERIF, fontSize: 96, lineHeight: 1.0, color: '#1B140F', textTransform: 'uppercase', maxWidth: 880 }}>
+              {penutup.ajakan || merek.nama}
+            </div>
+            <div style={{ width: 84, height: 2, background: 'rgba(27,20,15,0.25)' }} />
+            <div style={{ fontFamily: SANS, fontSize: 30, fontWeight: 600, color: 'rgba(27,20,15,0.72)' }}>
+              {penutup.info || merek.info || merek.sub || 'Waru, Sidoarjo'}
+            </div>
+            <span style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 10, background: '#1B140F', color: '#F3EBDF', borderRadius: 999, padding: '18px 40px', fontFamily: SANS, fontSize: 24, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+              MAMPIR SEKARANG →
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Sticky Top Navbar yang selalu diam elegan di atas saat halaman menggulir */}
       <div
         style={{
           position: 'absolute',
-          top: 84,
-          left: 64,
-          right: 64,
-          paddingBottom: 22,
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 185,
+          background: 'rgba(243,235,223,0.92)',
+          backdropFilter: 'blur(12px)',
+          padding: '84px 56px 20px',
           borderBottom: '1.5px solid rgba(27,20,15,0.14)',
           display: 'flex',
           justifyContent: 'space-between',
@@ -313,110 +479,15 @@ const AdeganEditorialScroll: React.FC<{
           fontFamily: SANS,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 38, height: 38, borderRadius: 10, objectFit: 'contain' }} /> : null}
-          <span style={{ fontWeight: 800, fontSize: 28, letterSpacing: 2.5, textTransform: 'uppercase', color: '#1B140F' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 42, height: 42, borderRadius: 10, objectFit: 'contain' }} /> : null}
+          <span style={{ fontWeight: 800, fontSize: 30, letterSpacing: 3, textTransform: 'uppercase', color: '#1B140F' }}>
             {merek.nama}
           </span>
         </div>
-        <span style={{ fontSize: 18, fontWeight: 600, letterSpacing: 2, textTransform: 'uppercase', color: 'rgba(27,20,15,0.55)' }}>
-          {merek.sub || 'SIGNATURE · MENU · WARU'}
+        <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: 2.2, textTransform: 'uppercase', color: 'rgba(27,20,15,0.58)' }}>
+          {merek.sub || 'MENU · SUASANA · WARU'}
         </span>
-      </div>
-
-      {/* Konten utama menggulir halus vertikal */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 210,
-          left: 64,
-          right: 64,
-          bottom: 110,
-          transform: `translateY(${geserY}px)`,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          gap: 36,
-        }}
-      >
-        {/* Blok tipografi editorial */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 48, color: '#8C6239' }}>{nomor}</span>
-            <span style={{ fontFamily: SANS, fontSize: 20, fontWeight: 700, letterSpacing: 2.5, textTransform: 'uppercase', color: 'rgba(27,20,15,0.52)' }}>
-              {indeks === 0 ? 'SPECIALTY BREW' : indeks === totalSegmen - 1 ? 'VISIT US TONIGHT' : 'HANDCRAFTED EXPERIENCE'}
-            </span>
-          </div>
-
-          <div
-            style={{
-              fontFamily: SERIF,
-              fontSize: teksMentah.length > 26 ? 78 : 96,
-              lineHeight: 1.0,
-              letterSpacing: -1.5,
-              color: '#1B140F',
-              textTransform: 'uppercase',
-            }}
-          >
-            {judulUtama}
-            {judulAksen ? (
-              <span style={{ display: 'block', fontStyle: 'italic', color: '#8C6239', textTransform: 'none', marginTop: 6 }}>
-                {judulAksen}
-              </span>
-            ) : null}
-          </div>
-
-          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 16 }}>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 10,
-                background: '#1B140F',
-                color: '#F3EBDF',
-                borderRadius: 999,
-                padding: '14px 28px',
-                fontFamily: SANS,
-                fontSize: 22,
-                fontWeight: 700,
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-              }}
-            >
-              {indeks === totalSegmen - 1 ? 'Mampir Sekarang →' : 'Temukan Rasanya →'}
-            </span>
-          </div>
-        </div>
-
-        {/* Bingkai visual produk / video kopi dengan sudut mewah & parallax */}
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            borderRadius: 40,
-            overflow: 'hidden',
-            position: 'relative',
-            boxShadow: '0 36px 72px -24px rgba(27,20,15,0.32)',
-            border: '2px solid rgba(27,20,15,0.08)',
-            background: '#E6D9C6',
-          }}
-        >
-          {s.berkas ? (
-            s.jenis === 'video' ? (
-              <OffthreadVideo
-                src={staticFile(s.berkas)}
-                startFrom={Math.max(0, Math.round((Number(s.mulaiKlip) || 0) * FPS_SINEMATIK))}
-                muted
-                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${skalaMedia})`, filter: 'contrast(1.04) saturate(1.1) sepia(0.06)' }}
-              />
-            ) : (
-              <Img
-                src={staticFile(s.berkas)}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: `scale(${skalaMedia})`, filter: 'contrast(1.04) saturate(1.1) sepia(0.06)' }}
-              />
-            )
-          ) : null}
-        </div>
       </div>
     </AbsoluteFill>
   );
@@ -431,32 +502,31 @@ export const Sinematik: React.FC<PropsSinematik> = (props) => {
 
   return (
     <AbsoluteFill style={{ background: editorial ? '#F3EBDF' : '#0E0B09' }}>
-      {props.segmen.map((s, i) => (
-        <Sequence key={i} from={jadwal[i].mulai} durationInFrames={jadwal[i].durasi} name={`Segmen ${i + 1}`}>
-          {editorial ? (
-            <AdeganEditorialScroll s={s} durasi={jadwal[i].durasi} indeks={i} totalSegmen={props.segmen.length} merek={props.merek} />
-          ) : (
-            <>
+      {editorial ? (
+        <HalamanEditorialScroll props={props} jadwal={jadwal} penutupMulai={penutupMulai} penutupDurasi={penutupDurasi} />
+      ) : (
+        <>
+          {props.segmen.map((s, i) => (
+            <Sequence key={i} from={jadwal[i].mulai} durationInFrames={jadwal[i].durasi} name={`Segmen ${i + 1}`}>
               <LapisanMedia s={s} durasi={jadwal[i].durasi} indeks={i} gaya={props.gaya} />
               <LapisanTeks s={s} durasi={jadwal[i].durasi} aksen={aksen} gaya={props.gaya} namaMerek={props.merek.nama} />
-            </>
-          )}
-          {s.suaraBerkas ? <Audio src={staticFile(s.suaraBerkas)} /> : null}
-        </Sequence>
-      ))}
-
-      {props.penutup && penutupDurasi > 0 ? (
-        <Sequence from={penutupMulai} durationInFrames={penutupDurasi} name="Penutup">
-          <PenutupSinematik merek={props.merek} penutup={props.penutup} durasi={penutupDurasi} />
-        </Sequence>
-      ) : null}
+              {s.suaraBerkas ? <Audio src={staticFile(s.suaraBerkas)} /> : null}
+            </Sequence>
+          ))}
+          {props.penutup && penutupDurasi > 0 ? (
+            <Sequence from={penutupMulai} durationInFrames={penutupDurasi} name="Penutup">
+              <PenutupSinematik merek={props.merek} penutup={props.penutup} durasi={penutupDurasi} />
+            </Sequence>
+          ) : null}
+        </>
+      )}
 
       {/* Bilah progres tipis di atas layar */}
       <div style={{ position: 'absolute', top: 44, left: 48, right: 48, height: 5, borderRadius: 99, background: editorial ? 'rgba(27,20,15,0.14)' : 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
         <div style={{ width: `${Math.min(100, (frame / total) * 100)}%`, height: '100%', background: editorial ? '#1B140F' : aksen, borderRadius: 99 }} />
       </div>
 
-      {/* Watermark merek halus di pojok kiri atas (khusus non-editorial; editorial sudah punya header sendiri) */}
+      {/* Watermark merek halus di pojok kiri atas (khusus non-editorial; editorial sudah punya sticky navbar) */}
       {!editorial && frame < penutupMulai ? (
         <div style={{ position: 'absolute', top: 72, left: 52, display: 'flex', alignItems: 'center', gap: 12, opacity: 0.85 }}>
           {props.merek.logo ? (

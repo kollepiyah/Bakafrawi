@@ -189,6 +189,10 @@ export const TAG_AI = 'ai'
 
 function aturanAi(d: DataKonten): string {
   if (!d.gambarAi) return ''
+  if (d.gambarAi >= 3) {
+    return `
+- Tag "${TAG_AI}" (maks ${d.gambarAi} adegan): gambarnya DIBUAT AI (Cloudflare FLUX.2 / Gemini) dari "bidikan". Cocok untuk visual studio editorial kopi mewah (tuangan espresso, percikan latte creamy, biji kopi panggang melayang di atas latar krem hangat minimalis, suasana kafe estetik). JANGAN gambar logo atau teks tulisan di dalam gambar — "bidikan" harus satu kalimat deskriptif visual berbahasa Inggris/Indonesia yang tajam (subjek, pencahayaan, latar krem/hangat, sudut kamera, tanpa tulisan).`
+  }
   return `
 - Tag "${TAG_AI}" (boleh selain tag bank, maks ${d.gambarAi} adegan): gambarnya DIBUAT AI dari "bidikan", lalu dihidupkan dengan zoom pelan. Pakai hanya untuk suasana/konsep yang tak ada di bank (mis. hujan di jalan malam, orang lembur di kantor, senja di jalan raya Waru). JANGAN untuk minuman, menu, logo, atau barista Lek Kopi — produk wajib foto asli dari bank. "bidikan" untuk tag ini: satu kalimat rinci (siapa, di mana, cahaya, sudut kamera), tanpa tulisan.`
 }

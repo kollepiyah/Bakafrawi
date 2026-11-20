@@ -26,10 +26,12 @@ export function benih(teks) {
   return h >>> 0
 }
 
+const bukanLogo = (m) => !/(^|\/|\\)logo/i.test(`${m.tag ?? ''}/${m.path ?? ''}`)
+
 function kelompokkan(bank) {
   const perTag = new Map()
   for (const m of bank) {
-    if (m.jenis !== 'foto' && m.jenis !== 'video') continue
+    if ((m.jenis !== 'foto' && m.jenis !== 'video') || !bukanLogo(m)) continue
     if (!perTag.has(m.tag)) perTag.set(m.tag, [])
     perTag.get(m.tag).push(m)
   }
@@ -77,7 +79,7 @@ function bonusSaran(s, p) {
 
 /** Bank yang boleh dipilih sutradara AI, diberi kode pendek (k1, k2, …) supaya hemat token. */
 export function daftarKlip(bank) {
-  return bank.filter((m) => m.jenis === 'foto' || m.jenis === 'video')
+  return bank.filter((m) => (m.jenis === 'foto' || m.jenis === 'video') && bukanLogo(m))
     .sort((a, b) => a.path.localeCompare(b.path))
     .map((m, i) => ({ kode: `k${i + 1}`, path: m.path, jenis: m.jenis, durasi: m.durasi, kurasi: m.kurasi }))
 }

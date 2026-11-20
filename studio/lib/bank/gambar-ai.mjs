@@ -17,8 +17,13 @@ export const TAG_AI = 'ai'
 export const UKURAN_RASIO = { '9:16': [720, 1280], '4:5': [1024, 1280], '1:1': [1024, 1024] }
 
 export function promptGambar(deskripsi) {
-  return `${String(deskripsi).trim()}\n\nPhotorealistic photo, natural light, warm cinematic color grade, East Java (Sidoarjo) setting and Indonesian people. `
-    + 'Absolutely no text, letters, logos, watermarks, signage, or readable screens. No coffee cup brand. Leave calm space for overlaid text.'
+  const teks = String(deskripsi).trim()
+  const adalahStudio = /studio|editorial|minimalis|minimalist|krem|cream|#f3ebdf|splash|floating|melayang|latte art|espresso pour/i.test(teks)
+  const gaya = adalahStudio
+    ? 'High-end commercial editorial studio product photography, soft warm cream aesthetic, ultra clean studio lighting, shallow depth of field, magazine quality.'
+    : 'Photorealistic photo, natural light, warm cinematic color grade, East Java (Sidoarjo) setting and Indonesian people.'
+  return `${teks}\n\n${gaya} `
+    + 'Absolutely no text, letters, logos, watermarks, signage, or readable screens. No coffee cup brand. Clean uncluttered composition.'
 }
 
 /** Galat kuota/billing — gambar berikutnya pasti gagal juga, berhenti mencoba. */
