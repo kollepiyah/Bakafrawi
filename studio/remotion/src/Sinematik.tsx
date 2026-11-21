@@ -17,11 +17,13 @@ import {
 } from 'remotion';
 import { SANS, SERIF, TANGAN } from './components/dasar';
 import { DialMenu, hitungDurasiDial } from './DialMenu';
+import { hitungDurasiStoryDrop, StoryDrop } from './StoryDrop';
 
 export const FPS_SINEMATIK = 30;
 
 export type SegmenSinematik = {
   berkas: string;
+  berkasTransparan?: string;
   jenis: 'video' | 'foto';
   durasi: number; // detik
   mulaiKlip?: number; // detik mulai pada video sumber
@@ -41,6 +43,7 @@ export type PropsSinematik = {
     info?: string;
   };
   gaya?: string;
+  latarMeja?: string;
   musik?: string | null;
   musikVolume?: number;
   segmen: SegmenSinematik[];
@@ -68,6 +71,8 @@ export const contohSinematik: PropsSinematik = {
 };
 
 export function hitungDurasiSinematik(p: PropsSinematik) {
+  // Mode story-drop = UI Instagram Story di atas, menu melompat mendarat di meja kafe (ala Aurelia Cafe).
+  if (p.gaya === 'story-drop') return hitungDurasiStoryDrop(p);
   // Mode dial-menu = keypad menu + potongan foto layar penuh bernomor (ala Happy Cake).
   if (p.gaya === 'dial-menu') return hitungDurasiDial(p);
   // Mode editorial-scroll = 1 scene tunggal laptop di meja kayu (~9–11 detik total, tanpa penutup terpisah).
@@ -687,10 +692,13 @@ export const Sinematik: React.FC<PropsSinematik> = (props) => {
   const volDasar = Number(props.musikVolume) || 0.72;
   const editorial = props.gaya === 'editorial-scroll';
   const dial = props.gaya === 'dial-menu';
+  const storyDrop = props.gaya === 'story-drop';
 
   return (
-    <AbsoluteFill style={{ background: editorial ? '#1B1511' : dial ? '#F3EBD8' : '#0E0B09' }}>
-      {dial ? (
+    <AbsoluteFill style={{ background: editorial ? '#1B1511' : dial ? '#F3EBD8' : storyDrop ? '#0B0B0D' : '#0E0B09' }}>
+      {storyDrop ? (
+        <StoryDrop props={props} />
+      ) : dial ? (
         <DialMenu props={props} />
       ) : editorial ? (
         <HalamanEditorialScroll props={props} jadwal={jadwal} total={total} />
@@ -711,15 +719,15 @@ export const Sinematik: React.FC<PropsSinematik> = (props) => {
         </>
       )}
 
-      {/* Bilah progres tipis di atas layar (disembunyikan pada editorial laptop agar bersih 100% sinematik) */}
-      {!editorial && !dial ? (
+      {/* Bilah progres tipis di atas layar (disembunyikan pada editorial laptop, dial-menu, & story-drop) */}
+      {!editorial && !dial && !storyDrop ? (
         <div style={{ position: 'absolute', top: 44, left: 48, right: 48, height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
           <div style={{ width: `${Math.min(100, (frame / total) * 100)}%`, height: '100%', background: aksen, borderRadius: 99 }} />
         </div>
       ) : null}
 
-      {/* Watermark merek halus di pojok kiri atas (khusus non-editorial; editorial sudah tampil di layar laptop) */}
-      {!editorial && !dial && frame < penutupMulai ? (
+      {/* Watermark merek halus di pojok kiri atas (khusus non-editorial/dial/story-drop) */}
+      {!editorial && !dial && !storyDrop && frame < penutupMulai ? (
         <div style={{ position: 'absolute', top: 72, left: 52, display: 'flex', alignItems: 'center', gap: 12, opacity: 0.85 }}>
           {props.merek.logo ? (
             <Img src={staticFile(props.merek.logo)} style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'contain' }} />

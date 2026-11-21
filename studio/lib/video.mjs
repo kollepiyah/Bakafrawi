@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ffmpeg, jalankan, probe } from './bank/alat.mjs';
+import { adaGambarAi, buatGambarAi } from './bank/gambar-ai.mjs';
 import { musikContoh, suaraKata } from './iklan.mjs';
 import { hapusLatar, videoTransparan } from './latar.mjs';
 import { FPS, hitungWaktu } from '../remotion/src/data/script.ts';
@@ -299,18 +300,52 @@ export async function renderSinematikRemotion({
     });
   }
 
-  // editorial-scroll (1 scene laptop 4 blok) & dial-menu (keypad + potongan menu): 1 media unik per adegan.
-  const satuMediaPerAdegan = gaya === 'editorial-scroll' || gaya === 'dial-menu';
+  // editorial-scroll (1 scene laptop 4 blok), dial-menu (keypad), & story-drop (IG Story ke meja): 1 media unik per adegan.
+  const satuMediaPerAdegan = gaya === 'editorial-scroll' || gaya === 'dial-menu' || gaya === 'story-drop';
   const segmenFinal = gaya === 'dial-menu'
     ? segmen.filter((s, i) => (i === 0 || segmen[i - 1].adeganKe !== s.adeganKe) && String(s.teksLayar ?? '').trim()).slice(0, 10)
+    : gaya === 'story-drop'
+    ? segmen.filter((s, i) => (i === 0 || segmen[i - 1].adeganKe !== s.adeganKe) && s.berkas).slice(0, 5)
     : satuMediaPerAdegan
     ? segmen.filter((s, i) => i === 0 || segmen[i - 1].adeganKe !== s.adeganKe).slice(0, 4)
     : segmen;
+
+  // Khusus story-drop: siapkan latar meja kafe kosong (AI gratis) + potong latar belakang foto menu lewat MODNet.
+  let latarMejaNama;
+  if (gaya === 'story-drop') {
+    if (adaGambarAi()) {
+      try {
+        const berkasMeja = path.join(publik, 'meja-kafe.jpg');
+        await buatGambarAi(
+          'Empty warm marble round cafe table in foreground occupying bottom half of frame, cozy sunlit coffee shop interior bokeh background with warm pendant lights and wooden chairs, golden hour aesthetic, vertical 9:16 photo, no cups, no food, no text, no people',
+          '9:16',
+          berkasMeja,
+        );
+        if (existsSync(berkasMeja)) latarMejaNama = 'meja-kafe.jpg';
+      } catch (e) {
+        log(`Latar meja AI story-drop gagal (pakai fallback meja CSS): ${String(e.message ?? e).slice(0, 120)}`);
+      }
+    }
+    for (let i = 0; i < segmenFinal.length; i++) {
+      const s = segmenFinal[i];
+      if (!s.berkas || s.jenis !== 'foto') continue;
+      try {
+        const sumberPublik = path.join(publik, s.berkas);
+        const namaCutout = `cutout-${i}.png`;
+        await hapusLatar(sumberPublik, path.join(publik, namaCutout));
+        s.berkasTransparan = namaCutout;
+      } catch (e) {
+        log(`Potong latar menu #${i + 1} gagal (pakai piring bundar): ${String(e.message ?? e).slice(0, 120)}`);
+      }
+    }
+  }
 
   const totalDetik = gaya === 'editorial-scroll'
     ? Math.max(7, segmenFinal.length * 2.4)
     : gaya === 'dial-menu'
     ? 3.4 + segmenFinal.length * (26 / 30)
+    : gaya === 'story-drop'
+    ? (20 + Math.max(1, segmenFinal.length) * 40 + 48) / 30
     : (Number(r.total) || segmenFinal.reduce((a, b) => a + b.durasi, 0) + 2.2);
   let musikNama = null;
   if (musik) {
@@ -322,7 +357,7 @@ export async function renderSinematikRemotion({
     musikNama = 'musik-lofi.mp3';
   }
 
-  const ajakanAkhir = gaya === 'dial-menu'
+  const ajakanAkhir = gaya === 'dial-menu' || gaya === 'story-drop'
     ? `Mampir ngopi di ${merek.nama || 'Lek Kopi'}`
     : (r.adegan.at(-1)?.teksLayar || `Mampir ke ${merek.nama || 'Lek Kopi'}`);
   const propsData = {
@@ -334,6 +369,7 @@ export async function renderSinematikRemotion({
       info: merek.info || '',
     },
     gaya,
+    ...(latarMejaNama ? { latarMeja: latarMejaNama } : {}),
     musik: musikNama,
     musikVolume: suara.length ? 0.22 : musikVolume,
     segmen: segmenFinal,

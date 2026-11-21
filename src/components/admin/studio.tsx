@@ -51,6 +51,7 @@ import type { ReferensiTersimpan } from "@/lib/referensi-video";
 
 const PRESET_VIDEO = [
   { kode: "otomatis", label: "Otomatis (sesuai AI / referensi)" },
+  { kode: "story-drop", label: "Story Drop: Menu Lompat dari IG Story ke Meja (ala Aurelia Cafe)" },
   { kode: "editorial-scroll", label: "Laptop di Meja Kayu / Scroll Website (ala POUR·PLAY)" },
   { kode: "dial-menu", label: "Dial Menu: Keypad + Foto Penuh Bernomor (ala Happy Cake)" },
   { kode: "sinematik-kafe", label: "Sinematik Kafe / Remotion + B-roll AI" },

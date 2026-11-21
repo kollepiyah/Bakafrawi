@@ -127,17 +127,24 @@ export async function tulisNaskahBank(
   if (!data.tagBank.length) throw new Error(`Bank media ${merek.nama} masih kosong — mesin Studio belum mengindeks folder Drive-nya.`);
   const adalahEditorial = /\[Gaya:\s*editorial-scroll\]/i.test(permintaan);
   const adalahDial = /\[Gaya:\s*dial-menu\]/i.test(permintaan);
-  if (adalahEditorial || adalahDial) {
-    // Gaya referensi (laptop POUR/PLAY atau keypad Happy Cake) butuh visual produk bersih & seragam (gratis via Cloudflare FLUX.2).
-    data.gambarAi = Math.max(Number(data.gambarAi) || 0, adalahDial ? 8 : 4);
+  const adalahStoryDrop = /\[Gaya:\s*story-drop\]/i.test(permintaan);
+  if (adalahEditorial || adalahDial || adalahStoryDrop) {
+    // Gaya referensi (laptop POUR/PLAY, keypad Happy Cake, atau Story Drop Aurelia Cafe) butuh visual produk bersih & seragam (gratis via Cloudflare FLUX.2).
+    data.gambarAi = Math.max(Number(data.gambarAi) || 0, adalahDial ? 8 : adalahStoryDrop ? 6 : 4);
   }
+  const sudutStoryDrop = `MODE STORY-DROP (persis referensi "Aurelia Cafe", ±9 detik): buat TEPAT 5 adegan, satu adegan = satu menu andalan (minuman kopi, matcha, non-kopi, atau cemilan) yang akan melompat turun dari lingkaran Instagram Story ke atas meja kafe (durasi 1.4 detik per adegan).
+ATURAN VISUAL WAJIB:
+- DILARANG memakai tag "suasana", "racik", atau "logo"! Hanya fokus pada 5 item menu produk.
+- Gunakan tag "ai" untuk setiap menu agar tiap produk tampil utuh (satu gelas/cangkir/piring utuh terpusat pada latar polos terang/krem bersih sehingga mudah dipotong rapi otomatis ke atas meja).
+- Tulis "bidikan" dalam BAHASA INGGRIS yang spesifik menggambarkan satu objek utuh terpusat (mis. "Single iced palm sugar milk coffee (es kopi susu) in a clear aesthetic cafe glass with ice cubes, centered product photography on a clean solid light cream background, studio lighting, sharp focus, no hands, no text").
+- WAJIB isi "teks_layar" tiap adegan singkat dalam format "Jenis | Nama Pendek" agar rapi di bawah lingkaran Story (mis. "Kopi | Kopi Susu", "Matcha | Matcha Latte", "Spesial | Sakura Coffee", "Cemilan | Cireng", "Minuman | Milkshake"). Tanpa narasi.`;
   const sudutDial = `MODE DIAL-MENU (persis "Dial a slice" Happy Cake, cepat ±10 detik): buat TEPAT 7 adegan, satu adegan = satu menu minuman/cemilan andalan Lek Kopi (durasi 0.9 detik per adegan).
 ATURAN VISUAL WAJIB (SANGAT PENTING):
 - DILARANG memakai tag "suasana", "racik", atau "logo"! Jangan pernah tampilkan foto jendela kedai, barista, atau logo pada mode ini.
 - Gunakan tag "ai" untuk setiap menu agar ke-7 foto produk seragam, close-up gelas/piring di tengah meja kayu/marmer kafe yang hangat & menggugah selera (persis gaya foto kue seragam Happy Cake).
 - Tulis "bidikan" dalam BAHASA INGGRIS yang spesifik menggambarkan bentuk & warna minumannya (mis. "Close-up of iced palm sugar milk coffee (es kopi susu gula aren) in a clear glass with ice cubes and creamy swirl centered on a warm wooden cafe table, soft window daylight, bokeh cafe background" atau "Close-up of refreshing iced green pandan melon drink with ice cubes in a tall glass centered on a marble cafe table, no people, no text").
 - WAJIB isi "teks_layar" tiap adegan dengan format "Jenis | Nama Menu" tanpa mengulang kata yang sama (mis. "Kopi | Es Kopi Susu Lek", "Kopi | Latte Art", "Minuman | Banana Milkshake", "Minuman | Es Ijo Segar", "Cemilan | Cireng Crispy"). Tanpa narasi.`;
-  const sudutTambahan = adalahDial ? sudutDial : adalahEditorial
+  const sudutTambahan = adalahStoryDrop ? sudutStoryDrop : adalahDial ? sudutDial : adalahEditorial
     ? `MODE EDITORIAL LAPTOP 1-SCENE (persis referensi POUR/PLAY): buat TEPAT 4 adegan untuk 4 blok gulir di dalam layar laptop (durasi 2.2–2.5 detik per blok, total ±9.6 detik). WAJIB isi "teks_layar" pada blok 1, 2, 4 dengan format "JUDUL 2–3 KATA | subteks pendek 6–10 kata" (bahasa Indonesia keren untuk menu/suasana Lek Kopi); blok 3 cukup judul 2 kata sebagai showcase full-bleed. Pakai tag "ai" untuk 3–4 blok dengan "bidikan" fotografi studio kopi minimalis mewah berlatar krem hangat (#F4ECE0): mis. biji kopi & percikan espresso emas, tuangan pour-over di gelas kaca estetik, latte art creamy melayang di cangkir — TANPA tulisan di gambar.`
     : `Ikuti persis tema permintaan ini: "${permintaan}". Pilih tag & bidikan yang paling sesuai temanya (utamakan rekaman video).`;
   const ide = { judul: permintaan, alasan: "permintaan Kyai", sudut: sudutTambahan };
@@ -155,7 +162,7 @@ ATURAN VISUAL WAJIB (SANGAT PENTING):
   const menuBerfoto = (data.menu ?? [])
     .map((m) => ({ nama: m.nama, url: String(m.foto || m.gambar || m.image_url || "").trim() }))
     .filter((m) => /^https?:\/\//i.test(m.url));
-  if (menuBerfoto.length > 0 && (adalahDial || adalahEditorial)) {
+  if (menuBerfoto.length > 0 && (adalahDial || adalahEditorial || adalahStoryDrop)) {
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     let cocokFoto = 0;
     for (const a of naskah.adegan) {
