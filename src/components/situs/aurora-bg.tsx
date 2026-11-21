@@ -5,8 +5,9 @@
 export function AuroraBg() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute -top-44 left-1/4 h-[420px] w-[520px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(24,180,168,0.13),transparent_68%)] blur-3xl" />
-      <div className="absolute -top-36 right-0 h-[460px] w-[540px] rounded-full bg-[radial-gradient(circle,rgba(201,162,75,0.16),transparent_66%)] blur-3xl" />
+      {/* Gradasi radial murni tanpa filter blur-3xl agar ringan di GPU HP & desktop */}
+      <div className="absolute -top-56 left-1/4 h-[560px] w-[680px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(24,180,168,0.12)_0%,rgba(24,180,168,0.04)_38%,transparent_70%)]" />
+      <div className="absolute -top-48 right-[-80px] h-[600px] w-[700px] rounded-full bg-[radial-gradient(circle,rgba(201,162,75,0.14)_0%,rgba(201,162,75,0.04)_38%,transparent_68%)]" />
 
       {/* Berkas cahaya meteor tipis melintas lembut secara diagonal (murni CSS) */}
       <span className="animasi-meteor absolute top-16 left-[12%] h-px w-40 bg-gradient-to-r from-transparent via-emas-muda/75 to-transparent opacity-0" />

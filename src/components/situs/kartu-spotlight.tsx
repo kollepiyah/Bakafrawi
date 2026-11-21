@@ -1,12 +1,11 @@
 "use client";
 
-import type { MouseEvent, ReactNode } from "react";
-import { motion, useMotionTemplate, useMotionValue } from "motion/react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * Kartu Bento interaktif dengan efek sorot cahaya emas lembut yang mengikuti posisi kursor
- * (gaya Linear / Vercel / portofolio dark tech modern).
+ * Kartu Bento interaktif dengan efek sorot cahaya emas lembut yang mengikuti posisi kursor.
+ * Murni CSS custom properties + IntersectionObserver (0 React re-render saat hover, tanpa motion/react).
  */
 export function KartuSpotlight({
   children,
@@ -17,41 +16,50 @@ export function KartuSpotlight({
   className?: string;
   jeda?: number;
 }) {
-  const x = useMotionValue(-300);
-  const y = useMotionValue(-300);
+  const ref = useRef<HTMLDivElement>(null);
+  const cahayaRef = useRef<HTMLDivElement>(null);
+  const [terlihat, setTerlihat] = useState(false);
+
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setTerlihat(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "0px 0px -48px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   function gerak(e: MouseEvent<HTMLDivElement>) {
+    const cahaya = cahayaRef.current;
+    if (!cahaya) return;
     const r = e.currentTarget.getBoundingClientRect();
-    x.set(e.clientX - r.left);
-    y.set(e.clientY - r.top);
+    cahaya.style.background = `radial-gradient(360px circle at ${e.clientX - r.left}px ${e.clientY - r.top}px, rgba(201,162,75,0.14), transparent 70%)`;
   }
-
-  function keluar() {
-    x.set(-300);
-    y.set(-300);
-  }
-
-  const cahaya = useMotionTemplate`radial-gradient(360px circle at ${x}px ${y}px, rgba(201,162,75,0.14), transparent 70%)`;
 
   return (
-    <motion.div
+    <div
+      ref={ref}
       onMouseMove={gerak}
-      onMouseLeave={keluar}
-      initial={{ opacity: 0, y: 24 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "0px 0px -60px 0px" }}
-      transition={{ duration: 0.65, delay: jeda, ease: [0.2, 0.7, 0.2, 1] }}
-      whileHover={{ y: -4 }}
+      style={{ transitionDelay: jeda ? `${Math.round(jeda * 1000)}ms` : undefined }}
       className={cn(
-        "group relative overflow-hidden rounded-2xl border border-border bg-card transition-colors duration-300 hover:border-emas/35",
+        "group relative overflow-hidden rounded-2xl border border-border bg-card transition-[opacity,transform,border-color] duration-500 ease-out hover:-translate-y-1 hover:border-emas/35 motion-reduce:translate-y-0 motion-reduce:opacity-100 motion-reduce:transition-none",
+        terlihat ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0",
         className,
       )}
     >
-      <motion.div
-        style={{ background: cahaya }}
+      <div
+        ref={cahayaRef}
         className="pointer-events-none absolute -inset-px opacity-0 transition-opacity duration-300 group-hover:opacity-100"
       />
       <div className="relative z-10">{children}</div>
-    </motion.div>
+    </div>
   );
 }

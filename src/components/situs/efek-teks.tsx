@@ -1,53 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { motion, useInView, useMotionValue, useSpring } from "motion/react";
+import { useRef, type MouseEvent, type ReactNode } from "react";
 
 /**
- * BlurText (ala React Bits): memecah kalimat per kata lalu memunculkannya
- * dengan gerak naik lembut satu per satu (tanpa filter blur berat di mobile).
- */
-export function BlurText({
-  teks,
-  className = "",
-  itemClassName = "",
-  jedaAwal = 0,
-}: {
-  teks: string;
-  className?: string;
-  itemClassName?: string;
-  jedaAwal?: number;
-}) {
-  const kata = teks.split(" ");
-  return (
-    <span className={className}>
-      {kata.map((k, i) => (
-        <motion.span
-          key={`${k}-${i}`}
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{
-            duration: 0.48,
-            delay: jedaAwal + i * 0.05,
-            ease: [0.22, 1, 0.36, 1],
-          }}
-          className={`inline-block ${itemClassName}`}
-        >
-          {k}
-          {i < kata.length - 1 ? "\u00A0" : ""}
-        </motion.span>
-      ))}
-    </span>
-  );
-}
-
-/**
- * ShinyText (ala React Bits): efek kilau cahaya melintas halus di atas teks (murni CSS).
+ * ShinyText: teks berkilau gradasi emas lembut tanpa animasi background-position non-composited.
  */
 export function ShinyText({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <span
-      className={`animasi-kilau inline-block bg-gradient-to-r from-zinc-400 via-emas-muda to-zinc-400 bg-clip-text text-transparent ${className}`}
+      className={`inline-block bg-gradient-to-r from-zinc-300 via-emas-muda to-zinc-300 bg-clip-text text-transparent ${className}`}
     >
       {children}
     </span>
@@ -55,62 +16,29 @@ export function ShinyText({ children, className = "" }: { children: ReactNode; c
 }
 
 /**
- * CountUp (ala React Bits): menganimasikan angka statistik seperti "30+" atau "100%"
- * dari 0 naik ke nilai akhir saat masuk layar.
+ * CountUp: menampilkan angka statistik secara instan pada SSR/First Paint agar tidak berkedip
+ * atau memicu repaint berulang di layar pertama.
  */
 export function CountUp({ nilai, className = "" }: { nilai: string; className?: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const terlihat = useInView(ref, { once: true, margin: "-40px" });
-  const cocok = nilai.match(/^([^0-9]*)(\d+)(.*)$/);
-  const targetAngka = cocok ? Number(cocok[2]) : null;
-  const awalan = cocok ? cocok[1] : "";
-  const akhiran = cocok ? cocok[3] : "";
-  const [tampil, setTampil] = useState(0);
-
-  useEffect(() => {
-    if (!terlihat || targetAngka === null) return;
-    let raf = 0;
-    const durasi = 1100;
-    const mulai = performance.now();
-    const langkah = (now: number) => {
-      const p = Math.min(1, (now - mulai) / durasi);
-      const easeOut = 1 - Math.pow(1 - p, 3);
-      setTampil(Math.round(easeOut * targetAngka));
-      if (p < 1) raf = requestAnimationFrame(langkah);
-    };
-    raf = requestAnimationFrame(langkah);
-    return () => cancelAnimationFrame(raf);
-  }, [terlihat, targetAngka]);
-
-  if (targetAngka === null) {
-    return <span className={className}>{nilai}</span>;
-  }
-
-  return (
-    <span ref={ref} className={className}>
-      {awalan}
-      {terlihat ? tampil : 0}
-      {akhiran}
-    </span>
-  );
+  return <span className={className}>{nilai}</span>;
 }
 
 /**
- * BorderBeam: garis cahaya emas-teal tipis di tepian atas & bawah kartu produk.
- * Tidak memakai mask-composite (yang bermasalah di Safari iOS) sehingga 100% bersih & ringan.
+ * BorderBeam: garis cahaya emas-teal tipis yang meluncur di tepian atas & bawah kartu produk.
+ * Murni transform GPU compositor (0% repaint main thread).
  */
 export function BorderBeam({ className = "" }: { className?: string }) {
   return (
     <div aria-hidden="true" className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] ${className}`}>
-      <div className="animasi-kilau absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-emas-muda/85 to-transparent" />
-      <div className="animasi-kilau absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-teal-400/50 to-transparent" />
+      <div className="animasi-kilau-garis absolute top-0 left-0 h-[1.5px] w-1/2 bg-gradient-to-r from-transparent via-emas-muda/85 to-transparent will-change-transform" />
+      <div className="animasi-kilau-garis absolute bottom-0 left-0 h-px w-1/2 bg-gradient-to-r from-transparent via-teal-400/50 to-transparent will-change-transform [animation-delay:2.4s]" />
     </div>
   );
 }
 
 /**
- * KartuMiring3D (ala React Bits TiltedCard): memiringkan mockup produk secara 3D
- * mengikuti gerak kursor di desktop.
+ * KartuMiring3D: memiringkan mockup produk secara 3D mengikuti gerak kursor di desktop.
+ * Murni DOM transform + CSS transition tanpa React re-render & tanpa motion/react.
  */
 export function KartuMiring3D({
   children,
@@ -121,66 +49,66 @@ export function KartuMiring3D({
   className?: string;
   maksSudut?: number;
 }) {
-  const rx = useMotionValue(0);
-  const ry = useMotionValue(0);
-  const springRx = useSpring(rx, { stiffness: 220, damping: 22 });
-  const springRy = useSpring(ry, { stiffness: 220, damping: 22 });
+  const ref = useRef<HTMLDivElement>(null);
 
   function saatGerak(e: MouseEvent<HTMLDivElement>) {
+    const el = ref.current;
+    if (!el) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const px = (e.clientX - rect.left) / rect.width - 0.5;
     const py = (e.clientY - rect.top) / rect.height - 0.5;
-    ry.set(px * maksSudut * 2);
-    rx.set(-py * maksSudut * 2);
+    el.style.transform = `rotateX(${(-py * maksSudut * 2).toFixed(2)}deg) rotateY(${(px * maksSudut * 2).toFixed(2)}deg)`;
   }
 
   function saatKeluar() {
-    rx.set(0);
-    ry.set(0);
+    const el = ref.current;
+    if (el) el.style.transform = "rotateX(0deg) rotateY(0deg)";
   }
 
   return (
     <div style={{ perspective: 1000 }} className={className}>
-      <motion.div
+      <div
+        ref={ref}
         onMouseMove={saatGerak}
         onMouseLeave={saatKeluar}
-        style={{ rotateX: springRx, rotateY: springRy, transformStyle: "preserve-3d" }}
+        style={{ transformStyle: "preserve-3d" }}
+        className="transition-transform duration-200 ease-out"
       >
         {children}
-      </motion.div>
+      </div>
     </div>
   );
 }
 
 /**
- * TombolMagnet (ala React Bits Magnet): menarik tombol pelan ke arah kursor.
+ * TombolMagnet: menarik tombol pelan ke arah kursor di desktop (murni CSS transform).
  */
 export function TombolMagnet({ children, className = "" }: { children: ReactNode; className?: string }) {
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const sx = useSpring(x, { stiffness: 260, damping: 18 });
-  const sy = useSpring(y, { stiffness: 260, damping: 18 });
+  const ref = useRef<HTMLDivElement>(null);
 
   function gerak(e: MouseEvent<HTMLDivElement>) {
+    const el = ref.current;
+    if (!el) return;
     const r = e.currentTarget.getBoundingClientRect();
-    x.set((e.clientX - (r.left + r.width / 2)) * 0.16);
-    y.set((e.clientY - (r.top + r.height / 2)) * 0.2);
+    const x = (e.clientX - (r.left + r.width / 2)) * 0.16;
+    const y = (e.clientY - (r.top + r.height / 2)) * 0.2;
+    el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
   }
 
   function lepas() {
-    x.set(0);
-    y.set(0);
+    const el = ref.current;
+    if (el) el.style.transform = "translate3d(0, 0, 0)";
   }
 
   return (
-    <motion.div
+    <div
+      ref={ref}
       onMouseMove={gerak}
       onMouseLeave={lepas}
-      style={{ x: sx, y: sy }}
-      className={`inline-block ${className}`}
+      className={`inline-block transition-transform duration-200 ease-out ${className}`}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }
 

@@ -1,8 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
-import { motion, useScroll, useSpring } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 import { Menu } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -18,28 +17,37 @@ const menu = [
 export function Navbar({ nama }: { nama: string }) {
   const [tergulir, setTergulir] = useState(false);
   const [buka, setBuka] = useState(false);
-  const { scrollYProgress } = useScroll();
-  const progres = useSpring(scrollYProgress, { stiffness: 180, damping: 28, restDelta: 0.001 });
+  const progresRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const cek = () => setTergulir(window.scrollY > 24);
-    cek();
-    window.addEventListener("scroll", cek, { passive: true });
-    return () => window.removeEventListener("scroll", cek);
+    const perbarui = () => {
+      const y = window.scrollY;
+      setTergulir(y > 24);
+      const el = progresRef.current;
+      if (el) {
+        const maks = document.documentElement.scrollHeight - window.innerHeight;
+        const rasio = maks > 0 ? Math.min(1, Math.max(0, y / maks)) : 0;
+        el.style.transform = `scaleX(${rasio})`;
+      }
+    };
+    perbarui();
+    window.addEventListener("scroll", perbarui, { passive: true });
+    return () => window.removeEventListener("scroll", perbarui);
   }, []);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 transition-all duration-300">
-      {/* Garis progres baca emas tipis di puncak layar */}
-      <motion.div
-        style={{ scaleX: progres, transformOrigin: "0% 50%" }}
-        className="pointer-events-none fixed inset-x-0 top-0 z-50 h-[2px] bg-gradient-to-r from-emas/40 via-emas to-emas-muda"
+      {/* Garis progres baca emas tipis di puncak layar (murni transform GPU tanpa motion/react) */}
+      <div
+        ref={progresRef}
+        style={{ transform: "scaleX(0)", transformOrigin: "0% 50%" }}
+        className="pointer-events-none fixed inset-x-0 top-0 z-50 h-[2px] bg-gradient-to-r from-emas/40 via-emas to-emas-muda transition-transform duration-100 ease-out will-change-transform"
       />
       <div
         className={cn(
           "mx-auto flex items-center justify-between transition-all duration-300",
           tergulir
-            ? "mt-3 h-[60px] max-w-4xl rounded-full border border-white/12 bg-background/80 px-5 shadow-[0_18px_40px_-18px_rgba(0,0,0,0.9)] backdrop-blur-xl sm:px-6"
+            ? "mt-3 h-[60px] max-w-4xl rounded-full border border-white/12 bg-background/85 px-5 shadow-[0_18px_40px_-18px_rgba(0,0,0,0.9)] backdrop-blur-md sm:px-6"
             : "wadah h-[74px] border-b border-transparent",
         )}
       >
@@ -49,7 +57,7 @@ export function Navbar({ nama }: { nama: string }) {
             alt=""
             width={34}
             height={34}
-            priority
+            preload
             className="transition-transform duration-700 ease-out group-hover:rotate-[360deg]"
           />
           {nama}

@@ -82,21 +82,22 @@
   @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
 }
 
-@keyframes kilau-teks {
+@keyframes kilau-lintas {
   0% {
-    background-position: 120% 0;
+    transform: translate3d(-120%, 0, 0);
   }
   100% {
-    background-position: -120% 0;
+    transform: translate3d(260%, 0, 0);
   }
 }
 
-@keyframes putar-beam {
-  0% {
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
+@keyframes ayun-kartu {
+  0%,
   100% {
-    transform: translate(-50%, -50%) rotate(360deg);
+    transform: rotate(-1.2deg);
+  }
+  50% {
+    transform: rotate(1.2deg);
   }
 }
 
@@ -127,13 +128,12 @@
   }
 }
 
-.animasi-kilau {
-  background-size: 240% 100%;
-  animation: kilau-teks 4.5s linear infinite;
+.animasi-kilau-garis {
+  animation: kilau-lintas 4.8s linear infinite;
 }
 
-.animasi-beam {
-  animation: putar-beam 8s linear infinite;
+.animasi-ayun {
+  animation: ayun-kartu 6s ease-in-out infinite;
 }
 
 .animasi-pita {
@@ -153,8 +153,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animasi-kilau,
-  .animasi-beam,
+  .animasi-kilau-garis,
+  .animasi-ayun,
   .animasi-pita,
   .animasi-meteor,
   .animasi-meteor-2 {
