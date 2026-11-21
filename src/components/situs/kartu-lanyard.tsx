@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { Component, type ReactNode } from "react";
+import { Component, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Gambar } from "@/content/skema";
 
 const Lanyard3DCanvas = dynamic(() => import("./lanyard-3d-canvas"), {
@@ -12,7 +12,6 @@ const Lanyard3DCanvas = dynamic(() => import("./lanyard-3d-canvas"), {
       <div className="size-12 animate-pulse rounded-2xl border border-emas/30 bg-emas/10 p-2.5">
         <Image src="/logo.png" alt="" width={28} height={28} className="object-contain opacity-70" />
       </div>
-      <span>Memuat kartu 3D...</span>
     </div>
   ),
 });
@@ -30,7 +29,8 @@ class BatasWebGL extends Component<{ fallback: ReactNode; children: ReactNode },
 
 /**
  * Wrapper Kartu Lanyard 3D WebGL (Three.js + Rapier Physics + MeshLine).
- * Dimuat lazy secara client-only agar loading awal tetap cepat dan aman untuk SSR.
+ * - Dimuat lazy client-only agar loading awal tetap cepat
+ * - Otomatis pause (0% GPU/CPU) saat Hero di-scroll keluar layar
  */
 export function KartuLanyard({
   nama = "Bakafrawi",
@@ -41,6 +41,20 @@ export function KartuLanyard({
   status?: string;
   foto?: Gambar;
 }) {
+  const wadahRef = useRef<HTMLDivElement>(null);
+  const [terlihat, setTerlihat] = useState(true);
+
+  useEffect(() => {
+    const el = wadahRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => setTerlihat(entries[0]?.isIntersecting ?? true),
+      { rootMargin: "120px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
   const cadangan = (
     <div className="flex h-full w-full items-center justify-center">
       <div className="w-[260px] rounded-[26px] border border-white/15 bg-gradient-to-br from-[#171b23] to-[#090b10] p-5 text-center shadow-2xl">
@@ -54,13 +68,16 @@ export function KartuLanyard({
   );
 
   return (
-    <div className="relative mx-auto flex h-[470px] w-full max-w-[380px] flex-col items-center justify-center select-none sm:h-[520px]">
+    <div
+      ref={wadahRef}
+      className="relative mx-auto flex h-[470px] w-full max-w-[380px] flex-col items-center justify-center select-none sm:h-[520px]"
+    >
       {/* Pendar cahaya halus di belakang ruang 3D */}
       <div className="pointer-events-none absolute top-1/2 left-1/2 size-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(201,162,75,0.22),rgba(24,180,168,0.08)_50%,transparent_72%)] blur-2xl" />
 
       <div className="relative z-10 h-full w-full">
         <BatasWebGL fallback={cadangan}>
-          <Lanyard3DCanvas nama={nama} status={status} fotoUrl={foto?.src} />
+          <Lanyard3DCanvas nama={nama} status={status} fotoUrl={foto?.src} aktif={terlihat} />
         </BatasWebGL>
       </div>
     </div>

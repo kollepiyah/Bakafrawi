@@ -18,6 +18,11 @@
     terangkat halus membuka halaman utama.
   - *Segel Kaligrafi Orbital* interaktif di bagian **Tentang** (`tentang-proses.tsx`): teks melingkar
     dan cincin orbit berputar pelan; medali logo bisa diklik untuk berputar 360°.
+- **Optimasi Performa WebGL & Mobile:** *IntersectionObserver* otomatis mem-pause `AuroraBg` dan
+  `Lanyard3DCanvas` (`frameloop="demand"` + `Physics paused`) saat Hero keluar layar (0% beban GPU
+  saat scroll ke bawah), menurunkan DPR & resolusi tekstur kartu (hemat ~60% VRAM), mengganti
+  `<Environment blur>` & `MeshPhysicalMaterial` ke pencahayaan studio ringan, mengganti marquee
+  `PitaBerjalan` ke pure CSS compositor, dan menonaktifkan Lenis di layar sentuh HP.
 - **Floating Glass Pill Navbar & Garis Progres Baca (`navbar.tsx`)** serta **Kartu Bento Spotlight**
   (`kartu-spotlight.tsx`) di Layanan & Produk.
 

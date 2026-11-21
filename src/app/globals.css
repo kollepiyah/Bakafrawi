@@ -100,18 +100,36 @@
   }
 }
 
+@keyframes pita-geser {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
 .animasi-kilau {
   background-size: 240% 100%;
   animation: kilau-teks 4.5s linear infinite;
 }
 
 .animasi-beam {
-  animation: putar-beam 7s linear infinite;
+  animation: putar-beam 8s linear infinite;
+}
+
+.animasi-pita {
+  animation: pita-geser 28s linear infinite;
+}
+
+.animasi-pita:hover {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animasi-kilau,
-  .animasi-beam {
+  .animasi-beam,
+  .animasi-pita {
     animation: none;
   }
 }

@@ -4,18 +4,18 @@ import { useEffect } from "react";
 import Lenis from "lenis";
 
 /**
- * Smooth scroll elegan berbasis Lenis untuk halaman utama Bakafrawi.
- * Otomatis nonaktif jika pengguna memilih prefers-reduced-motion.
+ * Smooth scroll berbasis Lenis khusus desktop (mouse/trackpad).
+ * Di HP/layar sentuh (pointer: coarse) dibiarkan memakai scroll native agar tetap ringan & responsif.
  */
 export function SmoothScroll() {
   useEffect(() => {
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia?.("(pointer: coarse)").matches) return;
 
     const lenis = new Lenis({
-      duration: 1.1,
+      duration: 0.95,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
-      touchMultiplier: 1.5,
     });
 
     let rafId = 0;
@@ -25,7 +25,6 @@ export function SmoothScroll() {
     };
     rafId = requestAnimationFrame(raf);
 
-    // Dukung klik tautan anchor (#produk, #layanan, #kontak, dll.) agar meluncur mulus
     const klikAnchor = (e: MouseEvent) => {
       const target = (e.target as HTMLElement | null)?.closest("a[href^='#']") as HTMLAnchorElement | null;
       if (!target) return;

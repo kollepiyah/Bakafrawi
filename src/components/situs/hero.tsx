@@ -36,8 +36,12 @@ export function Hero({ situs }: { situs: Situs }) {
               <BlurText teks={hero.judul} jedaAwal={0.08} />{" "}
               {hero.sorot.map((kata, i) => (
                 <span key={kata}>
-                  <em className="bg-gradient-to-r from-emas via-emas-muda to-amber-200 bg-clip-text text-transparent">
-                    <BlurText teks={kata} jedaAwal={0.32 + i * 0.12} />
+                  <em className="italic">
+                    <BlurText
+                      teks={kata}
+                      jedaAwal={0.32 + i * 0.12}
+                      itemClassName="text-emas-muda"
+                    />
                   </em>
                   {i < hero.sorot.length - 1 ? " & " : "."}
                 </span>

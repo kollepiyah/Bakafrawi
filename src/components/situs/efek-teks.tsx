@@ -1,28 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import {
-  motion,
-  useAnimationFrame,
-  useInView,
-  useMotionValue,
-  useScroll,
-  useSpring,
-  useTransform,
-  useVelocity,
-} from "motion/react";
+import { motion, useInView, useMotionValue, useSpring } from "motion/react";
 
 /**
  * BlurText (ala React Bits): memecah kalimat per kata lalu memunculkannya
- * dari efek kabur + naik lembut satu per satu.
+ * dengan gerak naik lembut satu per satu (tanpa filter blur berat di mobile).
  */
 export function BlurText({
   teks,
   className = "",
+  itemClassName = "",
   jedaAwal = 0,
 }: {
   teks: string;
   className?: string;
+  itemClassName?: string;
   jedaAwal?: number;
 }) {
   const kata = teks.split(" ");
@@ -31,14 +24,14 @@ export function BlurText({
       {kata.map((k, i) => (
         <motion.span
           key={`${k}-${i}`}
-          initial={{ opacity: 0, y: 16, filter: "blur(8px)" }}
-          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{
-            duration: 0.55,
-            delay: jedaAwal + i * 0.055,
+            duration: 0.48,
+            delay: jedaAwal + i * 0.05,
             ease: [0.22, 1, 0.36, 1],
           }}
-          className="inline-block"
+          className={`inline-block ${itemClassName}`}
         >
           {k}
           {i < kata.length - 1 ? "\u00A0" : ""}
@@ -49,7 +42,7 @@ export function BlurText({
 }
 
 /**
- * ShinyText (ala React Bits): efek kilau cahaya melintas halus di atas teks.
+ * ShinyText (ala React Bits): efek kilau cahaya melintas halus di atas teks (murni CSS).
  */
 export function ShinyText({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
@@ -77,7 +70,7 @@ export function CountUp({ nilai, className = "" }: { nilai: string; className?: 
   useEffect(() => {
     if (!terlihat || targetAngka === null) return;
     let raf = 0;
-    const durasi = 1200;
+    const durasi = 1100;
     const mulai = performance.now();
     const langkah = (now: number) => {
       const p = Math.min(1, (now - mulai) / durasi);
@@ -103,34 +96,26 @@ export function CountUp({ nilai, className = "" }: { nilai: string; className?: 
 }
 
 /**
- * BorderBeam (ala Magic UI): garis cahaya emas-teal mengalir lembut mengelilingi
- * pinggiran kartu produk unggulan.
+ * BorderBeam: garis cahaya emas-teal tipis di tepian atas & bawah kartu produk.
+ * Tidak memakai mask-composite (yang bermasalah di Safari iOS) sehingga 100% bersih & ringan.
  */
 export function BorderBeam({ className = "" }: { className?: string }) {
   return (
-    <div
-      aria-hidden="true"
-      className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] p-[1px] [mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] [mask-composite:exclude] ${className}`}
-    >
-      <div
-        className="animasi-beam absolute top-1/2 left-1/2 aspect-square w-[220%] opacity-80"
-        style={{
-          background:
-            "conic-gradient(from 0deg, transparent 0deg 260deg, rgba(24,180,168,0.85) 295deg, rgba(227,201,137,0.95) 330deg, transparent 360deg)",
-        }}
-      />
+    <div aria-hidden="true" className={`pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] ${className}`}>
+      <div className="animasi-kilau absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-emas-muda/85 to-transparent" />
+      <div className="animasi-kilau absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-teal-400/50 to-transparent" />
     </div>
   );
 }
 
 /**
  * KartuMiring3D (ala React Bits TiltedCard): memiringkan mockup produk secara 3D
- * mengikuti gerak kursor, kembali rata saat kursor keluar.
+ * mengikuti gerak kursor di desktop.
  */
 export function KartuMiring3D({
   children,
   className = "",
-  maksSudut = 8,
+  maksSudut = 7,
 }: {
   children: ReactNode;
   className?: string;
@@ -160,7 +145,6 @@ export function KartuMiring3D({
         onMouseMove={saatGerak}
         onMouseLeave={saatKeluar}
         style={{ rotateX: springRx, rotateY: springRy, transformStyle: "preserve-3d" }}
-        className="will-change-transform"
       >
         {children}
       </motion.div>
@@ -169,7 +153,7 @@ export function KartuMiring3D({
 }
 
 /**
- * TombolMagnet (ala React Bits Magnet): pembungkus yang menarik tombol pelan ke arah kursor.
+ * TombolMagnet (ala React Bits Magnet): menarik tombol pelan ke arah kursor.
  */
 export function TombolMagnet({ children, className = "" }: { children: ReactNode; className?: string }) {
   const x = useMotionValue(0);
@@ -179,8 +163,8 @@ export function TombolMagnet({ children, className = "" }: { children: ReactNode
 
   function gerak(e: MouseEvent<HTMLDivElement>) {
     const r = e.currentTarget.getBoundingClientRect();
-    x.set((e.clientX - (r.left + r.width / 2)) * 0.18);
-    y.set((e.clientY - (r.top + r.height / 2)) * 0.22);
+    x.set((e.clientX - (r.left + r.width / 2)) * 0.16);
+    y.set((e.clientY - (r.top + r.height / 2)) * 0.2);
   }
 
   function lepas() {
@@ -212,40 +196,15 @@ const ITEM_PITA = [
 ];
 
 /**
- * PitaBerjalan (Scroll Velocity Marquee ala React Bits):
- * pita teks elegan yang meluncur terus dan ikut melaju lebih cepat mengikuti kecepatan scroll.
+ * PitaBerjalan: marquee murni CSS GPU compositor (0% beban JS main thread).
  */
 export function PitaBerjalan() {
-  const baseX = useMotionValue(0);
-  const { scrollY } = useScroll();
-  const scrollVelocity = useVelocity(scrollY);
-  const smoothVelocity = useSpring(scrollVelocity, { damping: 50, stiffness: 360 });
-  const faktorKecepatan = useTransform(smoothVelocity, [-1200, 0, 1200], [-3.2, 0, 3.2]);
-  const arahRef = useRef(1);
-
-  useAnimationFrame((_, delta) => {
-    const v = faktorKecepatan.get();
-    if (v < -0.05) arahRef.current = -1;
-    else if (v > 0.05) arahRef.current = 1;
-
-    // Gerak dasar perlahan + dorongan kecepatan scroll
-    let geser = arahRef.current * 2.4 * (delta / 1000);
-    geser += arahRef.current * Math.abs(v) * 2.6 * (delta / 1000);
-
-    let next = baseX.get() - geser;
-    if (next <= -50) next += 50;
-    if (next > 0) next -= 50;
-    baseX.set(next);
-  });
-
-  const xPersen = useTransform(baseX, (v) => `${v}%`);
-
   return (
     <div
       aria-label="Keahlian dan produk Bakafrawi"
       className="relative overflow-hidden border-y border-white/[0.07] bg-white/[0.015] py-4 select-none [mask-image:linear-gradient(to_right,transparent,black_10%,black_90%,transparent)]"
     >
-      <motion.div style={{ x: xPersen }} className="flex w-max items-center gap-8 will-change-transform">
+      <div className="animasi-pita flex w-max items-center gap-8 will-change-transform">
         {[0, 1].map((salinan) => (
           <div key={salinan} className="flex shrink-0 items-center gap-8">
             {ITEM_PITA.map((item) => (
@@ -259,7 +218,7 @@ export function PitaBerjalan() {
             ))}
           </div>
         ))}
-      </motion.div>
+      </div>
     </div>
   );
 }

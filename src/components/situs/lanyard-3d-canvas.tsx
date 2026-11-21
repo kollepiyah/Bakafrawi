@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, extend, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Environment, Lightformer, RoundedBox } from "@react-three/drei";
+import { RoundedBox } from "@react-three/drei";
 import {
   BallCollider,
   CuboidCollider,
@@ -410,20 +410,20 @@ function Band({
 
   const teksturTali = useMemo(() => buatTeksturTali(), []);
 
-  // Kanvas dinamis sisi depan & belakang kartu
+  // Kanvas dinamis sisi depan & belakang kartu (640×850 — tajam di kartu 300px, hemat 60% VRAM GPU)
   const { teksturDepan, teksturBelakang, canvasDepan, canvasBelakang } = useMemo(() => {
     const cd = document.createElement("canvas");
-    cd.width = 1024;
-    cd.height = 1360;
+    cd.width = 640;
+    cd.height = 850;
     const cb = document.createElement("canvas");
-    cb.width = 1024;
-    cb.height = 1360;
+    cb.width = 640;
+    cb.height = 850;
     const td = new THREE.CanvasTexture(cd);
     td.colorSpace = THREE.SRGBColorSpace;
-    td.anisotropy = 8;
+    td.anisotropy = 4;
     const tb = new THREE.CanvasTexture(cb);
     tb.colorSpace = THREE.SRGBColorSpace;
-    tb.anisotropy = 8;
+    tb.anisotropy = 4;
     return { teksturDepan: td, teksturBelakang: tb, canvasDepan: cd, canvasBelakang: cb };
   }, []);
 
@@ -438,8 +438,10 @@ function Band({
 
     const lukis = () => {
       if (!aktif) return;
-      gambarSisiDepan(ctxD, canvasDepan.width, canvasDepan.height, nama, status, logoImg, fotoImg);
-      gambarSisiBelakang(ctxB, canvasBelakang.width, canvasBelakang.height, nama, logoImg);
+      ctxD.setTransform(0.625, 0, 0, 0.625, 0, 0);
+      ctxB.setTransform(0.625, 0, 0, 0.625, 0, 0);
+      gambarSisiDepan(ctxD, 1024, 1360, nama, status, logoImg, fotoImg);
+      gambarSisiBelakang(ctxB, 1024, 1360, nama, logoImg);
       teksturDepan.needsUpdate = true;
       teksturBelakang.needsUpdate = true;
     };
@@ -559,7 +561,7 @@ function Band({
 
       const geom = bandRef.current?.geometry as MeshLineGeometry | undefined;
       if (geom && typeof geom.setPoints === "function") {
-        geom.setPoints(curve.getPoints(32));
+        geom.setPoints(curve.getPoints(20));
       }
 
       // Redam sedikit putaran Y agar kartu tidak berputar liar tak berhenti
@@ -641,38 +643,20 @@ function Band({
             onPointerDown={mulaiTarik}
           >
             {/* Badan utama kartu 3D (RoundedBox metalik gelap) */}
-            <RoundedBox args={[1.72, 2.28, 0.055]} radius={0.1} smoothness={4}>
-              <meshPhysicalMaterial
-                color="#141820"
-                clearcoat={1}
-                clearcoatRoughness={0.18}
-                roughness={0.3}
-                metalness={0.75}
-              />
+            <RoundedBox args={[1.72, 2.28, 0.055]} radius={0.1} smoothness={3}>
+              <meshStandardMaterial color="#181d27" roughness={0.32} metalness={0.7} />
             </RoundedBox>
 
             {/* Permukaan Depan (Foto Admin / Emblem + Nama + Status) */}
             <mesh position={[0, 0, 0.03]}>
               <planeGeometry args={[1.64, 2.2]} />
-              <meshPhysicalMaterial
-                map={teksturDepan}
-                clearcoat={1}
-                clearcoatRoughness={0.12}
-                roughness={0.22}
-                metalness={0.12}
-              />
+              <meshStandardMaterial map={teksturDepan} roughness={0.28} metalness={0.14} />
             </mesh>
 
             {/* Permukaan Belakang (Logo Kaligrafi & Domain saat diputar 360°) */}
             <mesh position={[0, 0, -0.03]} rotation={[0, Math.PI, 0]}>
               <planeGeometry args={[1.64, 2.2]} />
-              <meshPhysicalMaterial
-                map={teksturBelakang}
-                clearcoat={1}
-                clearcoatRoughness={0.15}
-                roughness={0.25}
-                metalness={0.18}
-              />
+              <meshStandardMaterial map={teksturBelakang} roughness={0.3} metalness={0.18} />
             </mesh>
 
             {/* Klip & pengait logam 3D di atas kartu */}
@@ -698,53 +682,31 @@ export default function Lanyard3DCanvas({
   nama,
   status,
   fotoUrl,
+  aktif = true,
 }: {
   nama: string;
   status: string;
   fotoUrl?: string;
+  aktif?: boolean;
 }) {
   return (
     <Canvas
+      frameloop={aktif ? "always" : "demand"}
       camera={{ position: [0, 0, 11.5], fov: 22 }}
-      dpr={[1, 2]}
-      gl={{ alpha: true, antialias: true }}
+      dpr={[1, 1.4]}
+      gl={{ alpha: true, antialias: true, powerPreference: "default" }}
       onCreated={({ gl }) => gl.setClearColor(new THREE.Color(0x000000), 0)}
       className="size-full touch-none"
     >
-      <ambientLight intensity={Math.PI * 0.7} />
-      <Physics interpolate gravity={[0, -38, 0]} timeStep={1 / 60}>
+      {/* Pencahayaan studio ringan tanpa Environment PMREM blur berat */}
+      <ambientLight intensity={1.35} />
+      <hemisphereLight args={["#fff4d6", "#0e1520", 0.9]} />
+      <directionalLight position={[4, 5, 6]} intensity={1.9} color="#fff7e2" />
+      <directionalLight position={[-5, -2, 4]} intensity={1.1} color="#34e0cd" />
+
+      <Physics paused={!aktif} interpolate gravity={[0, -38, 0]} timeStep={1 / 60}>
         <Band nama={nama} status={status} fotoUrl={fotoUrl} />
       </Physics>
-      <Environment blur={0.75}>
-        <Lightformer
-          intensity={2.4}
-          color="#fff4d6"
-          position={[0, -1, 5]}
-          rotation={[0, 0, Math.PI / 3]}
-          scale={[100, 0.15, 1]}
-        />
-        <Lightformer
-          intensity={3.2}
-          color="#ffffff"
-          position={[-2, -1, 2]}
-          rotation={[0, 0, Math.PI / 3]}
-          scale={[100, 0.15, 1]}
-        />
-        <Lightformer
-          intensity={2.8}
-          color="#18b4a8"
-          position={[2, 1, 2]}
-          rotation={[0, 0, Math.PI / 3]}
-          scale={[100, 0.15, 1]}
-        />
-        <Lightformer
-          intensity={8}
-          color="#f7e6bd"
-          position={[-10, 0, 14]}
-          rotation={[0, Math.PI / 2, Math.PI / 3]}
-          scale={[100, 10, 1]}
-        />
-      </Environment>
     </Canvas>
   );
 }
