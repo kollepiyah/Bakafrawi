@@ -9,7 +9,6 @@ import { KartuProduk } from "@/components/situs/kartu-produk";
 import { Footer, Kontak } from "@/components/situs/kontak-footer";
 import { Layanan } from "@/components/situs/layanan";
 import { Navbar } from "@/components/situs/navbar";
-import { SmoothScroll } from "@/components/situs/smooth-scroll";
 import { Proses, Tentang } from "@/components/situs/tentang-proses";
 
 export default async function Beranda() {
@@ -18,7 +17,6 @@ export default async function Beranda() {
   const karyaPesanan = produkTampil(situs, "pesanan");
   return (
     <>
-      <SmoothScroll />
       <IntroSplash nama={situs.nama} />
       <Navbar nama={situs.nama} />
       <main>
