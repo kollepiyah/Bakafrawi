@@ -61,7 +61,6 @@ export function SegelLogo() {
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.94 }}
         transition={{ type: "spring", stiffness: 220, damping: 16 }}
-        title="Klik untuk memutar segel Bakafrawi"
         aria-label="Segel Kaligrafi Bakafrawi"
         className="relative z-10 flex size-24 cursor-pointer items-center justify-center rounded-full border border-emas/40 bg-gradient-to-br from-[#191e27] via-[#10131a] to-[#090b10] p-4 shadow-[0_14px_40px_-10px_rgba(0,0,0,0.9),0_0_32px_-8px_rgba(201,162,75,0.45)] focus:outline-none focus-visible:ring-2 focus-visible:ring-emas"
       >

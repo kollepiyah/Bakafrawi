@@ -1,23 +1,25 @@
 # CHANGELOG — bakafrawi.com
 
-## Pembaruan Tampilan Situs Utama — Konsep A Interaktif (21 Nov)
+## Pembaruan Tampilan Situs Utama — Paket WebGL 3D & Komponen Interaktif (21 Nov)
 
-- **Kartu Lanyard 3D Interaktif di Hero (`src/components/situs/kartu-lanyard.tsx`):** kartu Studio Pass
-  Bakafrawi yang bisa ditarik, digoyang, dan otomatis membal balik dengan fisika pegas 3D (`motion/react`),
-  efek kilau holografik mengikuti arah tarikan/kursor, tali gantungan elastis, dan dukungan **unggah foto
-  portrait custom lewat Admin → Situs → Hero** (`hero.fotoKartu`, otomatis kembali ke emblem bawaan jika
-  kosong), lengkap dengan layout Hero 2 kolom (`src/components/situs/hero.tsx`).
+- **Lanyard 3D Fisika Tali Asli (`lanyard-3d-canvas.tsx` & `kartu-lanyard.tsx`):** ditenagai
+  `three`, `@react-three/fiber`, `@react-three/drei`, `@react-three/rapier`, dan `meshline`. Tali
+  lanyard melengkung & mengayun dengan simulasi fisika nyata, kartu bisa ditarik/dilempar/berputar
+  360° (sisi depan menampilkan **foto portrait dari Admin → Situs → Hero** atau emblem bawaan; sisi
+  belakang menampilkan segel kaligrafi Bakafrawi), dimuat lazy client-only dengan pengaman fallback WebGL.
+- **Latar WebGL Aurora Shader (`aurora-bg.tsx`) & Smooth Scroll (`smooth-scroll.tsx`):** shader GLSL
+  real-time via `ogl` bernuansa teal-emas-gelap di belakang Hero serta gulir halaman mulus berbasis `lenis`.
+- **Komponen Interaktif Ala React Bits & Magic UI (`efek-teks.tsx`):** *BlurText* judul Hero,
+  *ShinyText* kilau lencana status, *CountUp* angka statistik, *PitaBerjalan* (Scroll Velocity Marquee),
+  *BorderBeam* cahaya mengalir di tepian kartu produk, *KartuMiring3D* pada mockup produk, dan
+  *TombolMagnet* di CTA utama.
 - **Animasi Logo Kaligrafi Bakafrawi (`intro-splash.tsx` & `segel-logo.tsx`):**
   - *Splash Intro* singkat (±0,9 detik, sekali per sesi tab) dengan pendar emas logo kaligrafi lalu tirai
     terangkat halus membuka halaman utama.
   - *Segel Kaligrafi Orbital* interaktif di bagian **Tentang** (`tentang-proses.tsx`): teks melingkar
     dan cincin orbit berputar pelan; medali logo bisa diklik untuk berputar 360°.
-- **Floating Glass Pill Navbar & Scroll Progress (`src/components/situs/navbar.tsx`):** saat halaman
-  di-scroll, bilah navigasi melayang menjadi kapsul kaca gelap (`backdrop-blur-xl`, `rounded-full`)
-  dilengkapi garis indikator progres baca emas tipis di bagian bawah.
-- **Kartu Bento Spotlight (`src/components/situs/kartu-spotlight.tsx`):** diterapkan pada bagian
-  **Layanan** (`layanan.tsx`) dan **Produk** (`kartu-produk.tsx`) — cahaya emas lembut mengikuti gerak
-  kursor di atas kartu dengan elevasi halus, tetap terhubung penuh ke CMS `/admin`.
+- **Floating Glass Pill Navbar & Garis Progres Baca (`navbar.tsx`)** serta **Kartu Bento Spotlight**
+  (`kartu-spotlight.tsx`) di Layanan & Produk.
 
 ## Jadwal Otomatis Jam Buka (Story Opening Lek Kopi) & Jadwal Tayang Custom (20 Nov)
 

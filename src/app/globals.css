@@ -81,3 +81,37 @@
 @utility wadah {
   @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
 }
+
+@keyframes kilau-teks {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+@keyframes putar-beam {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.animasi-kilau {
+  background-size: 240% 100%;
+  animation: kilau-teks 4.5s linear infinite;
+}
+
+.animasi-beam {
+  animation: putar-beam 7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animasi-kilau,
+  .animasi-beam {
+    animation: none;
+  }
+}

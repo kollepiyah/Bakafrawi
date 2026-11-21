@@ -1,6 +1,7 @@
 import { produkTampil } from "@/content/situs";
 import { ambilKonten } from "@/lib/konten";
 import { Bagian, KepalaBagian } from "@/components/situs/bagian";
+import { PitaBerjalan } from "@/components/situs/efek-teks";
 import { HargaMaktaba } from "@/components/situs/harga-maktaba";
 import { Hero } from "@/components/situs/hero";
 import { IntroSplash } from "@/components/situs/intro-splash";
@@ -8,6 +9,7 @@ import { KartuProduk } from "@/components/situs/kartu-produk";
 import { Footer, Kontak } from "@/components/situs/kontak-footer";
 import { Layanan } from "@/components/situs/layanan";
 import { Navbar } from "@/components/situs/navbar";
+import { SmoothScroll } from "@/components/situs/smooth-scroll";
 import { Proses, Tentang } from "@/components/situs/tentang-proses";
 
 export default async function Beranda() {
@@ -16,10 +18,12 @@ export default async function Beranda() {
   const karyaPesanan = produkTampil(situs, "pesanan");
   return (
     <>
+      <SmoothScroll />
       <IntroSplash nama={situs.nama} />
       <Navbar nama={situs.nama} />
       <main>
         <Hero situs={situs} />
+        <PitaBerjalan />
         <Layanan layanan={situs.layanan} />
 
         {produkSendiri.length > 0 && (

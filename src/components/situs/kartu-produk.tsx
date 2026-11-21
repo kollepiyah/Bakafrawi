@@ -2,6 +2,7 @@ import Image from "next/image";
 import { ArrowUpRight, Check } from "lucide-react";
 import type { Produk } from "@/content/situs";
 import { TombolTautan } from "./bagian";
+import { BorderBeam, KartuMiring3D } from "./efek-teks";
 import { KartuSpotlight } from "./kartu-spotlight";
 import { Muncul } from "./muncul";
 
@@ -10,6 +11,7 @@ export function KartuProduk({ produk }: { produk: Produk }) {
   return (
     <div className="mt-14 first:mt-12">
       <KartuSpotlight className="bg-gradient-to-br from-card to-[#15191f] p-7 shadow-[0_24px_60px_-28px_rgba(0,0,0,.85)] sm:p-10 lg:p-12">
+        <BorderBeam />
         <div className="grid gap-10 lg:grid-cols-2 lg:gap-12">
         <div className="pointer-events-none absolute -top-28 -right-20 size-96 rounded-full bg-[radial-gradient(circle,rgba(201,162,75,.12),transparent_65%)]" />
         <div className="relative">
@@ -67,9 +69,11 @@ export function KartuProduk({ produk }: { produk: Produk }) {
 
       {produk.layarDesktop?.map((g) => (
         <Muncul key={g.src} className="mx-auto mt-10 max-w-4xl">
-          <div className="overflow-hidden rounded-xl border border-white/15 bg-[#0a0c10] shadow-[0_24px_60px_-28px_rgba(0,0,0,.85)]">
-            <Image src={g.src} alt={g.alt} width={g.lebar} height={g.tinggi} sizes="(min-width: 1024px) 896px, 100vw" className="w-full" />
-          </div>
+          <KartuMiring3D maksSudut={5}>
+            <div className="overflow-hidden rounded-xl border border-white/15 bg-[#0a0c10] shadow-[0_24px_60px_-28px_rgba(0,0,0,.85)]">
+              <Image src={g.src} alt={g.alt} width={g.lebar} height={g.tinggi} sizes="(min-width: 1024px) 896px, 100vw" className="w-full" />
+            </div>
+          </KartuMiring3D>
           {g.keterangan && <p className="mt-3 text-center text-sm text-redup">{g.keterangan}</p>}
         </Muncul>
       ))}
@@ -79,9 +83,11 @@ export function KartuProduk({ produk }: { produk: Produk }) {
           {produk.layarHp.map((g, i) => (
             <Muncul key={g.src} jeda={i * 0.08} className="w-[62vw] max-w-[230px] shrink-0 snap-center">
               <figure>
-                <div className="rounded-[30px] border border-white/15 bg-[#0a0c10] p-2 shadow-[0_24px_60px_-28px_rgba(0,0,0,.85)]">
-                  <Image src={g.src} alt={g.alt} width={g.lebar} height={g.tinggi} sizes="230px" className="w-full rounded-[22px]" />
-                </div>
+                <KartuMiring3D maksSudut={9}>
+                  <div className="rounded-[30px] border border-white/15 bg-[#0a0c10] p-2 shadow-[0_24px_60px_-28px_rgba(0,0,0,.85)]">
+                    <Image src={g.src} alt={g.alt} width={g.lebar} height={g.tinggi} sizes="230px" className="w-full rounded-[22px]" />
+                  </div>
+                </KartuMiring3D>
                 {g.keterangan && <figcaption className="mt-3 text-center text-sm text-redup">{g.keterangan}</figcaption>}
               </figure>
             </Muncul>
