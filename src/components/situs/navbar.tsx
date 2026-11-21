@@ -43,8 +43,15 @@ export function Navbar({ nama }: { nama: string }) {
             : "wadah h-[74px] border-b border-transparent",
         )}
       >
-        <a href="#beranda" className="flex items-center gap-2.5 text-lg font-bold">
-          <Image src="/logo.png" alt="" width={34} height={34} priority />
+        <a href="#beranda" className="group flex items-center gap-2.5 text-lg font-bold">
+          <Image
+            src="/logo.png"
+            alt=""
+            width={34}
+            height={34}
+            priority
+            className="transition-transform duration-700 ease-out group-hover:rotate-[360deg]"
+          />
           {nama}
           <span className="-ml-2 text-emas">.</span>
         </a>

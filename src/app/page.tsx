@@ -1,10 +1,10 @@
 import { produkTampil } from "@/content/situs";
 import { ambilKonten } from "@/lib/konten";
 import { Bagian, KepalaBagian } from "@/components/situs/bagian";
+import { CahayaKursor } from "@/components/situs/cahaya-kursor";
 import { PitaBerjalan } from "@/components/situs/efek-teks";
 import { HargaMaktaba } from "@/components/situs/harga-maktaba";
 import { Hero } from "@/components/situs/hero";
-import { IntroSplash } from "@/components/situs/intro-splash";
 import { KartuProduk } from "@/components/situs/kartu-produk";
 import { Footer, Kontak } from "@/components/situs/kontak-footer";
 import { Layanan } from "@/components/situs/layanan";
@@ -17,7 +17,7 @@ export default async function Beranda() {
   const karyaPesanan = produkTampil(situs, "pesanan");
   return (
     <>
-      <IntroSplash nama={situs.nama} />
+      <CahayaKursor />
       <Navbar nama={situs.nama} />
       <main>
         <Hero situs={situs} />

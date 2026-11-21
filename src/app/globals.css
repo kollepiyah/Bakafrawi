@@ -109,6 +109,24 @@
   }
 }
 
+@keyframes meteor-lintas {
+  0% {
+    opacity: 0;
+    transform: translate3d(-120px, -60px, 0) rotate(22deg);
+  }
+  12% {
+    opacity: 0.85;
+  }
+  38% {
+    opacity: 0;
+    transform: translate3d(380px, 155px, 0) rotate(22deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(380px, 155px, 0) rotate(22deg);
+  }
+}
+
 .animasi-kilau {
   background-size: 240% 100%;
   animation: kilau-teks 4.5s linear infinite;
@@ -126,10 +144,20 @@
   animation-play-state: paused;
 }
 
+.animasi-meteor {
+  animation: meteor-lintas 7.5s ease-in-out infinite;
+}
+
+.animasi-meteor-2 {
+  animation: meteor-lintas 9.5s ease-in-out 3.8s infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animasi-kilau,
   .animasi-beam,
-  .animasi-pita {
+  .animasi-pita,
+  .animasi-meteor,
+  .animasi-meteor-2 {
     animation: none;
   }
 }
