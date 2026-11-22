@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { situsBawaan } from "@/content/situs";
 
-// Kebijakan privasi bakafrawi.com — juga syarat layar izin Google (Google Calendar untuk Bakafrawi Studio).
+// Kebijakan privasi bakafrawi.com — juga syarat layar izin Google (Google Calendar) dan Meta (Instagram/Facebook) untuk Bakafrawi Studio.
 export const metadata: Metadata = { title: "Kebijakan Privasi", alternates: { canonical: "/privasi" } };
 
-const BERLAKU = "18 November 2026";
+const BERLAKU = "22 November 2026";
 
 export default function Privasi() {
   const { email } = situsBawaan.kontak;
@@ -52,6 +52,47 @@ export default function Privasi() {
         <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener" className="text-emas hover:underline">myaccount.google.com/permissions</a>.
         Salinan acara dihapus atas permintaan ke {email}.
       </p>
+
+      <h2>Bakafrawi Studio dan Meta (Facebook &amp; Instagram)</h2>
+      <p>
+        Bakafrawi Studio juga dapat dihubungkan dengan akun Instagram profesional dan Halaman Facebook milik pengelola
+        melalui Facebook Login for Business dan Meta Graph API untuk:
+      </p>
+      <ul>
+        <li>mengenali ID dan nama pengguna akun Instagram bisnis yang terhubung;</li>
+        <li>menerbitkan konten gambar dan video (Feed, Reels, dan Story) sesuai jadwal atau perintah pemilik;</li>
+        <li>memperbarui token akses secara otomatis di server agar jadwal tayang berjalan lancar.</li>
+      </ul>
+      <p className="mt-3">
+        Data yang disimpan di basis data Supabase milik Bakafrawi terbatas pada ID akun Instagram, nama pengguna, dan
+        token akses. Token akses hanya disimpan di server dan tidak pernah dikirim ke peramban. Data ini tidak dijual,
+        tidak dibagikan ke pihak lain, tidak dipakai untuk iklan, dan tidak dipakai untuk melatih model AI.
+      </p>
+
+      <h2 id="hapus-data">Petunjuk penghapusan data pengguna</h2>
+      <p>
+        Anda dapat mencabut izin dan menghapus seluruh data akun yang tersimpan di Bakafrawi Studio kapan saja melalui
+        langkah berikut:
+      </p>
+      <ul>
+        <li>
+          <strong>Lewat panel Bakafrawi Studio:</strong> buka menu <em>Studio → Sambungan</em> (untuk Instagram/Meta) atau
+          menu <em>Agenda</em> (untuk Google Calendar), lalu klik tombol <em>Putuskan</em>. Kredensial dan token akses
+          langsung dihapus dari basis data server kami.
+        </li>
+        <li>
+          <strong>Lewat pengaturan Facebook (Meta):</strong> buka{" "}
+          <a href="https://www.facebook.com/settings?tab=business_tools" target="_blank" rel="noopener" className="text-emas hover:underline">
+            Pengaturan Integrasi Bisnis Facebook
+          </a>
+          , pilih <strong>Bakafrawi Studio</strong>, lalu klik <em>Hapus</em> untuk mencabut akses aplikasi.
+        </li>
+        <li>
+          <strong>Permintaan penghapusan penuh lewat email:</strong> kirim email ke {email} dengan subjek{" "}
+          <em>Permintaan Penghapusan Data</em> dan sebutkan nama akun terkait. Seluruh data yang tersisa akan kami
+          hapus maksimal dalam 7 hari kerja dan kami kirimkan konfirmasi balasannya.
+        </li>
+      </ul>
 
       <h2>Aplikasi produk Bakafrawi</h2>
       <p>Aplikasi seperti Maktaba POS memiliki kebijakan privasinya sendiri yang tercantum di halaman aplikasi tersebut.</p>
