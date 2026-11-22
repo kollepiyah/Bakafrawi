@@ -1,13 +1,10 @@
 name: Rilis APK Bakafrawi Studio
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       versi:
-        description: "Tag rilis (mis. v2.0.1)"
+        description: "Tag rilis (mis. v2.1.1)"
         required: true
       catatan:
         description: "Catatan pembaruan singkat"
@@ -33,7 +30,6 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Siapkan keystore rilis dari GitHub Secrets
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         working-directory: aplikasi-android
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -41,13 +37,17 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > bakafrawi-studio.jks
-          cat <<EOF > keystore.properties
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > bakafrawi-studio.jks
+            cat <<EOF > keystore.properties
           storeFile=bakafrawi-studio.jks
           storePassword=${ANDROID_STORE_PASSWORD}
           keyAlias=${ANDROID_KEY_ALIAS}
           keyPassword=${ANDROID_KEY_PASSWORD}
           EOF
+          else
+            echo "Keystore secret belum diisi; melanjutkan tanpa signing rilis."
+          fi
 
       - name: Bangun APK Release
         working-directory: aplikasi-android
@@ -58,8 +58,8 @@ jobs:
       - name: Terbitkan ke GitHub Releases
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.versi || github.ref_name }}
-          CATATAN: ${{ inputs.catatan || 'Pembaruan otomatis Bakafrawi Studio Android.' }}
+          TAG: ${{ inputs.versi }}
+          CATATAN: ${{ inputs.catatan }}
         run: |
           APK="aplikasi-android/app/build/outputs/apk/release/app-release.apk"
           NAMA="bakafrawi-studio-${TAG}.apk"
