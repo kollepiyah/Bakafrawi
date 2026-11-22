@@ -210,24 +210,43 @@ class Api(private val sesi: Sesi) {
 
         val biayaObj = isi.obj("biaya")
         val ringkasBiaya = biayaObj?.let { b ->
-            val idr = b.prim("totalRupiah")?.doubleOrNull ?: b.prim("totalIdr")?.doubleOrNull
-            val usd = b.prim("totalUsd")?.doubleOrNull
-            val pgl = b.prim("jumlahPanggilan")?.intOrNull ?: b.prim("panggilan")?.intOrNull
-            when {
-                idr != null -> "${rupiah(idr)}" + (pgl?.let { " · $it panggilan" } ?: "")
-                usd != null -> String.format(Locale.US, "$%.4f", usd) + (pgl?.let { " · $it panggilan" } ?: "")
-                else -> null
-            }
+            val usd = b.prim("usd")?.doubleOrNull
+            val tugas = b.prim("tugas")?.intOrNull ?: 0
+            if (usd != null) "${rupiah(usd * 16_300.0)} · $tugas tugas" else null
         }
 
         val insightObj = isi.obj("insight")
-        val pengikutIg = insightObj?.obj("akun")?.let { a ->
-            val u = a.teks("username")
-            val f = a.prim("followers_count")?.intOrNull
-            if (u != null && f != null) "@$u · ${nfId.format(f)} pengikut" else null
+        val insight = insightObj?.let { ig ->
+            val posts = ig.arr("posts")?.mapNotNull { el ->
+                val p = el as? JsonObject ?: return@mapNotNull null
+                PostInsightItem(
+                    id = p.teks("id") ?: return@mapNotNull null,
+                    merek = p.teks("merek") ?: "",
+                    jenis = p.teks("jenis") ?: "",
+                    caption = p.teks("caption"),
+                    permalink = p.teks("permalink"),
+                    likes = p.bulat("likes"),
+                    comments = p.bulat("comments"),
+                    views = p.prim("views")?.intOrNull,
+                    reach = p.prim("reach")?.intOrNull,
+                    saved = p.prim("saved")?.intOrNull,
+                    shares = p.prim("shares")?.intOrNull,
+                )
+            } ?: emptyList()
+            RingkasInsightIg(
+                tersambung = ig.bool("tersambung"),
+                akun = ig.teks("akun"),
+                totalTayang = ig.bulat("totalTayang"),
+                totalLikes = ig.bulat("totalLikes"),
+                totalComments = ig.bulat("totalComments"),
+                totalViews = ig.bulat("totalViews"),
+                posts = posts.take(6),
+                pesan = ig.teks("pesan"),
+                galatInsight = ig.teks("galatInsight"),
+            )
         }
 
-        DataDeck(workflows = workflows.take(5), ringkasBiaya = ringkasBiaya, pengikutIg = pengikutIg)
+        DataDeck(workflows = workflows.take(5), ringkasBiaya = ringkasBiaya, insight = insight)
     }
 
     suspend fun agenda(dari: Instant? = null, sampai: Instant? = null): List<Acara> = withContext(Dispatchers.IO) {

@@ -107,10 +107,36 @@ data class WorkflowRunItem(
     val url: String?,
 )
 
+data class PostInsightItem(
+    val id: String,
+    val merek: String,
+    val jenis: String,
+    val caption: String?,
+    val permalink: String?,
+    val likes: Int,
+    val comments: Int,
+    val views: Int?,
+    val reach: Int?,
+    val saved: Int?,
+    val shares: Int?,
+)
+
+data class RingkasInsightIg(
+    val tersambung: Boolean,
+    val akun: String?,
+    val totalTayang: Int,
+    val totalLikes: Int,
+    val totalComments: Int,
+    val totalViews: Int,
+    val posts: List<PostInsightItem>,
+    val pesan: String?,
+    val galatInsight: String?,
+)
+
 data class DataDeck(
     val workflows: List<WorkflowRunItem>,
     val ringkasBiaya: String?,
-    val pengikutIg: String?,
+    val insight: RingkasInsightIg?,
 )
 
 // ---------------- Studio Konten ----------------

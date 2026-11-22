@@ -32,6 +32,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -524,35 +525,98 @@ private fun LayarBeranda(
             }
         }
 
-        // Studio AI & Mesin (Deck) — selalu tampil (memuat / isi / galat + coba lagi)
+        // Studio AI & Mesin (Deck) — dengan sub-tab Mesin & Insight IG (sama seperti web)
         item {
+            var tabDeck by remember { mutableStateOf("insight") } // default langsung tampilkan Insight IG
+            val konteksDeck = LocalContext.current
             KartuBagian("Studio AI & Mesin", bukaKonten) {
                 when {
                     deck != null -> {
-                        if (!deck.pengikutIg.isNullOrBlank()) {
-                            Text("Instagram: ${deck.pengikutIg}", fontSize = 13.sp, color = EmasMuda)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = tabDeck == "insight",
+                                onClick = { tabDeck = "insight" },
+                                label = { Text("Insight IG", fontSize = 12.sp) },
+                            )
+                            FilterChip(
+                                selected = tabDeck == "mesin",
+                                onClick = { tabDeck = "mesin" },
+                                label = { Text("Mesin & Biaya", fontSize = 12.sp) },
+                            )
                         }
-                        if (!deck.ringkasBiaya.isNullOrBlank()) {
-                            Text("Biaya AI bulan ini: ${deck.ringkasBiaya}", fontSize = 13.sp, color = Redup)
-                        }
-                        if (deck.workflows.isEmpty()) {
-                            Text("Belum ada riwayat mesin terbaru.", color = Redup, fontSize = 13.sp)
-                        } else {
-                            deck.workflows.take(3).forEach { w ->
-                                val st = w.kesimpulan ?: w.status
-                                val warnaSt = when (st) {
-                                    "success" -> Color(0xFF4ADE80)
-                                    "failure" -> Color(0xFFF87171)
-                                    else -> EmasMuda
+
+                        if (tabDeck == "insight") {
+                            val ig = deck.insight
+                            if (ig == null || !ig.tersambung) {
+                                Text(ig?.pesan ?: "Instagram belum tersambung.", color = Redup, fontSize = 13.sp)
+                            } else {
+                                if (!ig.akun.isNullOrBlank()) {
+                                    Text("Akun: ${ig.akun}", fontSize = 13.sp, color = EmasMuda, fontWeight = FontWeight.Medium)
                                 }
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(w.nama, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1)
-                                    Text(st, fontSize = 12.sp, color = warnaSt)
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Angka(ig.totalViews, "Total Views", Modifier.weight(1f), sorot = true)
+                                        Angka(ig.totalLikes, "Total Likes", Modifier.weight(1f))
+                                    }
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Angka(ig.totalComments, "Komentar", Modifier.weight(1f))
+                                        Angka(ig.totalTayang, "Postingan", Modifier.weight(1f))
+                                    }
+                                }
+                                if (!ig.galatInsight.isNullOrBlank()) {
+                                    Text(ig.galatInsight, color = Redup, fontSize = 11.sp)
+                                }
+                                if (ig.posts.isNotEmpty()) {
+                                    Spacer(Modifier.height(2.dp))
+                                    Text("Postingan terbaru:", color = Redup, fontSize = 12.sp)
+                                    ig.posts.take(4).forEach { p ->
+                                        val judulPost = p.caption?.lineSequence()?.firstOrNull()?.trim()?.ifBlank { null }
+                                            ?: "${p.merek.uppercase()} · ${p.jenis}"
+                                        val metrik = buildList {
+                                            p.views?.let { add("${it} views") }
+                                            add("${p.likes} suka")
+                                            add("${p.comments} komen")
+                                            p.saved?.takeIf { it > 0 }?.let { add("${it} simpan") }
+                                        }.joinToString(" · ")
+                                        Column(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(10.dp))
+                                                .clickable(enabled = !p.permalink.isNullOrBlank()) {
+                                                    p.permalink?.let { url -> konteksDeck.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+                                                }
+                                                .padding(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                                        ) {
+                                            Text(judulPost, fontSize = 13.sp, maxLines = 1)
+                                            Text(metrik, fontSize = 11.sp, color = EmasMuda)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            if (!deck.ringkasBiaya.isNullOrBlank()) {
+                                Text("Biaya AI bulan ini: ${deck.ringkasBiaya}", fontSize = 13.sp, color = EmasMuda)
+                            }
+                            if (deck.workflows.isEmpty()) {
+                                Text("Belum ada riwayat mesin terbaru.", color = Redup, fontSize = 13.sp)
+                            } else {
+                                deck.workflows.take(4).forEach { w ->
+                                    val st = w.kesimpulan ?: w.status
+                                    val warnaSt = when (st) {
+                                        "success" -> Color(0xFF4ADE80)
+                                        "failure" -> Color(0xFFF87171)
+                                        else -> EmasMuda
+                                    }
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(w.nama, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                                        Text(st, fontSize = 12.sp, color = warnaSt)
+                                    }
                                 }
                             }
                         }
                     }
-                    memuatDeck -> Text("Memuat status mesin Studio…", color = Redup, fontSize = 13.sp)
+                    memuatDeck -> Text("Memuat Insight & status mesin…", color = Redup, fontSize = 13.sp)
                     else -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(galatDeck ?: "Gagal memuat status mesin.", color = MaterialTheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.weight(1f))
                         TextButton(onClick = cobaLagiDeck) { Text("Ulangi", fontSize = 12.sp) }
