@@ -5,6 +5,7 @@ import { Bagian, Label, TombolTautan } from "./bagian";
 import { FormKontak } from "./form-kontak";
 import { IkonSosial, namaSosial } from "./ikon-sosial";
 import { Muncul } from "./muncul";
+import { LencanaPengunjungFooter } from "./pencatat-pengunjung";
 
 export function Kontak({ situs }: { situs: Situs }) {
   const { kontak } = situs;
@@ -66,7 +67,10 @@ export async function Footer({ situs }: { situs: Situs }) {
             <div>{situs.kontak.lokasi}</div>
           </div>
         </div>
-        <a href="/privasi" className="text-muted-foreground hover:text-emas">Kebijakan privasi</a>
+        <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-5">
+          <LencanaPengunjungFooter />
+          <a href="/privasi" className="text-muted-foreground hover:text-emas">Kebijakan privasi</a>
+        </div>
       </div>
     </footer>
   );

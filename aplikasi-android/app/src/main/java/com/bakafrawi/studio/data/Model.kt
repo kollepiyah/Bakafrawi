@@ -2,7 +2,7 @@ package com.bakafrawi.studio.data
 
 import kotlinx.serialization.Serializable
 
-// Bentuk data dari API situs (/api/agenda, /api/beranda). Kolom lain diabaikan.
+// Bentuk data utama API situs & Studio. Kolom tambahan dari server diabaikan secara aman.
 
 @Serializable
 data class Acara(
@@ -35,12 +35,40 @@ data class StatusGoogle(
 )
 
 @Serializable
+data class ItemHalamanPengunjung(
+    val jalur: String = "",
+    val tayangan: Int = 0,
+)
+
+@Serializable
+data class ItemSumberPengunjung(
+    val sumber: String = "",
+    val tayangan: Int = 0,
+)
+
+@Serializable
+data class RingkasPengunjung(
+    val hariIniUnik: Int = 0,
+    val hariIniTayangan: Int = 0,
+    val pekanUnik: Int = 0,
+    val pekanTayangan: Int = 0,
+    val bulanUnik: Int = 0,
+    val bulanTayangan: Int = 0,
+    val totalUnik: Int = 0,
+    val totalTayangan: Int = 0,
+    val persenHp: Int = 0,
+    val halamanTeratas: List<ItemHalamanPengunjung> = emptyList(),
+    val sumberTeratas: List<ItemSumberPengunjung> = emptyList(),
+)
+
+@Serializable
 data class Ringkasan(
     val tanggal: String,
     val acaraHariIni: List<Acara> = emptyList(),
     val acaraPekan: List<Acara> = emptyList(),
     val konten: RingkasKonten = RingkasKonten(),
     val google: StatusGoogle = StatusGoogle(),
+    val pengunjung: RingkasPengunjung? = null,
 )
 
 /** Isi formulir acara. Waktu ditulis WIB tanpa zona ("2026-11-20T09:00"); aturan lengkapnya di server. */
@@ -54,4 +82,116 @@ data class MasukanAcara(
     val seharian: Boolean,
     val lokasi: String,
     val catatan: String,
+)
+
+// ---------------- Dasbor Aplikasi ----------------
+
+data class RingkasAplikasi(
+    val slug: String,
+    val nama: String,
+    val jenis: String?,
+    val ok: Boolean,
+    val galat: String?,
+    val tingkat: String, // "baik" | "perhatian"
+    val catatan: List<String>,
+    val angka: List<Pair<String, String>>,
+)
+
+// ---------------- Deck Mesin ----------------
+
+data class WorkflowRunItem(
+    val nama: String,
+    val status: String,
+    val kesimpulan: String?,
+    val dibuat: String?,
+    val url: String?,
+)
+
+data class DataDeck(
+    val workflows: List<WorkflowRunItem>,
+    val ringkasBiaya: String?,
+    val pengikutIg: String?,
+)
+
+// ---------------- Studio Konten ----------------
+
+data class MerekStudio(
+    val slug: String,
+    val nama: String,
+    val aktif: Boolean,
+    val adalahBank: Boolean,
+)
+
+data class ProdukRingkas(
+    val slug: String,
+    val nama: String,
+)
+
+data class HasilStudio(
+    val jenis: String,
+    val rasio: String,
+    val url: String,
+)
+
+data class TugasStudio(
+    val id: String,
+    val merek: String,
+    val dibuat: String,
+    val jenis: String,
+    val produkSlug: String,
+    val arahan: String,
+    val status: String,
+    val caption: String?,
+    val hasil: List<HasilStudio>,
+    val galat: String?,
+    val statusTayang: String,
+    val jadwalTayang: String?,
+    val sasaran: String?,
+    val permalink: String?,
+    val adaNaskah: Boolean,
+)
+
+data class UsulanArahan(
+    val judul: String,
+    val arahan: String,
+)
+
+data class JadwalRutinData(
+    val aktif: Boolean,
+    val jamWib: String,
+    val hari: List<Int>,
+    val modeKonten: String, // "video-bank" | "ai-baru"
+    val formatAi: String,   // "video-animasi" | "poster-story"
+    val temaAi: String,     // "otomatis" | "hangat-kafe" | "terang-modern" | "minimalis-gelap"
+    val berikutnya: String?,
+    val jumlahVideo: Int,
+)
+
+data class KonsepViral(
+    val judul: String,
+    val hook: String,
+    val ringkas: String,
+    val cta: String,
+)
+
+data class DataRiset(
+    val statusJadwal: String,
+    val daftarJamOptimal: List<String>,
+    val konsep: List<KonsepViral>,
+)
+
+data class SambunganMerek(
+    val merek: String,
+    val nama: String,
+    val aktif: Boolean,
+    val igAkun: String?,
+    val tiktokAkun: String?,
+)
+
+data class DataSambungan(
+    val siap: Boolean,
+    val pesan: String?,
+    val merek: List<SambunganMerek>,
+    val telegramTerdaftar: Boolean,
+    val telegramWebhook: String?,
 )

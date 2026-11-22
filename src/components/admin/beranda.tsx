@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { AlertTriangle, Bot, CalendarDays, Clock, LayoutGrid, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, Bot, CalendarDays, Clock, LayoutGrid, Loader2, Sparkles, Users } from "lucide-react";
 import { TandaAplikasi, useRingkasanAplikasi } from "./aplikasi";
 import { Deck } from "./deck";
 import { jamWIB, namaTanggal, tanggalWIB, type Acara } from "@/lib/agenda-murni";
+import type { RingkasanPengunjung } from "@/lib/kunjungan-murni";
 import { apiAdmin } from "./agenda";
 
 type Ringkasan = {
@@ -14,6 +15,7 @@ type Ringkasan = {
   acaraPekan: Acara[];
   konten: { menungguPersetujuan: number; sedangDibuat: number; terjadwal: number; gagal: number };
   google: { siap: boolean; tersambung: boolean; galat: string | null };
+  pengunjung?: RingkasanPengunjung | null;
 };
 
 export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: ReactNode; buka: (h: "agenda" | "studio" | "aplikasi") => void }) {
@@ -116,6 +118,49 @@ export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: 
                 <Angka n={r.konten.gagal} label="Gagal" />
               </div>
             </Kartu>
+
+            {r.pengunjung && (
+              <section className="rounded-2xl border border-border bg-card p-5">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h2 className="flex items-center gap-2 font-heading text-lg">
+                    <Users className="size-5 text-emas" /> Pengunjung Situs
+                  </h2>
+                  <span className="text-xs text-muted-foreground">Anti-bot · 1 unik/hari · {r.pengunjung.persenHp}% HP</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <AngkaPengunjung unik={r.pengunjung.hariIniUnik} tayangan={r.pengunjung.hariIniTayangan} label="Hari ini" sorot />
+                  <AngkaPengunjung unik={r.pengunjung.pekanUnik} tayangan={r.pengunjung.pekanTayangan} label="7 hari" />
+                  <AngkaPengunjung unik={r.pengunjung.bulanUnik} tayangan={r.pengunjung.bulanTayangan} label="30 hari" />
+                  <AngkaPengunjung unik={r.pengunjung.totalUnik} tayangan={r.pengunjung.totalTayangan} label="Total" />
+                </div>
+                {(r.pengunjung.halamanTeratas.length > 0 || r.pengunjung.sumberTeratas.length > 0) && (
+                  <div className="mt-4 grid gap-4 border-t border-border/60 pt-4 text-xs sm:grid-cols-2">
+                    <div>
+                      <p className="mb-2 font-medium text-muted-foreground">Halaman terpopuler (30 hari)</p>
+                      <ul className="space-y-1">
+                        {r.pengunjung.halamanTeratas.map((h) => (
+                          <li key={h.jalur} className="flex justify-between gap-2">
+                            <span className="truncate font-mono text-foreground/90">{h.jalur}</span>
+                            <span className="shrink-0 tabular-nums text-muted-foreground">{h.tayangan.toLocaleString("id-ID")}×</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="mb-2 font-medium text-muted-foreground">Sumber kunjungan (30 hari)</p>
+                      <ul className="space-y-1">
+                        {r.pengunjung.sumberTeratas.map((s) => (
+                          <li key={s.sumber} className="flex justify-between gap-2">
+                            <span className="truncate text-foreground/90">{s.sumber}</span>
+                            <span className="shrink-0 tabular-nums text-muted-foreground">{s.tayangan.toLocaleString("id-ID")}×</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
           </>
         )}
       </main>
@@ -140,6 +185,16 @@ function Angka({ n, label, sorot }: { n: number; label: string; sorot?: boolean 
     <div className="rounded-xl bg-white/5 px-3 py-2">
       <p className={`font-heading text-2xl tabular-nums ${sorot && n > 0 ? "text-emas" : ""}`}>{n}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function AngkaPengunjung({ unik, tayangan, label, sorot }: { unik: number; tayangan: number; label: string; sorot?: boolean }) {
+  return (
+    <div className="rounded-xl bg-white/5 px-3 py-2">
+      <p className={`font-heading text-2xl tabular-nums ${sorot && unik > 0 ? "text-emas" : ""}`}>{unik.toLocaleString("id-ID")}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-[11px] tabular-nums text-redup">{tayangan.toLocaleString("id-ID")} tayangan</p>
     </div>
   );
 }

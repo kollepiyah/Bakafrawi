@@ -17,6 +17,7 @@ import {
 } from "./agenda-murni";
 import { rest } from "./db-server";
 import { aksesToken, adaGoogle, GoogleTerputus, kalender } from "./google-server";
+import { ringkasanKunjunganAdmin } from "./kunjungan-server";
 import { bacaPengaturan, pastikanSemuaJadwalRutin, simpanPengaturan } from "./studio-server";
 import { adaBot, kirim } from "./telegram-server";
 
@@ -221,11 +222,12 @@ export async function statusGoogle() {
 export async function ringkasanBeranda(sekarang = new Date()) {
   const hariIni = rentangHariWIB(sekarang);
   const pekan = rentangHariWIB(sekarang, 1, 7);
-  const [acaraHariIni, acaraPekan, konten, google] = await Promise.all([
+  const [acaraHariIni, acaraPekan, konten, google, pengunjung] = await Promise.all([
     daftarAcara(hariIni.dari, hariIni.sampai),
     daftarAcara(pekan.dari, pekan.sampai),
     rest("studio_tugas?select=status,status_tayang&dibuat=gte." + iso(new Date(sekarang.getTime() - 30 * 24 * 3600_000))) as Promise<{ status: string; status_tayang: string }[]>,
     statusGoogle(),
+    ringkasanKunjunganAdmin(sekarang).catch(() => null),
   ]);
   return {
     tanggal: tanggalWIB(sekarang),
@@ -238,5 +240,6 @@ export async function ringkasanBeranda(sekarang = new Date()) {
       gagal: konten.filter((k) => k.status === "gagal" || k.status_tayang === "gagal").length,
     },
     google,
+    pengunjung,
   };
 }

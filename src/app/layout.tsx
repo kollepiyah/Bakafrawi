@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
+import { PencatatPengunjung } from "@/components/situs/pencatat-pengunjung";
 import { ambilKonten } from "@/lib/konten";
 import "./globals.css";
 
@@ -28,6 +29,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="id" className={`${jakarta.variable} ${fraunces.variable}`}>
       <body className="min-h-dvh overflow-x-hidden">
+        <PencatatPengunjung />
         {children}
         {/* Analitik dipasang sekali di sini. Umami dilepas 19 Nov 2026: statistiknya tak bisa tampil langsung di situs. */}
         {gaId && (
