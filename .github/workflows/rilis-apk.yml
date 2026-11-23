@@ -26,8 +26,9 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Siapkan Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Siapkan Android SDK (bawaan runner)
+        run: |
+          yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
 
       - name: Siapkan keystore rilis dari GitHub Secrets
         working-directory: aplikasi-android
