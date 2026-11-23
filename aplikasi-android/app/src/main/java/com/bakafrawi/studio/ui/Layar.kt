@@ -568,15 +568,35 @@ private fun LayarBeranda(
                                 }
                                 if (ig.posts.isNotEmpty()) {
                                     Spacer(Modifier.height(2.dp))
-                                    Text("Postingan terbaru:", color = Redup, fontSize = 12.sp)
-                                    ig.posts.take(4).forEach { p ->
+                                    Text("Postingan & Story terbaru:", color = Redup, fontSize = 12.sp)
+                                    ig.posts.take(6).forEach { p ->
+                                        val adalahStory = p.format == "story"
+                                        val badgeFormat = when (p.format) {
+                                            "story" -> "STORY"
+                                            "feed" -> "FEED"
+                                            else -> "REELS"
+                                        }
+                                        val warnaBadge = when (p.format) {
+                                            "story" -> Color(0xFFE879F9)
+                                            "feed" -> EmasMuda
+                                            else -> Color(0xFF38BDF8)
+                                        }
                                         val judulPost = p.caption?.lineSequence()?.firstOrNull()?.trim()?.ifBlank { null }
-                                            ?: "${p.merek.uppercase()} · ${p.jenis}"
+                                            ?: "${p.merek.uppercase()} · ${if (adalahStory) "Story IG" else p.jenis}"
                                         val metrik = buildList {
-                                            p.views?.let { add("${it} views") }
-                                            add("${p.likes} suka")
-                                            add("${p.comments} komen")
-                                            p.saved?.takeIf { it > 0 }?.let { add("${it} simpan") }
+                                            if (p.views != null) {
+                                                add("${p.views} ${if (adalahStory) "penonton" else "views"}")
+                                            } else if (adalahStory && p.arsipStory) {
+                                                add("arsip >24 jam")
+                                            }
+                                            if (adalahStory) {
+                                                p.reach?.takeIf { it != p.views }?.let { add("$it unik") }
+                                                p.replies?.takeIf { it > 0 }?.let { add("$it balas") }
+                                            } else {
+                                                add("${p.likes} suka")
+                                                add("${p.comments} komen")
+                                                p.saved?.takeIf { it > 0 }?.let { add("$it simpan") }
+                                            }
                                         }.joinToString(" · ")
                                         Column(
                                             Modifier
@@ -586,10 +606,24 @@ private fun LayarBeranda(
                                                     p.permalink?.let { url -> konteksDeck.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
                                                 }
                                                 .padding(10.dp),
-                                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                                            verticalArrangement = Arrangement.spacedBy(3.dp),
                                         ) {
-                                            Text(judulPost, fontSize = 13.sp, maxLines = 1)
-                                            Text(metrik, fontSize = 11.sp, color = EmasMuda)
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Text(
+                                                    badgeFormat,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = warnaBadge,
+                                                    modifier = Modifier
+                                                        .background(warnaBadge.copy(alpha = 0.16f), RoundedCornerShape(4.dp))
+                                                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                                                )
+                                                Text(judulPost, fontSize = 13.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                                            }
+                                            Text(metrik.ifBlank { "Menunggu data insight…" }, fontSize = 11.sp, color = EmasMuda)
                                         }
                                     }
                                 }

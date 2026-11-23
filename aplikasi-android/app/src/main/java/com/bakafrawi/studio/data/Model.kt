@@ -111,6 +111,7 @@ data class PostInsightItem(
     val id: String,
     val merek: String,
     val jenis: String,
+    val format: String = "reels", // "reels" | "feed" | "story"
     val caption: String?,
     val permalink: String?,
     val likes: Int,
@@ -119,6 +120,8 @@ data class PostInsightItem(
     val reach: Int?,
     val saved: Int?,
     val shares: Int?,
+    val replies: Int? = null,
+    val arsipStory: Boolean = false,
 )
 
 data class RingkasInsightIg(
@@ -182,15 +185,30 @@ data class UsulanArahan(
     val arahan: String,
 )
 
+data class VideoRutinItem(
+    val id: String,
+    val judul: String,
+    val url: String,
+    val jenis: String = "video",
+    val sasaran: String = "story",
+    val wajib: Boolean = false,
+    val aktif: Boolean = true,
+    val durasi: Int? = null,
+    val caption: String = "",
+)
+
 data class JadwalRutinData(
     val aktif: Boolean,
-    val jamWib: String,
+    val jam: String,
     val hari: List<Int>,
-    val modeKonten: String, // "video-bank" | "ai-baru"
-    val formatAi: String,   // "video-animasi" | "poster-story"
-    val temaAi: String,     // "otomatis" | "hangat-kafe" | "terang-modern" | "minimalis-gelap"
+    val mode: String, // "acak" | "wajib+bergilir" | "semua"
+    val aiAktif: Boolean,
+    val aiFormat: String, // "video-animasi" | "poster"
+    val aiGaya: String,   // "otomatis" | "hangat-kafe" | "terang-modern" | "minimalis-gelap"
     val berikutnya: String?,
-    val jumlahVideo: Int,
+    val videoBerikutnyaId: String? = null,
+    val videoBerikutnyaJudul: String? = null,
+    val video: List<VideoRutinItem> = emptyList(),
 )
 
 data class KonsepViral(

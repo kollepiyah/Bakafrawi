@@ -1,7 +1,14 @@
 import { permintaanDariAdmin } from "@/lib/admin-server";
 import type { JadwalRutin } from "@/lib/jadwal-tayang-murni";
 import { SUPABASE_URL } from "@/lib/lingkungan";
-import { adaKunciServer, bacaJadwalRutin, buatPratinjauRutin, simpanJadwalRutin, tayangkanRutinSekarang } from "@/lib/studio-server";
+import {
+  acakUlangJadwalRutin,
+  adaKunciServer,
+  bacaJadwalRutin,
+  buatPratinjauRutin,
+  simpanJadwalRutin,
+  tayangkanRutinSekarang,
+} from "@/lib/studio-server";
 
 // Pengaturan jadwal otomatis setiap jam buka (mis. upload video Story Opening Lek Kopi).
 export async function GET(req: Request) {
@@ -26,7 +33,7 @@ export async function POST(req: Request) {
   }
   const origin = new URL(req.url).origin;
   const isi = (await req.json()) as {
-    aksi?: "simpan" | "tayang-sekarang" | "pratinjau" | "izin-unggah";
+    aksi?: "simpan" | "tayang-sekarang" | "pratinjau" | "izin-unggah" | "acak-ulang";
     merek?: string;
     namaBerkas?: string;
     jadwal?: Partial<JadwalRutin>;
@@ -72,12 +79,22 @@ export async function POST(req: Request) {
         pesan: `Pratinjau Story Jam Buka sedang dibuat${r.dipicu ? " sekarang (±1–2 menit)" : " pada putaran mesin berikutnya"}. Hasilnya akan muncul di Riwayat Studio & dikirim ke Telegram untuk Kyai cek dulu (tidak langsung tayang).`,
       });
     }
+    if (isi.aksi === "acak-ulang") {
+      const r = await acakUlangJadwalRutin(merek, origin);
+      return Response.json({
+        ok: true,
+        ...r,
+        pesan: r.videoBerikutnya?.judul
+          ? `Video acak berikutnya diganti ke: ${r.videoBerikutnya.judul}.`
+          : "Video acak berikutnya berhasil diundi ulang.",
+      });
+    }
     if (isi.aksi === "tayang-sekarang") {
       const r = await tayangkanRutinSekarang(merek, origin);
       return Response.json({
         ok: true,
         ...r,
-        pesan: `Story Jam Buka (${r.jumlahVideo} video) sedang ditayangkan ke Instagram${r.dipicu ? " sekarang." : " pada putaran mesin berikutnya."}`,
+        pesan: `Story Jam Buka (${r.videoDipilih ? `"${r.videoDipilih}"` : `${r.jumlahVideo} video`}) sedang ditayangkan ke Instagram${r.dipicu ? " sekarang." : " pada putaran mesin berikutnya."}`,
       });
     }
     const r = await simpanJadwalRutin(merek, isi.jadwal ?? {}, origin);

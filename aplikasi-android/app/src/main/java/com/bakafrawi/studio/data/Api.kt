@@ -41,6 +41,12 @@ class GalatApi(pesan: String, val kode: Int = 0) : Exception(pesan)
  */
 class Api(private val sesi: Sesi) {
     private val http = OkHttpClient.Builder().callTimeout(60, TimeUnit.SECONDS).build()
+    private val httpUnggah = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(180, TimeUnit.SECONDS)
+        .readTimeout(180, TimeUnit.SECONDS)
+        .callTimeout(240, TimeUnit.SECONDS)
+        .build()
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
     private val jenisJson = "application/json".toMediaType()
     private val nfId = NumberFormat.getIntegerInstance(Locale("id", "ID"))
@@ -223,6 +229,7 @@ class Api(private val sesi: Sesi) {
                     id = p.teks("id") ?: return@mapNotNull null,
                     merek = p.teks("merek") ?: "",
                     jenis = p.teks("jenis") ?: "",
+                    format = p.teks("format") ?: if (p.teks("jenis") == "video") "reels" else "feed",
                     caption = p.teks("caption"),
                     permalink = p.teks("permalink"),
                     likes = p.bulat("likes"),
@@ -231,6 +238,8 @@ class Api(private val sesi: Sesi) {
                     reach = p.prim("reach")?.intOrNull,
                     saved = p.prim("saved")?.intOrNull,
                     shares = p.prim("shares")?.intOrNull,
+                    replies = p.prim("replies")?.intOrNull,
+                    arsipStory = p.bool("arsipStory"),
                 )
             } ?: emptyList()
             RingkasInsightIg(
@@ -482,23 +491,134 @@ class Api(private val sesi: Sesi) {
         Unit
     }
 
-    // ==================== STORY JAM BUKA (RUTIN) ====================
+    // ==================== UNGGAH MANUAL & STORY JAM BUKA (RUTIN) ====================
+
+    private fun unggahKeUrlBertanda(uploadUrl: String, bytes: ByteArray, mime: String) {
+        val req = Request.Builder()
+            .url(uploadUrl)
+            .put(bytes.toRequestBody(mime.toMediaType()))
+            .build()
+        httpUnggah.newCall(req).execute().use { res ->
+            if (!res.isSuccessful) {
+                throw GalatApi("Gagal mengunggah berkas ke penyimpanan (HTTP ${res.code}).", res.code)
+            }
+        }
+    }
+
+    /** Unggah video/foto manual dari HP lalu tayangkan sekarang, jadwalkan otomatis (WIB), atau simpan draf. */
+    suspend fun unggahKontenManual(
+        merek: String,
+        namaBerkas: String,
+        bytes: ByteArray,
+        adalahGambar: Boolean,
+        judul: String,
+        caption: String,
+        sasaran: String,
+        modeTayang: String, // "jadwal" | "sekarang" | "draf"
+        jadwalWib: String?,
+    ): String = withContext(Dispatchers.IO) {
+        val izin = situs(
+            "/api/studio/unggah",
+            buildJsonObject {
+                put("aksi", "izin-unggah")
+                put("merek", merek)
+                put("namaBerkas", namaBerkas)
+            },
+        )
+        val uploadUrl = izin.teks("uploadUrl") ?: throw GalatApi("Server tidak mengembalikan alamat unggah.")
+        val publicUrl = izin.teks("publicUrl") ?: throw GalatApi("Server tidak mengembalikan tautan media.")
+        val mime = if (adalahGambar) {
+            if (namaBerkas.lowercase().endsWith(".png")) "image/png" else "image/jpeg"
+        } else {
+            "video/mp4"
+        }
+        unggahKeUrlBertanda(uploadUrl, bytes, mime)
+
+        val buat = situs(
+            "/api/studio/unggah",
+            buildJsonObject {
+                put("aksi", "buat")
+                put("merek", merek)
+                put("judul", judul.ifBlank { namaBerkas.substringBeforeLast('.') })
+                put("url", publicUrl)
+                put("jenis", if (adalahGambar) "gambar" else "video")
+                put("caption", if (sasaran == "story") "" else caption)
+                put("sasaran", sasaran)
+                put("modeTayang", modeTayang)
+                if (modeTayang == "jadwal" && !jadwalWib.isNullOrBlank()) put("jadwal", jadwalWib)
+            },
+        )
+        buat.teks("pesan") ?: "Konten berhasil diunggah!"
+    }
+
+    /** Unggah 1 video/foto ke koleksi Story Otomatis (rutin-buka) dan kembalikan item baru. */
+    suspend fun unggahVideoRutin(
+        merek: String,
+        namaBerkas: String,
+        bytes: ByteArray,
+        adalahGambar: Boolean,
+    ): VideoRutinItem = withContext(Dispatchers.IO) {
+        val izin = situs(
+            "/api/studio/rutin",
+            buildJsonObject {
+                put("aksi", "izin-unggah")
+                put("merek", merek)
+                put("namaBerkas", namaBerkas)
+            },
+        )
+        val uploadUrl = izin.teks("uploadUrl") ?: throw GalatApi("Server tidak mengembalikan alamat unggah.")
+        val publicUrl = izin.teks("publicUrl") ?: throw GalatApi("Server tidak mengembalikan tautan media.")
+        val mime = if (adalahGambar) {
+            if (namaBerkas.lowercase().endsWith(".png")) "image/png" else "image/jpeg"
+        } else {
+            "video/mp4"
+        }
+        unggahKeUrlBertanda(uploadUrl, bytes, mime)
+        VideoRutinItem(
+            id = "rutin-${System.currentTimeMillis()}",
+            judul = namaBerkas.substringBeforeLast('.').replace(Regex("[-_]+"), " ").trim().ifBlank { "Video Story" },
+            url = publicUrl,
+            jenis = if (adalahGambar) "gambar" else "video",
+            sasaran = "story",
+            wajib = false,
+            aktif = true,
+            caption = "We are OPEN! Lek Kopi Waru Sidoarjo ☕",
+        )
+    }
 
     suspend fun bacaRutin(merek: String = "lekkopi"): JadwalRutinData = withContext(Dispatchers.IO) {
         val isi = situs("/api/studio/rutin?merek=$merek")
         val j = runCatching { isi["jadwal"]?.jsonObject }.getOrNull() ?: JsonObject(emptyMap())
         val hari = runCatching { j["hari"]?.jsonArray }.getOrNull()?.mapNotNull { it.jsonPrimitive.intOrNull }
             ?: listOf(1, 2, 3, 4, 5, 6)
-        val daftarVideo = runCatching { j["video"]?.jsonArray }.getOrNull()?.size ?: 0
+        val daftarVideo = runCatching { j["video"]?.jsonArray }.getOrNull()?.mapNotNull { el ->
+            val v = runCatching { el.jsonObject }.getOrNull() ?: return@mapNotNull null
+            val url = v.teks("url") ?: return@mapNotNull null
+            VideoRutinItem(
+                id = v.teks("id") ?: "video-${url.hashCode()}",
+                judul = v.teks("judul") ?: "Video Story",
+                url = url,
+                jenis = v.teks("jenis") ?: "video",
+                sasaran = v.teks("sasaran") ?: "story",
+                wajib = v.bool("wajib"),
+                aktif = v["aktif"]?.jsonPrimitive?.booleanOrNull != false,
+                durasi = v.prim("durasi")?.intOrNull,
+                caption = v.teks("caption") ?: "",
+            )
+        } ?: emptyList()
+        val vb = runCatching { isi["videoBerikutnya"]?.jsonObject }.getOrNull()
         JadwalRutinData(
-            aktif = j["aktif"]?.jsonPrimitive?.booleanOrNull == true,
-            jamWib = j.teks("jamWib") ?: "14:00",
+            aktif = j.bool("aktif"),
+            jam = j.teks("jam") ?: "14:00",
             hari = hari,
-            modeKonten = j.teks("modeKonten") ?: "ai-baru",
-            formatAi = j.teks("formatAi") ?: "video-animasi",
-            temaAi = j.teks("temaAi") ?: "otomatis",
+            mode = j.teks("mode") ?: "acak",
+            aiAktif = j.bool("aiAktif"),
+            aiFormat = j.teks("aiFormat") ?: "video-animasi",
+            aiGaya = j.teks("aiGaya") ?: "otomatis",
             berikutnya = isi.teks("berikutnya"),
-            jumlahVideo = daftarVideo,
+            videoBerikutnyaId = vb?.teks("id"),
+            videoBerikutnyaJudul = vb?.teks("judul"),
+            video = daftarVideo,
         )
     }
 
@@ -510,21 +630,42 @@ class Api(private val sesi: Sesi) {
                 "jadwal",
                 buildJsonObject {
                     put("aktif", data.aktif)
-                    put("jamWib", data.jamWib)
+                    put("jam", data.jam)
                     put("hari", buildJsonArray { data.hari.forEach { add(it) } })
-                    put("modeKonten", data.modeKonten)
-                    put("formatAi", data.formatAi)
-                    put("temaAi", data.temaAi)
+                    put("mode", data.mode)
+                    put("aiAktif", data.aiAktif)
+                    put("aiFormat", data.aiFormat)
+                    put("aiGaya", data.aiGaya)
+                    put(
+                        "video",
+                        buildJsonArray {
+                            data.video.forEach { v ->
+                                add(
+                                    buildJsonObject {
+                                        put("id", v.id)
+                                        put("judul", v.judul)
+                                        put("url", v.url)
+                                        put("jenis", v.jenis)
+                                        put("sasaran", v.sasaran)
+                                        put("wajib", v.wajib)
+                                        put("aktif", v.aktif)
+                                        if (v.durasi != null) put("durasi", v.durasi)
+                                        put("caption", v.caption)
+                                    },
+                                )
+                            }
+                        },
+                    )
                 },
             )
         }
         val isi = situs("/api/studio/rutin", badan)
-        isi.teks("pesan") ?: "Pengaturan Story Jam Buka disimpan."
+        isi.teks("pesan") ?: "Pengaturan Story Otomatis disimpan."
     }
 
     suspend fun aksiRutin(merek: String, aksi: String): String = withContext(Dispatchers.IO) {
         val isi = situs("/api/studio/rutin", buildJsonObject { put("aksi", aksi); put("merek", merek) })
-        isi.teks("pesan") ?: "Permintaan Story Jam Buka dikirim."
+        isi.teks("pesan") ?: "Permintaan Story Otomatis dikirim."
     }
 
     // ==================== RISET & SAMBUNGAN ====================

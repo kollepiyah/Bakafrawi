@@ -1,6 +1,7 @@
 import "server-only";
 import { adaKunciServer, rest } from "./db-server";
 import {
+  catatRiwayatVideoBuka,
   jamBukaBerikutnya,
   jamWibBerikutnya,
   normalisasiJadwalRutin,
@@ -288,6 +289,82 @@ export async function buatTugas(isi: {
   return { tugas: t, dipicu: await picuStudio() };
 }
 
+export async function buatTugasUnggahManual(isi: {
+  merek?: string;
+  judul?: string;
+  url: string;
+  sampulUrl?: string | null;
+  jenis: "video" | "gambar";
+  durasi?: number;
+  caption?: string;
+  sasaran?: SasaranTayang | string | null;
+  modeTayang?: "sekarang" | "jadwal" | "draf";
+  jadwal?: string | null;
+}) {
+  const url = String(isi.url ?? "").trim();
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error("URL berkas media tidak sah.");
+  }
+  const merek = String(isi.merek || "bakafrawi").trim();
+  const jenis = isi.jenis === "gambar" ? "gambar" : "video";
+  const sasaran = normalisasiSasaran(isi.sasaran);
+  const modeTayang = isi.modeTayang === "sekarang" || isi.modeTayang === "jadwal" ? isi.modeTayang : "draf";
+
+  let jadwalIso: string | null = null;
+  if (modeTayang === "jadwal") {
+    const parsed = uraiJadwalCustomWIB(String(isi.jadwal ?? ""));
+    if (!parsed.ok) throw new Error(parsed.pesan);
+    jadwalIso = parsed.tanggal.toISOString();
+  }
+
+  const judulBersih = String(isi.judul ?? "").trim().slice(0, 120) || (jenis === "video" ? "Video Unggah Manual" : "Foto Unggah Manual");
+  const hasil: Record<string, unknown>[] = [
+    {
+      jenis,
+      rasio: sasaran === "feed" ? "potret" : "story",
+      url,
+      ...(jenis === "video" && Number.isFinite(Number(isi.durasi)) && Number(isi.durasi) > 0
+        ? { durasi: Math.round(Number(isi.durasi)) }
+        : {}),
+      judul: judulBersih,
+    },
+  ];
+  if (isi.sampulUrl && /^https?:\/\//i.test(isi.sampulUrl.trim())) {
+    hasil.push({ jenis: "gambar", rasio: "sampul", url: isi.sampulUrl.trim() });
+  }
+
+  const statusTayang = modeTayang === "sekarang" ? "antre" : modeTayang === "jadwal" ? "dijadwalkan" : "belum";
+  const baris = {
+    merek,
+    jenis,
+    produk_slug: "unggah-manual",
+    arahan: judulBersih,
+    latar: "polos",
+    status: "selesai",
+    selesai: new Date().toISOString(),
+    status_tayang: statusTayang,
+    jadwal_tayang: jadwalIso,
+    caption: String(isi.caption ?? "").trim().slice(0, 2200),
+    naskah: {
+      sumber: "unggah-manual",
+      judul: judulBersih,
+      sasaran,
+    },
+    tayang: { sasaran },
+    hasil,
+    galat: null,
+  };
+
+  const [tugas] = (await rest("studio_tugas", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(baris),
+  })) as RingkasTugas[];
+
+  const dipicu = modeTayang === "sekarang" ? await picuStudio() : false;
+  return { tugas, dipicu, jadwalIso };
+}
+
 export async function buatUlang(id: string) {
   const [lama] = (await rest(`studio_tugas?id=eq.${id}&select=produk_slug,jenis,latar,arahan,merek`)) as {
     produk_slug: string;
@@ -314,14 +391,17 @@ export async function bacaJadwalRutin(slugMerek = "lekkopi") {
   const jadwal = normalisasiJadwalRutin(m.profil?.jadwal_rutin, m.slug);
   const berikutnya = jamBukaBerikutnya(jadwal, new Date());
   const [terjadwal] = (await rest(
-    `studio_tugas?merek=eq.${encodeURIComponent(m.slug)}&produk_slug=eq.rutin-buka&status_tayang=in.(dijadwalkan,antre)&select=id,status_tayang,jadwal_tayang,hasil&order=dibuat.desc&limit=1`,
-  ).catch(() => [])) as RingkasTugas[];
+    `studio_tugas?merek=eq.${encodeURIComponent(m.slug)}&produk_slug=eq.rutin-buka&status_tayang=in.(dijadwalkan,antre)&select=id,status_tayang,jadwal_tayang,hasil,naskah&order=dibuat.desc&limit=1`,
+  ).catch(() => [])) as (RingkasTugas & { naskah?: { videoDipilihId?: string; videoDipilihJudul?: string } | null })[];
   return {
     merek: m.slug,
     namaMerek: m.nama,
     jadwal,
     berikutnya: berikutnya ? berikutnya.toISOString() : null,
     tugasTerjadwal: terjadwal ?? null,
+    videoBerikutnya: terjadwal?.naskah?.videoDipilihJudul
+      ? { id: terjadwal.naskah.videoDipilihId ?? null, judul: terjadwal.naskah.videoDipilihJudul }
+      : null,
   };
 }
 
@@ -330,11 +410,17 @@ export async function sinkronTugasJadwalRutin(
   merek: Merek,
   jadwal: JadwalRutin,
   originSitus = "https://bakafrawi.com",
+  opsi?: { paksaAcakUlang?: boolean },
 ): Promise<RingkasTugas | null> {
   const berikutnya = jamBukaBerikutnya(jadwal, new Date());
   const antrean = (await rest(
-    `studio_tugas?merek=eq.${encodeURIComponent(merek.slug)}&produk_slug=eq.rutin-buka&status_tayang=eq.dijadwalkan&select=id,jadwal_tayang&order=dibuat.desc`,
-  ).catch(() => [])) as { id: string; jadwal_tayang: string | null }[];
+    `studio_tugas?merek=eq.${encodeURIComponent(merek.slug)}&produk_slug=eq.rutin-buka&status_tayang=eq.dijadwalkan&select=id,jadwal_tayang,naskah,hasil&order=dibuat.desc`,
+  ).catch(() => [])) as {
+    id: string;
+    jadwal_tayang: string | null;
+    naskah?: { videoDipilihId?: string; mode?: string } | null;
+    hasil?: { id?: string; url?: string; judul?: string }[];
+  }[];
 
   if (!jadwal.aktif || !berikutnya) {
     // Matikan/hapus antrean rutin yang belum tayang bila jadwal rutin dinonaktifkan
@@ -344,7 +430,25 @@ export async function sinkronTugasJadwalRutin(
     return null;
   }
 
-  const dipilih = pilihVideoBuka(jadwal, berikutnya);
+  const videoSebelumnyaId = antrean[0]?.naskah?.videoDipilihId ?? null;
+  const modeSebelumnya = antrean[0]?.naskah?.mode ?? null;
+  let dipilih = pilihVideoBuka(jadwal, berikutnya, {
+    hindariId: opsi?.paksaAcakUlang ? videoSebelumnyaId : undefined,
+  });
+
+  // Bila mode acak sudah memilih 1 video untuk antrean terjadwal saat ini dan tidak dipaksa acak ulang,
+  // pertahankan pilihan itu agar tidak berubah-ubah saat detak 5 menit berjalan.
+  if (
+    jadwal.mode === "acak" &&
+    !opsi?.paksaAcakUlang &&
+    modeSebelumnya === "acak" &&
+    videoSebelumnyaId
+  ) {
+    const cocokLama = jadwal.video.find((v) => v.aktif && v.id === videoSebelumnyaId);
+    if (cocokLama) {
+      dipilih = [cocokLama];
+    }
+  }
   if (!jadwal.aiAktif && !dipilih.length) return null;
 
   const daftarMenu = jadwal.aiAktif && merek.slug === "lekkopi" ? await ambilMenuLekKopi() : [];
@@ -371,6 +475,7 @@ export async function sinkronTugasJadwalRutin(
     : null;
 
   const hasil = dipilih.map((v) => ({
+    id: v.id,
     jenis: v.jenis,
     rasio: "story",
     url: mutlakUrlMedia(v.url, originSitus),
@@ -381,11 +486,12 @@ export async function sinkronTugasJadwalRutin(
   }));
 
   const jmlTotal = dipilih.length + (aiRutin ? 1 : 0);
+  const labelMode = jadwal.mode === "acak" ? "acak" : jadwal.mode === "wajib+bergilir" ? "bergilir" : "semua";
   const isiTugas = {
     merek: merek.slug,
     jenis: aiRutin?.format === "poster" && !dipilih.length ? "gambar" : "video",
     produk_slug: "rutin-buka",
-    arahan: `Jadwal otomatis jam buka (${jadwal.jam} WIB · ${jmlTotal} konten${aiRutin ? ` + AI ${aiRutin.format}` : ""})`,
+    arahan: `Jadwal otomatis jam buka (${jadwal.jam} WIB · mode ${labelMode} · ${dipilih[0]?.judul ?? `${jmlTotal} konten`}${aiRutin ? ` + AI ${aiRutin.format}` : ""})`,
     latar: "polos",
     status: "selesai",
     selesai: new Date().toISOString(),
@@ -394,9 +500,12 @@ export async function sinkronTugasJadwalRutin(
     caption: dipilih[0]?.caption || `We are OPEN! ${merek.nama} ☕`,
     naskah: {
       sumber: aiRutin ? "jadwal-rutin-ai" : "jadwal-rutin",
-      judul: `Story Jam Buka (${jadwal.jam} WIB)`,
+      judul: `Story Jam Buka (${jadwal.jam} WIB)${dipilih[0]?.judul ? ` · ${dipilih[0].judul}` : ""}`,
       sasaran: "story",
       rutin: true,
+      mode: jadwal.mode,
+      videoDipilihId: dipilih[0]?.id ?? null,
+      videoDipilihJudul: dipilih[0]?.judul ?? null,
       ...(aiRutin ? { aiRutin } : {}),
     },
     tayang: { sasaran: "story", rutin: true },
@@ -445,11 +554,36 @@ export async function simpanJadwalRutin(
   });
   const tugasTerjadwal = await sinkronTugasJadwalRutin({ ...m, profil: profilBaru }, jadwal, originSitus);
   const berikutnya = jamBukaBerikutnya(jadwal, new Date());
+  const naskahTugas = (tugasTerjadwal as unknown as { naskah?: { videoDipilihId?: string; videoDipilihJudul?: string } } | null)?.naskah;
   return {
     merek: m.slug,
     jadwal,
     berikutnya: berikutnya ? berikutnya.toISOString() : null,
     tugasTerjadwal,
+    videoBerikutnya: naskahTugas?.videoDipilihJudul
+      ? { id: naskahTugas.videoDipilihId ?? null, judul: naskahTugas.videoDipilihJudul }
+      : null,
+  };
+}
+
+/** Undi ulang video acak untuk jadwal rutin berikutnya tanpa mengubah pengaturan jam/hari. */
+export async function acakUlangJadwalRutin(slugMerek = "lekkopi", originSitus = "https://bakafrawi.com") {
+  const daftar = await daftarMerek();
+  const m = daftar.find((x) => x.slug === slugMerek);
+  if (!m) throw new Error(`Merek "${slugMerek}" tidak ditemukan.`);
+  const jadwal = normalisasiJadwalRutin(m.profil?.jadwal_rutin, m.slug);
+  if (!jadwal.aktif) throw new Error("Aktifkan jadwal buka terlebih dahulu.");
+  const tugasTerjadwal = await sinkronTugasJadwalRutin(m, jadwal, originSitus, { paksaAcakUlang: true });
+  const berikutnya = jamBukaBerikutnya(jadwal, new Date());
+  const naskahTugas = (tugasTerjadwal as unknown as { naskah?: { videoDipilihId?: string; videoDipilihJudul?: string } } | null)?.naskah;
+  return {
+    merek: m.slug,
+    jadwal,
+    berikutnya: berikutnya ? berikutnya.toISOString() : null,
+    tugasTerjadwal,
+    videoBerikutnya: naskahTugas?.videoDipilihJudul
+      ? { id: naskahTugas.videoDipilihId ?? null, judul: naskahTugas.videoDipilihJudul }
+      : null,
   };
 }
 
@@ -477,6 +611,7 @@ export async function tayangkanRutinSekarang(slugMerek = "lekkopi", originSitus 
     : null;
 
   const hasil = dipilih.map((v) => ({
+    id: v.id,
     jenis: v.jenis,
     rasio: "story",
     url: mutlakUrlMedia(v.url, originSitus),
@@ -494,7 +629,7 @@ export async function tayangkanRutinSekarang(slugMerek = "lekkopi", originSitus 
       merek: m.slug,
       jenis: aiRutin?.format === "poster" && !dipilih.length ? "gambar" : "video",
       produk_slug: "rutin-buka",
-      arahan: `Tayang langsung Story Jam Buka (${jmlTotal} konten${aiRutin ? ` · termasuk AI ${aiRutin.format}` : ""})`,
+      arahan: `Tayang langsung Story Jam Buka (${dipilih[0]?.judul ?? `${jmlTotal} konten`}${aiRutin ? ` · termasuk AI ${aiRutin.format}` : ""})`,
       latar: "polos",
       status: "selesai",
       selesai: new Date().toISOString(),
@@ -503,17 +638,32 @@ export async function tayangkanRutinSekarang(slugMerek = "lekkopi", originSitus 
       caption: dipilih[0]?.caption || `We are OPEN! ${m.nama} ☕`,
       naskah: {
         sumber: aiRutin ? "jadwal-rutin-ai" : "jadwal-rutin",
-        judul: `Story Jam Buka (${m.nama})`,
+        judul: `Story Jam Buka (${m.nama})${dipilih[0]?.judul ? ` · ${dipilih[0].judul}` : ""}`,
         sasaran: "story",
         rutin: true,
+        mode: jadwal.mode,
+        videoDipilihId: dipilih[0]?.id ?? null,
+        videoDipilihJudul: dipilih[0]?.judul ?? null,
         ...(aiRutin ? { aiRutin } : {}),
       },
       tayang: { sasaran: "story", rutin: true },
       hasil,
     }),
   })) as RingkasTugas[];
+
+  // Catat video terpilih ke riwayat agar undian acak berikutnya tidak langsung mengulang video yang sama.
+  if (dipilih[0]?.id && jadwal.mode === "acak") {
+    const riwayatBaru = catatRiwayatVideoBuka(jadwal, dipilih[0].id);
+    const jadwalBaru = { ...jadwal, ...riwayatBaru };
+    await rest(`studio_merek?slug=eq.${encodeURIComponent(m.slug)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ profil: { ...m.profil, jadwal_rutin: jadwalBaru }, diubah: new Date().toISOString() }),
+    }).catch(() => {});
+  }
+
   const dipicu = await picuStudio();
-  return { tugas, dipicu, jumlahVideo: jmlTotal };
+  return { tugas, dipicu, jumlahVideo: jmlTotal, videoDipilih: dipilih[0]?.judul ?? null };
 }
 
 /** Buat pratinjau Story Jam Buka AI dulu (tidak langsung tayang — masuk Riwayat Studio & dikirim ke Telegram dengan tombol persetujuan). */

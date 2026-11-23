@@ -49,10 +49,15 @@ export type JadwalRutin = {
   /** Hari aktif: 0 = Minggu, 1 = Senin, ..., 6 = Sabtu. */
   hari: number[];
   /**
-   * "semua" = upload semua video aktif setiap jam buka;
-   * "wajib+bergilir" = upload semua video wajib + 1 video pendamping secara bergilir tiap hari.
+   * "acak" = pilih 1 video acak tiap hari dari seluruh video aktif (tidak mengulang kemarin);
+   * "wajib+bergilir" = upload semua video wajib + 1 video pendamping secara bergilir tiap hari;
+   * "semua" = upload semua video aktif sekaligus setiap jam buka.
    */
-  mode: "semua" | "wajib+bergilir";
+  mode: "acak" | "semua" | "wajib+bergilir";
+  /** ID video yang sudah pernah tayang dalam putaran acak saat ini (anti-ulang). */
+  riwayatVideo?: string[];
+  /** ID video terakhir yang tayang (menjaga tidak tayang 2 hari berturut-turut saat siklus baru). */
+  terakhirVideoId?: string | null;
   /** Sertakan 1 konten opening baru hasil generate AI setiap jam buka (tanpa perlu bank video). */
   aiAktif?: boolean;
   /** Format konten AI jam buka: "video-animasi" (Remotion 8 dtk ala Bakafrawi) atau "poster" (Story 9:16). */
@@ -89,7 +94,9 @@ export function jadwalRutinBawaan(merek = "lekkopi"): JadwalRutin {
       aktif: false,
       jam: "09:00",
       hari: [1, 2, 3, 4, 5, 6], // Senin - Sabtu
-      mode: "semua",
+      mode: "acak",
+      riwayatVideo: [],
+      terakhirVideoId: null,
       aiAktif: false,
       aiFormat: "video-animasi",
       aiGaya: "otomatis",
@@ -103,7 +110,9 @@ export function jadwalRutinBawaan(merek = "lekkopi"): JadwalRutin {
     aktif: false,
     jam: "09:00",
     hari: [1, 2, 3, 4, 5, 6],
-    mode: "semua",
+    mode: "acak",
+    riwayatVideo: [],
+    terakhirVideoId: null,
     aiAktif: false,
     aiFormat: "video-animasi",
     aiGaya: "otomatis",
@@ -132,7 +141,14 @@ export function normalisasiJadwalRutin(mentah: unknown, merek = "lekkopi"): Jadw
     ? [...new Set(m.hari.map((h) => Number(h)).filter((h) => Number.isInteger(h) && h >= 0 && h <= 6))]
     : bawaan.hari;
 
-  const mode = m.mode === "wajib+bergilir" ? "wajib+bergilir" : "semua";
+  const mode: JadwalRutin["mode"] =
+    m.mode === "acak" || m.mode === "wajib+bergilir" || m.mode === "semua" ? m.mode : bawaan.mode;
+
+  const riwayatVideo = Array.isArray(m.riwayatVideo)
+    ? [...new Set(m.riwayatVideo.map((id) => String(id ?? "").trim()).filter(Boolean))].slice(-30)
+    : [];
+  const terakhirVideoId =
+    typeof m.terakhirVideoId === "string" && m.terakhirVideoId.trim() ? m.terakhirVideoId.trim() : null;
 
   let video: VideoRutin[] = [];
   if (Array.isArray(m.video)) {
@@ -163,6 +179,8 @@ export function normalisasiJadwalRutin(mentah: unknown, merek = "lekkopi"): Jadw
     jam,
     hari: hariValid,
     mode,
+    riwayatVideo,
+    terakhirVideoId,
     aiAktif: Boolean(m.aiAktif),
     aiFormat,
     aiGaya,
@@ -310,13 +328,35 @@ export function jamBukaBerikutnya(jadwal: JadwalRutin, sekarang = new Date()): D
 
 /**
  * Pilih daftar video yang akan diupload pada saat jam buka:
+ * - Mode "acak": pilih 1 video secara acak dari semua video aktif, menghindari video yang sudah
+ *   tayang dalam siklus saat ini (`riwayatVideo`) dan tidak pernah mengulang `terakhirVideoId`
+ *   selama tersedia minimal 2 video aktif.
  * - Mode "semua": semua video aktif (video wajib di urutan pertama, diikuti video lainnya).
  * - Mode "wajib+bergilir": semua video aktif yang ditandai wajib + 1 video pendamping bergilir berdasarkan tanggal.
  */
-export function pilihVideoBuka(jadwal: JadwalRutin, untukTanggal = new Date()): VideoRutin[] {
+export function pilihVideoBuka(
+  jadwal: JadwalRutin,
+  untukTanggal = new Date(),
+  opsi?: { acak?: () => number; hindariId?: string | null },
+): VideoRutin[] {
   const j = normalisasiJadwalRutin(jadwal);
   const aktif = j.video.filter((v) => v.aktif);
   if (!aktif.length) return [];
+
+  if (j.mode === "acak") {
+    if (aktif.length === 1) return [aktif[0]];
+    const sudah = new Set(j.riwayatVideo ?? []);
+    const terakhir = opsi?.hindariId ?? j.terakhirVideoId ?? (j.riwayatVideo?.length ? j.riwayatVideo[j.riwayatVideo.length - 1] : null);
+    let kandidat = aktif.filter((v) => !sudah.has(v.id) && v.id !== terakhir);
+    if (!kandidat.length) {
+      kandidat = aktif.filter((v) => v.id !== terakhir);
+    }
+    if (!kandidat.length) kandidat = aktif;
+    const rng = opsi?.acak ?? Math.random;
+    const r = Math.min(0.999999, Math.max(0, Number(rng())));
+    const idx = Math.floor(r * kandidat.length);
+    return [kandidat[idx] ?? kandidat[0]];
+  }
 
   const wajib = aktif.filter((v) => v.wajib);
   const pendamping = aktif.filter((v) => !v.wajib);
@@ -333,4 +373,20 @@ export function pilihVideoBuka(jadwal: JadwalRutin, untukTanggal = new Date()): 
   }
   if (wajib.length > 0) return wajib;
   return [aktif[Math.abs(hariEpoch) % aktif.length]];
+}
+
+/** Perbarui catatan riwayat video setelah satu video selesai tayang (untuk siklus acak anti-ulang). */
+export function catatRiwayatVideoBuka(
+  jadwal: JadwalRutin,
+  videoId: string | null | undefined,
+): { riwayatVideo: string[]; terakhirVideoId: string | null } {
+  const j = normalisasiJadwalRutin(jadwal);
+  const id = String(videoId ?? "").trim();
+  if (!id) return { riwayatVideo: j.riwayatVideo ?? [], terakhirVideoId: j.terakhirVideoId ?? null };
+  const aktifIds = new Set(j.video.filter((v) => v.aktif).map((v) => v.id));
+  const lama = (j.riwayatVideo ?? []).filter((x) => aktifIds.has(x) && x !== id);
+  const baru = [...lama, id];
+  // Jika seluruh video aktif sudah kebagian giliran, reset siklus mulai dari video terakhir ini saja.
+  const riwayatFinal = aktifIds.size > 1 && baru.length >= aktifIds.size ? [id] : baru;
+  return { riwayatVideo: riwayatFinal, terakhirVideoId: id };
 }

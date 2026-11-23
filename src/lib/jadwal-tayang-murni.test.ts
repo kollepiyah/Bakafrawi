@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  catatRiwayatVideoBuka,
   daftarSlotCepatWIB,
   jadwalRutinBawaan,
   jamBukaBerikutnya,
@@ -99,6 +100,41 @@ test("normalisasiSasaran", () => {
   assert.equal(normalisasiSasaran("reels+story"), "reels+story");
   assert.equal(normalisasiSasaran("tidak-dikenal"), "otomatis");
   assert.equal(normalisasiSasaran(null), "otomatis");
+});
+
+test("pilihVideoBuka mode acak memilih 1 video aktif tanpa mengulang berturut-turut", () => {
+  let jadwal = normalisasiJadwalRutin({
+    aktif: true,
+    jam: "14:00",
+    hari: [1, 2, 3, 4, 5, 6],
+    mode: "acak",
+    video: [
+      { id: "v-1", judul: "Story 1", url: "/1.mp4", jenis: "video", sasaran: "story", wajib: true, aktif: true },
+      { id: "v-2", judul: "Story 2", url: "/2.mp4", jenis: "video", sasaran: "story", wajib: true, aktif: true },
+      { id: "v-3", judul: "Story 3", url: "/3.mp4", jenis: "video", sasaran: "story", wajib: true, aktif: true },
+      { id: "v-off", judul: "Nonaktif", url: "/off.mp4", jenis: "video", sasaran: "story", wajib: false, aktif: false },
+    ],
+  });
+
+  // Simulasikan 3 hari berturut-turut: semua 3 video aktif harus kebagian 1x sebelum siklus reset
+  const terlihat = new Set<string>();
+  let sebelum: string | null = null;
+  for (let i = 0; i < 3; i++) {
+    const dipilih = pilihVideoBuka(jadwal, new Date(), { acak: () => 0 });
+    assert.equal(dipilih.length, 1);
+    assert.notEqual(dipilih[0].id, "v-off");
+    assert.notEqual(dipilih[0].id, sebelum);
+    terlihat.add(dipilih[0].id);
+    sebelum = dipilih[0].id;
+    const upd = catatRiwayatVideoBuka(jadwal, dipilih[0].id);
+    jadwal = { ...jadwal, ...upd };
+  }
+  assert.equal(terlihat.size, 3);
+
+  // Hari ke-4 (siklus baru): tidak boleh mengulang video hari ke-3
+  const hari4 = pilihVideoBuka(jadwal, new Date(), { acak: () => 0 });
+  assert.equal(hari4.length, 1);
+  assert.notEqual(hari4[0].id, sebelum);
 });
 
 test("jamBukaBerikutnya tetap aktif bila aiAktif=true meskipun daftar video statis kosong", () => {

@@ -5,22 +5,23 @@ import type { Session } from "@supabase/supabase-js";
 import {
   CalendarClock,
   Check,
-  ChevronDown,
-  ChevronUp,
   Clock,
   Copy,
   Download,
   ExternalLink,
   Flame,
+  History,
   ImageIcon,
   Lightbulb,
   Link2,
   Loader2,
   Palette,
   Play,
+  Plug,
   Plus,
   RefreshCw,
   Send,
+  Shuffle,
   Sparkles,
   Trash2,
   TrendingUp,
@@ -29,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { Sambungan } from "./studio-sambungan";
+import { PanelUnggahManual } from "./studio-unggah";
 import type { Situs } from "@/content/skema";
 import { jalurGudang, muatKonten, supabase } from "@/lib/gudang-admin";
 import {
@@ -198,13 +200,15 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [galatUsulan, setGalatUsulan] = useState("");
   const kolomArahan = useRef<HTMLTextAreaElement>(null);
 
+  // Navigasi sub-menu Studio (seragam antara Web/PWA dan APK Android)
+  type TabStudio = "unggah" | "rutin" | "buat" | "riwayat" | "riset" | "sambungan";
+  const [tabStudio, setTabStudio] = useState<TabStudio>("unggah");
+  const [filterRiwayat, setFilterRiwayat] = useState<"semua" | "terjadwal" | "cek" | "tayang">("semua");
+
   // Riset Reels Viral & Jam Tayang
   const [konsepViral, setKonsepViral] = useState<KonsepReelsViral[]>([]);
   const [merisetViral, setMerisetViral] = useState(false);
   const [galatRiset, setGalatRiset] = useState("");
-  const [bukaRiset, setBukaRiset] = useState(false);
-  const [bukaJadwal, setBukaJadwal] = useState(false);
-  const [bukaRef, setBukaRef] = useState(false);
   const [urlRef, setUrlRef] = useState("");
   const [catatanRef, setCatatanRef] = useState("");
   const [berkasRef, setBerkasRef] = useState<File[]>([]);
@@ -220,10 +224,10 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [daftarJadwal, setDaftarJadwal] = useState<SlotWaktu[]>([]);
 
   // Jadwal Otomatis Jam Buka (Story Opening Lek Kopi)
-  const [bukaRutin, setBukaRutin] = useState(false);
   const [merekRutin, setMerekRutin] = useState("lekkopi");
   const [jadwalRutin, setJadwalRutin] = useState<JadwalRutin>(() => jadwalRutinBawaan("lekkopi"));
   const [berikutnyaRutin, setBerikutnyaRutin] = useState<string | null>(null);
+  const [videoBerikutnyaRutin, setVideoBerikutnyaRutin] = useState<{ id: string | null; judul: string } | null>(null);
   const [menyimpanRutin, setMenyimpanRutin] = useState(false);
   const [mengunggahRutin, setMengunggahRutin] = useState(false);
   const [pesanRutin, setPesanRutin] = useState("");
@@ -306,6 +310,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     if (j.ok && j.jadwal) {
       setJadwalRutin(j.jadwal as JadwalRutin);
       setBerikutnyaRutin(j.berikutnya ?? null);
+      setVideoBerikutnyaRutin(j.videoBerikutnya ?? null);
     }
   }, [tokenSegar, merekRutin]);
 
@@ -330,6 +335,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       if (j.ok) {
         if (j.jadwal) setJadwalRutin(j.jadwal as JadwalRutin);
         setBerikutnyaRutin(j.berikutnya ?? null);
+        setVideoBerikutnyaRutin(j.videoBerikutnya ?? null);
         setPesanRutin(j.pesan ?? "Jadwal jam buka disimpan.");
         muat();
       } else {
@@ -337,6 +343,31 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       }
     } catch (e) {
       setPesanRutin(e instanceof Error ? e.message : "Gagal menyimpan jadwal rutin.");
+    }
+    setMenyimpanRutin(false);
+  }
+
+  async function acakUlangStoryBuka() {
+    setMenyimpanRutin(true);
+    setPesanRutin("");
+    try {
+      const tok = await tokenSegar();
+      const res = await fetch("/api/studio/rutin", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ aksi: "acak-ulang", merek: merekRutin }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (j.ok) {
+        setVideoBerikutnyaRutin(j.videoBerikutnya ?? null);
+        setBerikutnyaRutin(j.berikutnya ?? berikutnyaRutin);
+        setPesanRutin(j.pesan ?? "Video acak berikutnya berhasil diundi ulang.");
+        muat();
+      } else {
+        setPesanRutin(j.pesan ?? "Gagal mengacak ulang video.");
+      }
+    } catch (e) {
+      setPesanRutin(e instanceof Error ? e.message : "Gagal mengacak ulang video.");
     }
     setMenyimpanRutin(false);
   }
@@ -379,58 +410,68 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     setMenyimpanRutin(false);
   }
 
-  async function unggahVideoRutin(berkas: File) {
+  async function unggahBanyakVideoRutin(berkasList: File[]) {
+    if (!berkasList.length) return;
     setMengunggahRutin(true);
     setPesanRutin("");
     try {
-      const adalahGambar = berkas.type.startsWith("image/") || /\.(jpg|jpeg|png)$/i.test(berkas.name);
-      let durasi = 9;
-      if (!adalahGambar) {
-        const urlTmp = URL.createObjectURL(berkas);
-        try {
-          const v = document.createElement("video");
-          v.src = urlTmp;
-          v.preload = "metadata";
-          await new Promise<void>((ok) => {
-            v.onloadedmetadata = () => ok();
-            v.onerror = () => ok();
-            setTimeout(ok, 2000);
-          });
-          if (Number.isFinite(v.duration) && v.duration > 0) durasi = Math.round(v.duration);
-        } finally {
-          URL.revokeObjectURL(urlTmp);
-        }
-      }
-
       const tok = await tokenSegar();
-      const izinRes = await fetch("/api/studio/rutin", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ aksi: "izin-unggah", merek: merekRutin, namaBerkas: berkas.name }),
-      });
-      const izin = await izinRes.json().catch(() => ({}));
-      if (!izin.ok || !izin.uploadUrl) throw new Error(izin.pesan ?? "Gagal menyiapkan unggahan.");
+      const tambahan: VideoRutin[] = [];
+      for (const berkas of berkasList) {
+        const adalahGambar = berkas.type.startsWith("image/") || /\.(jpg|jpeg|png)$/i.test(berkas.name);
+        let durasi = 9;
+        if (!adalahGambar) {
+          const urlTmp = URL.createObjectURL(berkas);
+          try {
+            const v = document.createElement("video");
+            v.src = urlTmp;
+            v.preload = "metadata";
+            await new Promise<void>((ok) => {
+              v.onloadedmetadata = () => ok();
+              v.onerror = () => ok();
+              setTimeout(ok, 2000);
+            });
+            if (Number.isFinite(v.duration) && v.duration > 0) durasi = Math.round(v.duration);
+          } finally {
+            URL.revokeObjectURL(urlTmp);
+          }
+        }
 
-      const upRes = await fetch(izin.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": adalahGambar ? berkas.type || "image/jpeg" : "video/mp4" },
-        body: berkas,
-      });
-      if (!upRes.ok) throw new Error(`Unggah gagal (HTTP ${upRes.status}).`);
+        const izinRes = await fetch("/api/studio/rutin", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ aksi: "izin-unggah", merek: merekRutin, namaBerkas: berkas.name }),
+        });
+        const izin = await izinRes.json().catch(() => ({}));
+        if (!izin.ok || !izin.uploadUrl) throw new Error(izin.pesan ?? "Gagal menyiapkan unggahan.");
 
-      const itemBaru: VideoRutin = {
-        id: `rutin-${Date.now()}`,
-        judul: berkas.name.replace(/\.[a-z0-9]+$/i, ""),
-        url: izin.publicUrl,
-        sampul: null,
-        jenis: adalahGambar ? "gambar" : "video",
-        durasi: adalahGambar ? undefined : durasi,
-        sasaran: "story",
-        wajib: true,
-        aktif: true,
-        caption: "We are OPEN! Lek Kopi Waru Sidoarjo ☕",
-      };
-      await simpanPengaturanRutin({ video: [...jadwalRutin.video, itemBaru] });
+        const upRes = await fetch(izin.uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": adalahGambar
+              ? berkas.type === "image/png" || /\.png$/i.test(berkas.name)
+                ? "image/png"
+                : "image/jpeg"
+              : "video/mp4",
+          },
+          body: berkas,
+        });
+        if (!upRes.ok) throw new Error(`Unggah ${berkas.name} gagal (HTTP ${upRes.status}).`);
+
+        tambahan.push({
+          id: `rutin-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          judul: berkas.name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").trim(),
+          url: izin.publicUrl,
+          sampul: null,
+          jenis: adalahGambar ? "gambar" : "video",
+          durasi: adalahGambar ? undefined : durasi,
+          sasaran: "story",
+          wajib: false,
+          aktif: true,
+          caption: "We are OPEN! Lek Kopi Waru Sidoarjo ☕",
+        });
+      }
+      await simpanPengaturanRutin({ video: [...jadwalRutin.video, ...tambahan] });
     } catch (e) {
       setPesanRutin(e instanceof Error ? e.message : "Gagal mengunggah video.");
     }
@@ -449,7 +490,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       jenis: adalahGambar ? "gambar" : "video",
       durasi: adalahGambar ? undefined : 10,
       sasaran: "story",
-      wajib: true,
+      wajib: false,
       aktif: true,
       caption: "We are OPEN! Lek Kopi Waru Sidoarjo ☕",
     };
@@ -522,11 +563,17 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
 
   function tiruReferensi(r: ReferensiTersimpan) {
     const b = r.analisis;
-    if (!b || !kolomArahan.current) return;
+    if (!b) return;
     if (b.presetCocok) setPilihGaya(b.presetCocok);
-    kolomArahan.current.value = `${b.arahanTiru}\n(Referensi gaya: ${b.judul} — Hook: ${b.hook3Detik} | Pacing: ${b.pacing})`;
-    kolomArahan.current.focus();
-    setPesan(`Pola referensi "${b.judul}" diterapkan ke formulir!`);
+    const teks = `${b.arahanTiru}\n(Referensi gaya: ${b.judul} — Hook: ${b.hook3Detik} | Pacing: ${b.pacing})`;
+    setTabStudio("buat");
+    setTimeout(() => {
+      if (kolomArahan.current) {
+        kolomArahan.current.value = teks;
+        kolomArahan.current.focus();
+      }
+    }, 60);
+    setPesan(`Pola referensi "${b.judul}" diterapkan ke tab Buat AI!`);
   }
 
   // Riset konsep Reels viral (Gemini Google Search)
@@ -555,10 +602,14 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   }
 
   function pakaiKonsepViral(arahan: string) {
-    if (!kolomArahan.current) return;
-    kolomArahan.current.value = arahan;
-    kolomArahan.current.focus();
-    setPesan("Konsep arahan viral berhasil disalin ke formulir!");
+    setTabStudio("buat");
+    setTimeout(() => {
+      if (kolomArahan.current) {
+        kolomArahan.current.value = arahan;
+        kolomArahan.current.focus();
+      }
+    }, 60);
+    setPesan("Konsep arahan viral berhasil disalin ke tab Buat AI!");
   }
 
   // Usulan arahan dari Claude untuk produk & jenis yang sedang dipilih (Bakafrawi & Lek Kopi).
@@ -626,7 +677,10 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
         sasaran: sasaranBuat,
       });
       setSibuk(false);
-      if (j.ok) form.reset();
+      if (j.ok) {
+        form.reset();
+        setTabStudio("riwayat");
+      }
       return void muat();
     }
     const barisInsert: Record<string, unknown> = {
@@ -660,6 +714,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     );
     setSibuk(false);
     form.reset();
+    setTabStudio("riwayat");
     muat();
   }
 
@@ -716,122 +771,999 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const merekBank = Boolean(merek.find((m) => m.slug === pilihMerek)?.profil?.bahan?.includes("bank"));
   const namaMerek = (slug: string) => (merekAktif.length > 1 || slug !== "bakafrawi" ? `${merek.find((m) => m.slug === slug)?.nama ?? slug} · ` : "");
 
+  const jumlahTerjadwal = daftar.filter((t) => t.status_tayang === "dijadwalkan" || t.status_tayang === "antre").length;
+  const jumlahPerluCek = daftar.filter(
+    (t) => (t.status === "selesai" && t.status_tayang === "belum") || t.status === "naskah",
+  ).length;
+  const videoRutinAktif = jadwalRutin.video.filter((v) => v.aktif).length;
+
+  const daftarTersaring = daftar.filter((t) => {
+    if (filterRiwayat === "terjadwal") return t.status_tayang === "dijadwalkan" || t.status_tayang === "antre";
+    if (filterRiwayat === "cek") return (t.status === "selesai" && t.status_tayang === "belum") || t.status === "naskah";
+    if (filterRiwayat === "tayang") return t.status_tayang === "tayang";
+    return true;
+  });
+
+  const MENU_STUDIO: { id: TabStudio; label: string; ikon: ReactNode; lencana?: string | number | null }[] = [
+    { id: "unggah", label: "Unggah & Jadwal", ikon: <Upload className="size-3.5 shrink-0" /> },
+    {
+      id: "rutin",
+      label: "Story Otomatis",
+      ikon: <Shuffle className="size-3.5 shrink-0" />,
+      lencana: jadwalRutin.aktif ? jadwalRutin.jam : null,
+    },
+    { id: "buat", label: "Buat AI", ikon: <Sparkles className="size-3.5 shrink-0" /> },
+    {
+      id: "riwayat",
+      label: "Riwayat",
+      ikon: <History className="size-3.5 shrink-0" />,
+      lencana: jumlahPerluCek > 0 ? jumlahPerluCek : jumlahTerjadwal > 0 ? jumlahTerjadwal : daftar.length || null,
+    },
+    { id: "riset", label: "Riset & Gaya", ikon: <Flame className="size-3.5 shrink-0" /> },
+    { id: "sambungan", label: "Sambungan", ikon: <Plug className="size-3.5 shrink-0" /> },
+  ];
+
   return (
-    <div className="pb-16">
+    <div className="pb-20">
       {kepala}
-      <main className="mx-auto max-w-4xl px-4 pt-6">
+      <main className="mx-auto max-w-4xl space-y-5 px-4 pt-5">
         {jalurGudang !== "supabase" ? (
           <p className="text-muted-foreground">Studio hanya tersedia bila panel admin tersambung ke Supabase.</p>
         ) : (
           <>
-            {/* ── Panel Riset Reels Viral & Jam Tayang Optimal ── */}
-            <div className="mb-6 rounded-2xl border border-border bg-card p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex size-9 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
-                    <Flame className="size-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-heading text-base font-semibold text-foreground flex items-center gap-1.5">
-                      Riset Reels Viral & Waktu Tayang
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      {infoJadwal?.label ?? "Jadwal prime time & formula konten Instagram Reels"}
-                    </p>
-                  </div>
+            {/* ── Ringkasan Cepat & Bilah Sub-Menu Studio ── */}
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h1 className="font-heading text-xl font-semibold text-foreground">Studio Konten</h1>
+                  <p className="text-xs text-muted-foreground">
+                    Unggah manual, rotasi acak Story harian, pembuatan AI, dan penjadwalan otomatis Instagram.
+                  </p>
                 </div>
-
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                   <button
                     type="button"
-                    onClick={() => setBukaJadwal((v) => !v)}
-                    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
-                      bukaJadwal
-                        ? "border-amber-400/50 bg-amber-500/10 text-amber-300"
-                        : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground"
+                    onClick={() => setTabStudio("rutin")}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 transition ${
+                      jadwalRutin.aktif
+                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                        : "border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/25"
                     }`}
                   >
-                    <Clock className="size-3.5 shrink-0" />
-                    <span>Jam Terbaik</span>
-                    {bukaJadwal ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
+                    <Shuffle className="size-3" />
+                    Story: {jadwalRutin.aktif ? `${jadwalRutin.jam} WIB (${jadwalRutin.mode === "acak" ? "Acak" : jadwalRutin.mode})` : "Nonaktif"}
                   </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBukaRiset((v) => !v)}
-                    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
-                      bukaRiset
-                        ? "border-emas/50 bg-emas/10 text-emas"
-                        : "border-emas/30 text-emas-muda hover:border-emas hover:bg-emas/5"
-                    }`}
-                  >
-                    <TrendingUp className="size-3.5 shrink-0" />
-                    <span>Riset Tren Viral</span>
-                    {bukaRiset ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBukaRef((v) => !v)}
-                    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
-                      bukaRef
-                        ? "border-sky-400/50 bg-sky-500/10 text-sky-300"
-                        : "border-white/10 text-muted-foreground hover:border-sky-400/40 hover:text-sky-300"
-                    }`}
-                  >
-                    <Link2 className="size-3.5 shrink-0" />
-                    <span>Pelajari Link Video</span>
-                    {daftarRef.length > 0 && (
-                      <span className="rounded-full bg-sky-500/20 px-1.5 text-[10px] text-sky-300">{daftarRef.length}</span>
-                    )}
-                    {bukaRef ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBukaRutin((v) => !v)}
-                    className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
-                      bukaRutin || jadwalRutin.aktif
-                        ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-300"
-                        : "border-white/10 text-muted-foreground hover:border-emerald-400/40 hover:text-emerald-300"
-                    }`}
-                  >
-                    <CalendarClock className="size-3.5 shrink-0" />
-                    <span>Story Jam Buka</span>
-                    <span className={`rounded-full px-1.5 text-[10px] ${jadwalRutin.aktif ? "bg-emerald-500/25 text-emerald-200" : "bg-white/10 text-zinc-400"}`}>
-                      {jadwalRutin.aktif ? jadwalRutin.jam : "Mati"}
-                    </span>
-                    {bukaRutin ? <ChevronUp className="size-3 shrink-0" /> : <ChevronDown className="size-3 shrink-0" />}
-                  </button>
+                  {jumlahTerjadwal > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterRiwayat("terjadwal");
+                        setTabStudio("riwayat");
+                      }}
+                      className="inline-flex items-center gap-1 rounded-full border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-sky-300"
+                    >
+                      <CalendarClock className="size-3" /> {jumlahTerjadwal} Terjadwal
+                    </button>
+                  )}
+                  {jumlahPerluCek > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilterRiwayat("cek");
+                        setTabStudio("riwayat");
+                      }}
+                      className="inline-flex items-center gap-1 rounded-full border border-emas/40 bg-emas/10 px-2.5 py-1 text-emas-muda"
+                    >
+                      <Clock className="size-3" /> {jumlahPerluCek} Perlu Cek
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Status Saran Jam Tayang Singkat */}
-              {infoJadwal && !bukaJadwal && (
-                <p className="mt-3 text-xs text-zinc-400 border-t border-border/40 pt-2.5">
-                  💡 <b className="text-foreground">Saran waktu:</b> {infoJadwal.saran}
-                </p>
-              )}
+              {/* Bar Sub-Tab Horizontal (ramah jari di HP/PWA, rapi di desktop) */}
+              <div className="-mx-4 overflow-x-auto px-4 pb-1">
+                <div className="inline-flex min-w-full gap-1.5 rounded-2xl border border-border bg-card/80 p-1.5 sm:flex sm:flex-wrap">
+                  {MENU_STUDIO.map((m) => {
+                    const aktif = tabStudio === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setTabStudio(m.id)}
+                        className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-medium transition ${
+                          aktif
+                            ? "bg-emas text-background shadow-sm"
+                            : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                        }`}
+                      >
+                        {m.ikon}
+                        <span>{m.label}</span>
+                        {m.lencana != null && (
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                              aktif ? "bg-background/20 text-background" : "bg-white/10 text-zinc-300"
+                            }`}
+                          >
+                            {m.lencana}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-              {/* Detail Jadwal Tayang Terbaik */}
-              {bukaJadwal && (
-                <div className="mt-4 space-y-3 border-t border-border/50 pt-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-foreground">
-                      4 Slot Waktu Tayang Optimal Reels (WIB)
+              {pesan && (
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-emas/30 bg-emas/10 px-3.5 py-2.5 text-xs text-emas-muda">
+                  <span>{pesan}</span>
+                  <button type="button" onClick={() => setPesan("")} aria-label="Tutup pesan" className="shrink-0 hover:text-foreground">
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ══════════ TAB 1: UNGGAH MANUAL & JADWAL ══════════ */}
+            {tabStudio === "unggah" && (
+              <PanelUnggahManual
+                merekDaftar={merekAktif.length > 0 ? merekAktif : merek}
+                tokenSegar={tokenSegar}
+                selesai={(msg) => {
+                  setPesan(msg);
+                  setFilterRiwayat("semua");
+                  setTabStudio("riwayat");
+                  void muat();
+                }}
+              />
+            )}
+
+            {/* ══════════ TAB 2: STORY OTOMATIS HARIAN (ACAK / BERGILIR) ══════════ */}
+            {tabStudio === "rutin" && (
+              <div className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-6">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="flex items-center gap-2 font-heading text-lg font-semibold text-foreground">
+                      <CalendarClock className="size-5 text-emerald-400" />
+                      Story Otomatis Harian (Jam Buka)
+                    </h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Jadwalkan Story Instagram otomatis tiap hari buka. Gunakan mode <b>Acak 1 Video/Hari</b> agar video berganti-ganti dari koleksi yang sudah diunggah (tidak mengulang kemarin).
                     </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {merek.length > 1 && (
+                      <select
+                        value={merekRutin}
+                        onChange={(e) => setMerekRutin(e.target.value)}
+                        className="h-9 rounded-lg border border-input bg-transparent px-3 text-xs"
+                      >
+                        {merek.map((m) => (
+                          <option key={m.slug} value={m.slug} className="bg-card">
+                            {m.nama}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <button
+                      type="button"
+                      disabled={menyimpanRutin}
+                      onClick={() => void simpanPengaturanRutin({ aktif: !jadwalRutin.aktif })}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition ${
+                        jadwalRutin.aktif
+                          ? "bg-emerald-500 text-background hover:bg-emerald-400"
+                          : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500 hover:text-background"
+                      }`}
+                    >
+                      {menyimpanRutin ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                      {jadwalRutin.aktif ? "Jadwal Aktif" : "Aktifkan Jadwal"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Status jadwal berikutnya & video acak terpilih */}
+                <div className="space-y-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3.5 text-xs">
+                  <div className="space-y-1 text-zinc-200">
+                    {jadwalRutin.aktif && berikutnyaRutin ? (
+                      <>
+                        <p>
+                          ⏰ <b className="text-emerald-300">Tayang otomatis berikutnya:</b>{" "}
+                          {new Date(berikutnyaRutin).toLocaleString("id-ID", {
+                            timeZone: "Asia/Jakarta",
+                            dateStyle: "full",
+                            timeStyle: "short",
+                          })}{" "}
+                          WIB
+                        </p>
+                        {jadwalRutin.mode === "acak" && videoBerikutnyaRutin ? (
+                          <p className="flex flex-wrap items-center gap-2 text-zinc-300">
+                            <span>
+                              🎲 Pilihan acak berikutnya: <b className="text-emas-muda">{videoBerikutnyaRutin.judul}</b>{" "}
+                              <span className="text-zinc-400">({videoRutinAktif} video aktif ikut undian)</span>
+                            </span>
+                            {videoRutinAktif > 1 && (
+                              <button
+                                type="button"
+                                disabled={menyimpanRutin}
+                                onClick={acakUlangStoryBuka}
+                                className="inline-flex items-center gap-1 rounded-full border border-emas/40 bg-emas/10 px-2.5 py-0.5 text-[11px] font-medium text-emas hover:bg-emas hover:text-background disabled:opacity-50"
+                              >
+                                <Shuffle className="size-3" /> Acak Ulang
+                              </button>
+                            )}
+                          </p>
+                        ) : (
+                          <p className="text-zinc-400">
+                            {videoRutinAktif + (jadwalRutin.aiAktif ? 1 : 0)} konten siap tayang
+                            {jadwalRutin.aiAktif ? ` · termasuk AI ${jadwalRutin.aiFormat === "poster" ? "Poster" : "Animasi"}` : ""}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-zinc-400">
+                        Jadwal otomatis sedang nonaktif. Atur jam, mode acak, dan koleksi video di bawah lalu tekan <b>Aktifkan Jadwal</b> atau <b>Simpan Jadwal</b>.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={menyimpanRutin || (!jadwalRutin.aiAktif && videoRutinAktif === 0)}
+                      onClick={tayangkanStoryBukaSekarang}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500 hover:text-background disabled:opacity-50"
+                    >
+                      <Play className="size-3" /> Tayangkan 1 Story Sekarang
+                    </button>
+                    {jadwalRutin.aiAktif && (
+                      <button
+                        type="button"
+                        disabled={menyimpanRutin}
+                        onClick={buatPratinjauStoryBuka}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emas px-3 py-1.5 text-xs font-semibold text-background hover:bg-emas/90 disabled:opacity-50"
+                      >
+                        <Sparkles className="size-3.5" /> Buat Pratinjau AI Dulu
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pilihan Mode Putar Video (Kartu Jelas — Acak sebagai pilihan utama) */}
+                <div className="space-y-2">
+                  <span className="block text-xs font-semibold text-foreground">Mode Pemutaran Koleksi Video</span>
+                  <div className="grid gap-2.5 sm:grid-cols-3">
+                    {[
+                      {
+                        kode: "acak" as const,
+                        judul: "Acak 1 Video / Hari",
+                        badge: "Disarankan",
+                        ket: "Setiap hari diundi 1 video acak dari semua video aktif. Tidak mengulang kemarin sampai semua kebagian.",
+                      },
+                      {
+                        kode: "wajib+bergilir" as const,
+                        judul: "Wajib + Bergilir",
+                        badge: null,
+                        ket: "Video bertanda Wajib selalu tayang + 1 video pendamping bergantian sesuai urutan hari.",
+                      },
+                      {
+                        kode: "semua" as const,
+                        judul: "Tayang Semua Aktif",
+                        badge: null,
+                        ket: "Seluruh video yang berstatus Aktif diunggah sekaligus setiap jam buka.",
+                      },
+                    ].map((o) => {
+                      const aktif = jadwalRutin.mode === o.kode;
+                      return (
+                        <button
+                          key={o.kode}
+                          type="button"
+                          onClick={() => setJadwalRutin((j) => ({ ...j, mode: o.kode }))}
+                          className={`rounded-xl border p-3 text-left transition ${
+                            aktif
+                              ? "border-emas bg-emas/10"
+                              : "border-border/70 bg-white/[0.02] hover:border-white/25"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className={`text-xs font-semibold ${aktif ? "text-emas" : "text-foreground"}`}>
+                              {o.judul}
+                            </span>
+                            {o.badge && (
+                              <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                                {o.badge}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{o.ket}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Jam Buka & Hari Buka */}
+                <div className="grid gap-4 rounded-xl border border-border/70 bg-white/[0.02] p-3.5 text-xs sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <span className="block font-medium text-foreground">Jam Tayang Otomatis (WIB)</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="time"
+                        value={jadwalRutin.jam}
+                        onChange={(e) => setJadwalRutin((j) => ({ ...j, jam: e.target.value || "14:00" }))}
+                        className="h-9 rounded-lg border border-input bg-transparent px-3 font-mono text-sm"
+                      />
+                      {["09:00", "14:00", "16:00", "19:00"].map((jm) => (
+                        <button
+                          key={jm}
+                          type="button"
+                          onClick={() => setJadwalRutin((j) => ({ ...j, jam: jm }))}
+                          className={`rounded-md border px-2 py-1 text-[11px] ${
+                            jadwalRutin.jam === jm
+                              ? "border-emas bg-emas/15 text-emas"
+                              : "border-white/10 text-zinc-400 hover:text-foreground"
+                          }`}
+                        >
+                          {jm}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-foreground">Hari Aktif</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setJadwalRutin((j) => ({ ...j, hari: [1, 2, 3, 4, 5, 6] }))}
+                          className="text-[10px] text-emas hover:underline"
+                        >
+                          Sen–Sab
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setJadwalRutin((j) => ({ ...j, hari: [0, 1, 2, 3, 4, 5, 6] }))}
+                          className="text-[10px] text-muted-foreground hover:text-emas hover:underline"
+                        >
+                          Setiap Hari
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {HARI_WIB.map((h) => {
+                        const dipilih = jadwalRutin.hari.includes(h.kode);
+                        return (
+                          <button
+                            key={h.kode}
+                            type="button"
+                            onClick={() =>
+                              setJadwalRutin((j) => ({
+                                ...j,
+                                hari: dipilih ? j.hari.filter((x) => x !== h.kode) : [...j.hari, h.kode],
+                              }))
+                            }
+                            className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition ${
+                              dipilih
+                                ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-200"
+                                : "border-white/10 bg-white/[0.02] text-zinc-500 hover:text-zinc-300"
+                            }`}
+                          >
+                            {h.pendek}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Koleksi Video Story yang Sudah Diunggah */}
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-foreground">
+                      Koleksi Video Story ({videoRutinAktif} aktif dari {jadwalRutin.video.length} video)
+                    </p>
+                    {!jadwalRutin.video.some((v) => v.url.includes("lekkopi-opening-story")) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setJadwalRutin((j) => ({
+                            ...j,
+                            video: [{ ...VIDEO_OPENING_BAWAAN_LEKKOPI, wajib: false }, ...j.video],
+                          }))
+                        }
+                        className="text-[11px] text-emas hover:underline"
+                      >
+                        + Pulihkan Video Bawaan &quot;We Are Open&quot;
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Unggah Banyak Video Sekaligus atau Tempel URL */}
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-400/40 bg-emerald-500/5 px-4 py-3 text-xs font-medium text-emerald-300 transition hover:border-emerald-400 hover:bg-emerald-500/10">
+                      {mengunggahRutin ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                      <span>
+                        {mengunggahRutin ? "Mengunggah video ke Studio…" : "Unggah Video / Foto Story (bisa pilih banyak sekaligus)"}
+                      </span>
+                      <input
+                        type="file"
+                        accept="video/mp4,video/quicktime,video/webm,image/jpeg,image/png"
+                        multiple
+                        className="hidden"
+                        disabled={mengunggahRutin}
+                        onChange={(e) => {
+                          const list = Array.from(e.target.files ?? []);
+                          if (list.length) void unggahBanyakVideoRutin(list);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={judulBaruRutin}
+                        onChange={(e) => setJudulBaruRutin(e.target.value)}
+                        placeholder="Judul"
+                        className="h-11 w-24 rounded-lg border border-input bg-transparent px-2.5 text-xs"
+                      />
+                      <input
+                        type="text"
+                        value={urlBaruRutin}
+                        onChange={(e) => setUrlBaruRutin(e.target.value)}
+                        placeholder="Atau tempel URL video (.mp4)"
+                        className="h-11 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={tambahUrlRutin}
+                        disabled={!urlBaruRutin.trim()}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/15 px-3 text-xs hover:border-emas hover:text-emas disabled:opacity-40"
+                      >
+                        <Plus className="size-3.5" /> Tambah
+                      </button>
+                    </div>
+                  </div>
+
+                  {jadwalRutin.video.length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-border/70 py-6 text-center text-xs text-muted-foreground">
+                      Belum ada video Story di koleksi. Unggah beberapa video di atas agar sistem bisa mengacak setiap hari.
+                    </p>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {jadwalRutin.video.map((v, idx) => {
+                        const sedangTerpilih = jadwalRutin.mode === "acak" && videoBerikutnyaRutin?.id === v.id;
+                        return (
+                          <div
+                            key={v.id}
+                            className={`flex gap-3 rounded-xl border p-3 text-xs transition ${
+                              sedangTerpilih
+                                ? "border-emas/60 bg-emas/[0.06]"
+                                : v.aktif
+                                ? "border-border/80 bg-white/[0.03]"
+                                : "border-border/40 bg-white/[0.01] opacity-60"
+                            }`}
+                          >
+                            <div className="shrink-0">
+                              {v.jenis === "video" ? (
+                                <video
+                                  src={v.url}
+                                  poster={v.sampul ?? undefined}
+                                  controls
+                                  playsInline
+                                  preload="metadata"
+                                  className="h-32 w-20 rounded-lg bg-black object-cover"
+                                />
+                              ) : (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={v.url} alt={v.judul} className="h-32 w-20 rounded-lg bg-black object-cover" />
+                              )}
+                            </div>
+
+                            <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
+                              <div className="space-y-1.5">
+                                {sedangTerpilih && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emas/20 px-2 py-0.5 text-[10px] font-semibold text-emas-muda">
+                                    🎲 Giliran acak berikutnya
+                                  </span>
+                                )}
+                                <div className="flex items-start justify-between gap-1">
+                                  <input
+                                    type="text"
+                                    value={v.judul}
+                                    onChange={(e) =>
+                                      setJadwalRutin((j) => ({
+                                        ...j,
+                                        video: j.video.map((x, i) => (i === idx ? { ...x, judul: e.target.value } : x)),
+                                      }))
+                                    }
+                                    className="h-7 w-full rounded border border-white/10 bg-transparent px-2 text-xs font-semibold text-foreground"
+                                    placeholder="Judul video Story"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setJadwalRutin((j) => ({
+                                        ...j,
+                                        video: j.video.filter((_, i) => i !== idx),
+                                      }))
+                                    }
+                                    className="p-1 text-zinc-400 hover:text-red-400"
+                                    title="Hapus dari koleksi"
+                                  >
+                                    <Trash2 className="size-3.5" />
+                                  </button>
+                                </div>
+
+                                <select
+                                  value={v.sasaran}
+                                  onChange={(e) =>
+                                    setJadwalRutin((j) => ({
+                                      ...j,
+                                      video: j.video.map((x, i) =>
+                                        i === idx ? { ...x, sasaran: e.target.value as VideoRutin["sasaran"] } : x,
+                                      ),
+                                    }))
+                                  }
+                                  className="h-7 w-full rounded border border-white/10 bg-transparent px-2 text-[11px]"
+                                >
+                                  <option value="story" className="bg-card">Story Instagram saja</option>
+                                  <option value="reels+story" className="bg-card">Story + Reels</option>
+                                  <option value="reels" className="bg-card">Reels saja</option>
+                                </select>
+
+                                <div className="flex flex-wrap items-center gap-3 pt-0.5 text-[11px]">
+                                  <label className="inline-flex cursor-pointer items-center gap-1.5">
+                                    <input
+                                      type="checkbox"
+                                      checked={v.aktif}
+                                      onChange={(e) =>
+                                        setJadwalRutin((j) => ({
+                                          ...j,
+                                          video: j.video.map((x, i) => (i === idx ? { ...x, aktif: e.target.checked } : x)),
+                                        }))
+                                      }
+                                      className="size-3.5 accent-emerald-500"
+                                    />
+                                    <span>{jadwalRutin.mode === "acak" ? "Ikut diacak" : "Aktif"}</span>
+                                  </label>
+                                  {jadwalRutin.mode !== "acak" && (
+                                    <label className="inline-flex cursor-pointer items-center gap-1.5" title="Selalu diupload setiap jam buka">
+                                      <input
+                                        type="checkbox"
+                                        checked={v.wajib}
+                                        onChange={(e) =>
+                                          setJadwalRutin((j) => ({
+                                            ...j,
+                                            video: j.video.map((x, i) => (i === idx ? { ...x, wajib: e.target.checked } : x)),
+                                          }))
+                                        }
+                                        className="size-3.5 accent-[#c9a24b]"
+                                      />
+                                      <span className="text-emas-muda">Wajib tiap buka</span>
+                                    </label>
+                                  )}
+                                </div>
+                              </div>
+
+                              <span className="truncate text-[10px] text-zinc-500">
+                                {v.durasi ? `${v.durasi} dtk` : v.jenis === "gambar" ? "Foto" : "Video"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Opsional: Tambah Konten Opening Generated AI */}
+                <div className="space-y-3 rounded-xl border border-emas/25 bg-emas/[0.03] p-3.5 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(jadwalRutin.aiAktif)}
+                        onChange={(e) => setJadwalRutin((j) => ({ ...j, aiAktif: e.target.checked }))}
+                        className="size-4 accent-[#c9a24b]"
+                      />
+                      <span className="flex items-center gap-1.5 font-semibold text-foreground">
+                        <Sparkles className="size-3.5 text-emas" />
+                        Sertakan 1 Konten Opening Generated AI Tiap Jam Buka (Opsional)
+                      </span>
+                    </label>
+                    <span className="rounded-full bg-emas/15 px-2 py-0.5 text-[10px] font-medium text-emas-muda">
+                      3 Menu Terlaris + Musik Adaptif
+                    </span>
+                  </div>
+
+                  {jadwalRutin.aiAktif && (
+                    <div className="grid gap-3 pt-1 sm:grid-cols-3">
+                      <label className="grid gap-1">
+                        <span className="text-[11px] text-muted-foreground">Format Konten AI</span>
+                        <select
+                          value={jadwalRutin.aiFormat ?? "video-animasi"}
+                          onChange={(e) =>
+                            setJadwalRutin((j) => ({
+                              ...j,
+                              aiFormat: e.target.value as JadwalRutin["aiFormat"],
+                            }))
+                          }
+                          className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
+                        >
+                          <option value="video-animasi" className="bg-card">Video Animasi 3 Menu Terlaris (15 dtk)</option>
+                          <option value="poster" className="bg-card">Poster Story AI (9:16, ringan)</option>
+                        </select>
+                      </label>
+
+                      <label className="grid gap-1">
+                        <span className="text-[11px] text-muted-foreground">Tema Visual</span>
+                        <select
+                          value={jadwalRutin.aiGaya ?? "otomatis"}
+                          onChange={(e) =>
+                            setJadwalRutin((j) => ({
+                              ...j,
+                              aiGaya: e.target.value as JadwalRutin["aiGaya"],
+                            }))
+                          }
+                          className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
+                        >
+                          <option value="otomatis" className="bg-card">Otomatis berganti tiap hari</option>
+                          <option value="hangat-kafe" className="bg-card">Hangat Kafe (Cokelat Emas)</option>
+                          <option value="terang-modern" className="bg-card">Terang Modern (Krem Bersih)</option>
+                          <option value="minimalis-gelap" className="bg-card">Minimalis Gelap (Teal Elegan)</option>
+                        </select>
+                      </label>
+
+                      <label className="grid gap-1">
+                        <span className="text-[11px] text-muted-foreground">Arahan AI (opsional)</span>
+                        <input
+                          type="text"
+                          value={jadwalRutin.aiArahan ?? ""}
+                          onChange={(e) => setJadwalRutin((j) => ({ ...j, aiArahan: e.target.value }))}
+                          placeholder="Kosongkan agar AI pilih menu tiap hari"
+                          className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
+                        />
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <button
+                    type="button"
+                    disabled={menyimpanRutin}
+                    onClick={() => void simpanPengaturanRutin()}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-emas px-5 py-2.5 text-xs font-semibold text-background hover:bg-emas/90 disabled:opacity-60 sm:w-auto"
+                  >
+                    {menyimpanRutin ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                    Simpan Pengaturan Story Otomatis
+                  </button>
+                  {pesanRutin && <span className="text-xs text-emerald-300">{pesanRutin}</span>}
+                </div>
+              </div>
+            )}
+
+            {/* ══════════ TAB 3: BUAT KONTEN AI ══════════ */}
+            {tabStudio === "buat" && (
+              <form onSubmit={buat} className="grid gap-4 rounded-2xl border border-border bg-card p-4 sm:p-6">
+                <div>
+                  <h2 className="flex items-center gap-2 font-heading text-lg">
+                    <Sparkles className="size-5 text-emas" /> Buat Konten Promosi AI
+                  </h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Mesin otomatis membuat poster atau video iklan Remotion / bank media lengkap dengan naskah dan caption.
+                  </p>
+                </div>
+
+                {merekAktif.length > 1 ? (
+                  <div className="space-y-1.5">
+                    <span className="block text-xs font-medium text-muted-foreground">Merek</span>
+                    <div className="flex flex-wrap gap-2">
+                      {merekAktif.map((m) => (
+                        <button
+                          key={m.slug}
+                          type="button"
+                          onClick={() => {
+                            setPilihMerek(m.slug);
+                            setUsulan([]);
+                            setGalatUsulan("");
+                          }}
+                          className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
+                            pilihMerek === m.slug
+                              ? "border-emas bg-emas text-background"
+                              : "border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/25 hover:text-foreground"
+                          }`}
+                        >
+                          {m.nama}
+                        </button>
+                      ))}
+                    </div>
+                    <input type="hidden" name="merek" value={pilihMerek} />
+                  </div>
+                ) : (
+                  <input type="hidden" name="merek" value={merekAktif[0]?.slug ?? "bakafrawi"} />
+                )}
+
+                {merekBank && (
+                  <p className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-muted-foreground">
+                    Video dari bank foto/video <b>{merek.find((m) => m.slug === pilihMerek)?.nama}</b> di Google Drive. Naskah ditulis dulu dari data kedai untuk Kyai setujui sebelum dirender.
+                  </p>
+                )}
+
+                <div hidden={merekBank} className="grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">Produk</span>
+                    <select
+                      name="produk"
+                      value={pilihProduk}
+                      onChange={(e) => {
+                        setPilihProduk(e.target.value);
+                        setUsulan([]);
+                        setGalatUsulan("");
+                      }}
+                      className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+                    >
+                      {situs.produk.map((p) => (
+                        <option key={p.slug} value={p.slug} className="bg-card">{p.nama}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">Jenis</span>
+                    <select
+                      name="jenis"
+                      value={pilihJenis}
+                      onChange={(e) => {
+                        setPilihJenis(e.target.value as "gambar" | "video");
+                        setPilihGaya("otomatis");
+                      }}
+                      className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+                    >
+                      <option value="gambar" className="bg-card">Poster (1:1, 4:5, 9:16)</option>
+                      <option value="video" className="bg-card">Video Reels/TikTok (Remotion + animasi)</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="grid gap-1.5 sm:w-1/2">
+                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Palette className="size-3.5 text-emas" /> Gaya Desain {merekBank || pilihJenis === "video" ? "Video" : "Poster"}
+                  </span>
+                  <select
+                    name="gaya"
+                    value={pilihGaya}
+                    onChange={(e) => setPilihGaya(e.target.value)}
+                    className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+                  >
+                    {(merekBank || pilihJenis === "video" ? PRESET_VIDEO : PRESET_POSTER).map((g) => (
+                      <option key={g.kode} value={g.kode} className="bg-card">{g.label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label hidden={merekBank} className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" name="latar" className="mt-0.5 size-4 accent-[#c9a24b]" />
+                  <span>
+                    Latar gambar AI <span className="text-xs text-redup">(khusus poster: foto suasana — gratis ±60 gambar/hari lewat Cloudflare; video memakai karakter dari Drive)</span>
+                  </span>
+                </label>
+
+                <div className="grid gap-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label htmlFor="studio-arahan" className="text-xs font-medium text-muted-foreground">
+                      {merekBank ? "Ide video (opsional — kosongkan agar AI memilih otomatis)" : "Arahan untuk AI (opsional)"}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={mintaUsulan}
+                      disabled={mengusulkan}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-xs hover:border-emas hover:text-emas disabled:opacity-60"
+                    >
+                      {mengusulkan ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                      {merekBank ? "Usulkan ide AI" : "Usulkan arahan"}
+                    </button>
+                  </div>
+                  <textarea
+                    id="studio-arahan"
+                    ref={kolomArahan}
+                    key={merekBank ? "ide" : "arahan"}
+                    name="arahan"
+                    rows={3}
+                    placeholder={
+                      merekBank
+                        ? "Opsional: mis. suasana malam minggu, es kopi susu (kosongkan agar AI pilih menu terbaik otomatis)"
+                        : "Mis. sasar pemilik warung kopi, tonjolkan fitur struk WhatsApp, nada santai"
+                    }
+                    className="rounded-xl border border-input bg-transparent px-3 py-2 text-sm"
+                  />
+                  {galatUsulan && <p className="text-xs text-red-300">{galatUsulan}</p>}
+                  {usulan.length > 0 && (
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {usulan.map((u) => (
+                        <button
+                          key={u.judul + u.arahan}
+                          type="button"
+                          onClick={() => pakaiUsulan(u.arahan)}
+                          className="rounded-xl border border-white/10 bg-white/[.03] p-3 text-left text-xs hover:border-emas"
+                        >
+                          <span className="mb-1 block font-semibold text-emas-muda">{u.judul}</span>
+                          <span className="text-muted-foreground">{u.arahan}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Opsi Jadwal Tayang Otomatis / Custom & Sasaran Instagram */}
+                <div className="space-y-3 rounded-xl border border-border/70 bg-white/[0.02] p-3.5 text-xs">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="grid gap-1.5">
+                      <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                        <CalendarClock className="size-3.5 text-emas" /> Jadwal Tayang Setelah Selesai
+                      </span>
+                      <select
+                        value={modeJadwalBuat}
+                        onChange={(e) => setModeJadwalBuat(e.target.value as "persetujuan" | "prime19" | "custom")}
+                        className="h-9 rounded-lg border border-input bg-transparent px-3 text-xs"
+                      >
+                        <option value="persetujuan" className="bg-card">Tunggu persetujuan dulu (bawaan)</option>
+                        <option value="prime19" className="bg-card">Otomatis jadwalkan Prime Time 19.00 WIB</option>
+                        <option value="custom" className="bg-card">Otomatis jadwalkan di tanggal & jam custom…</option>
+                      </select>
+                    </label>
+
+                    <label className="grid gap-1.5">
+                      <span className="font-medium text-muted-foreground">Sasaran Tayang Instagram</span>
+                      <select
+                        value={sasaranBuat}
+                        onChange={(e) => setSasaranBuat(e.target.value as SasaranTayang)}
+                        className="h-9 rounded-lg border border-input bg-transparent px-3 text-xs"
+                      >
+                        {(merekBank || pilihJenis === "video" ? DAFTAR_SASARAN_VIDEO : DAFTAR_SASARAN_GAMBAR).map((s) => (
+                          <option key={s.kode} value={s.kode} className="bg-card">
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  {modeJadwalBuat === "custom" && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <input
+                        type="datetime-local"
+                        value={waktuJadwalBuat}
+                        onChange={(e) => setWaktuJadwalBuat(e.target.value)}
+                        className="h-9 w-full rounded-lg border border-input bg-transparent px-3 font-mono text-xs sm:w-auto"
+                      />
+                      <div className="flex flex-wrap gap-1.5">
+                        {daftarSlotCepatWIB().map((s) => (
+                          <button
+                            key={s.kode}
+                            type="button"
+                            onClick={() => setWaktuJadwalBuat(s.inputWib)}
+                            className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+                              waktuJadwalBuat === s.inputWib
+                                ? "border-emas bg-emas/15 text-emas"
+                                : "border-white/10 text-zinc-400 hover:border-white/25 hover:text-foreground"
+                            }`}
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    disabled={sibuk}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60 sm:w-auto"
+                  >
+                    {sibuk ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                    {merekBank ? "Buat Naskah Konten" : "Buat Konten AI"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ══════════ TAB 4: RIWAYAT & ANTREAN TAYANG ══════════ */}
+            {tabStudio === "riwayat" && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[
+                      { id: "semua" as const, label: `Semua (${daftar.length})` },
+                      { id: "terjadwal" as const, label: `Terjadwal (${jumlahTerjadwal})` },
+                      { id: "cek" as const, label: `Perlu Cek (${jumlahPerluCek})` },
+                      { id: "tayang" as const, label: `Tayang (${daftar.filter((t) => t.status_tayang === "tayang").length})` },
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setFilterRiwayat(f.id)}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                          filterRiwayat === f.id
+                            ? "border-emas bg-emas/15 text-emas"
+                            : "border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/25 hover:text-foreground"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void muat()}
+                    className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 text-xs text-muted-foreground hover:border-emas hover:text-emas"
+                  >
+                    <RefreshCw className="size-3" /> Segarkan
+                  </button>
+                </div>
+
+                {daftarTersaring.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border bg-card/40 py-10 text-center text-xs text-muted-foreground">
+                    Belum ada konten pada filter ini.
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {daftarTersaring.map((t) => (
+                      <KartuTugas
+                        key={t.id}
+                        t={t}
+                        nama={
+                          namaMerek(t.merek) +
+                          (t.produk_slug === "rutin-buka"
+                            ? "Story Otomatis Jam Buka"
+                            : t.produk_slug === "unggah-manual"
+                            ? "Unggah Manual"
+                            : t.produk_slug === t.merek
+                            ? "Video Bank Media"
+                            : namaProduk(t.produk_slug))
+                        }
+                        hapus={() => hapus(t)}
+                        tayang={(a, opsi) => tayang(t, a, opsi)}
+                        naskah={(a) => putusNaskah(t, a)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ══════════ TAB 5: RISET TREN, JAM OPTIMAL & REFERENSI VIDEO ══════════ */}
+            {tabStudio === "riset" && (
+              <div className="space-y-5">
+                {/* 5a. Jam Tayang Optimal */}
+                <section className="space-y-3 rounded-2xl border border-border bg-card p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="size-4 text-amber-400" />
+                      <h2 className="font-heading text-base font-semibold text-foreground">
+                        4 Slot Waktu Tayang Optimal Reels (WIB)
+                      </h2>
+                    </div>
                     <span className="text-[11px] text-muted-foreground">
                       Hari terbaik: Selasa, Rabu, Kamis, Minggu
                     </span>
                   </div>
-
+                  {infoJadwal && (
+                    <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-zinc-300">
+                      💡 <b className="text-foreground">Saran saat ini:</b> {infoJadwal.saran}
+                    </p>
+                  )}
                   <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-                    {(daftarJadwal.length > 0 ? daftarJadwal : [
-                      { slot: "sore", jam: "17.30 - 19.30 WIB", nama: "Golden Prime Time", alasan: "Trafik Instagram Indonesia tertinggi, jangkauan puncak ke Explore.", skor: 98 },
-                      { slot: "siang", jam: "11.45 - 13.00 WIB", nama: "Istirahat Siang", alasan: "Penonton fokus demo singkat 30s saat rehat makan siang.", skor: 88 },
-                      { slot: "malam", jam: "20.30 - 21.45 WIB", nama: "Santai Malam", alasan: "Waktu santai rebahan, cocok untuk storytelling & edukasi bisnis.", skor: 85 },
-                      { slot: "pagi", jam: "07.00 - 08.30 WIB", nama: "Commute Pagi", alasan: "Tips ringan & motivasi sebelum jam mulai kerja.", skor: 74 },
-                    ]).map((j) => (
+                    {(daftarJadwal.length > 0
+                      ? daftarJadwal
+                      : [
+                          { slot: "sore", jam: "17.30 - 19.30 WIB", nama: "Golden Prime Time", alasan: "Trafik Instagram Indonesia tertinggi, jangkauan puncak ke Explore.", skor: 98 },
+                          { slot: "siang", jam: "11.45 - 13.00 WIB", nama: "Istirahat Siang", alasan: "Penonton fokus demo singkat 30s saat rehat makan siang.", skor: 88 },
+                          { slot: "malam", jam: "20.30 - 21.45 WIB", nama: "Santai Malam", alasan: "Waktu santai rebahan, cocok untuk storytelling & edukasi bisnis.", skor: 85 },
+                          { slot: "pagi", jam: "07.00 - 08.30 WIB", nama: "Commute Pagi", alasan: "Tips ringan & motivasi sebelum jam mulai kerja.", skor: 74 },
+                        ]
+                    ).map((j) => (
                       <div
                         key={j.slot}
                         className={`rounded-xl border p-3 text-xs ${
@@ -840,115 +1772,34 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                             : "border-border/70 bg-white/[0.01] text-muted-foreground"
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-1 mb-1">
+                        <div className="mb-1 flex items-center justify-between gap-1">
                           <span className="font-semibold text-foreground">{j.nama}</span>
-                          <span className="rounded-full bg-white/10 px-1.5 py-0.2 font-mono text-[10px] text-emas">
-                            {j.skor}%
-                          </span>
+                          <span className="rounded-full bg-white/10 px-1.5 font-mono text-[10px] text-emas">{j.skor}%</span>
                         </div>
                         <p className="font-mono text-[11px] text-emas-muda">{j.jam}</p>
-                        <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-400">
-                          {j.alasan}
-                        </p>
+                        <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-400">{j.alasan}</p>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                </section>
 
-              {/* Panel Riset Konsep Viral */}
-              {bukaRiset && (
-                <div className="mt-4 space-y-4 border-t border-border/50 pt-4">
-                  <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs space-y-2">
-                    <p className="font-semibold text-foreground flex items-center gap-1.5">
-                      <Lightbulb className="size-3.5 text-emas" /> 4 Pilar Rahasia Reels Viral:
-                    </p>
-                    <div className="grid gap-2 sm:grid-cols-2 text-[11px] text-zinc-400">
-                      <div><b>1. Hook 3 Detik:</b> Sentil luka / rasa penasaran, jangan mulai dengan salam klise.</div>
-                      <div><b>2. Visual Rhythm:</b> Pacing cepat (ganti adegan tiap 2-4 dtk) + perbesaran layar UI.</div>
-                      <div><b>3. Teks Layar Kontras:</b> Teks stabilo tebal karena 80% audiens menonton tanpa suara.</div>
-                      <div><b>4. CTA Konkret:</b> Ajakan simpel (mis. coba demo di link bio atau WhatsApp).</div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      value={topikRiset}
-                      onChange={(e) => setTopikRiset(e.target.value)}
-                      placeholder={`Topik/sudut khusus untuk ${merekBank ? (merek.find((m) => m.slug === pilihMerek)?.nama ?? pilihMerek) : namaProduk(pilihProduk)} (opsional, mis. ${merekBank ? "suasana malam minggu, es kopi susu" : "nota WhatsApp, kasir lemot"})`}
-                      className="h-10 flex-1 rounded-lg border border-input bg-transparent px-3 text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={mintaRisetViral}
-                      disabled={merisetViral}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emas px-4 py-2 text-xs font-semibold text-background hover:bg-emas/90 disabled:opacity-60"
-                    >
-                      {merisetViral ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-                      Riset 3 Konsep Viral
-                    </button>
-                  </div>
-
-                  {galatRiset && <p className="text-xs text-red-300 break-words">{galatRiset}</p>}
-
-                  {konsepViral.length > 0 && (
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {konsepViral.map((k, idx) => (
-                        <div
-                          key={k.judul + idx}
-                          className="flex flex-col justify-between rounded-xl border border-border/80 bg-white/[0.02] p-3.5 text-xs hover:border-emas/50 transition"
-                        >
-                          <div className="space-y-2">
-                            <span className="inline-block rounded-md bg-emas/15 px-2 py-0.5 font-semibold text-emas-muda text-[11px]">
-                              {k.judul}
-                            </span>
-                            <div>
-                              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Hook 3 Detik</p>
-                              <p className="text-xs font-medium text-foreground italic mt-0.5">
-                                "{k.hook}"
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Teks Layar & Visual</p>
-                              <p className="text-[11px] text-zinc-400 mt-0.5">
-                                <b className="text-zinc-200">[{k.teksLayarKunci}]</b> · {k.alurVisual}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">CTA</p>
-                              <p className="text-[11px] text-zinc-400 mt-0.5">{k.ajakanCta}</p>
-                            </div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => pakaiKonsepViral(k.arahanStudio)}
-                            className="mt-3.5 w-full rounded-lg border border-emas/40 bg-emas/10 py-1.5 text-center text-xs font-medium text-emas hover:bg-emas hover:text-background transition"
-                          >
-                            Gunakan Konsep Ini →
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Panel Tempel Link Referensi Video (Instagram Reels / TikTok) */}
-              {bukaRef && (
-                <div className="mt-4 space-y-4 border-t border-border/50 pt-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
-                    <p className="flex-1 min-w-[220px]">
-                      Tempelkan tautan <b className="text-foreground">Instagram Reels, TikTok, atau YouTube Shorts</b>. AI akan membedah <i>hook</i>, ritme potongan, gaya teks & visualnya untuk merek aktif.
-                    </p>
+                {/* 5b. Riset Tren Viral AI */}
+                <section className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="flex items-center gap-2 font-heading text-base font-semibold text-foreground">
+                      <TrendingUp className="size-4 text-emas" /> Riset Tren Reels Viral AI
+                    </h2>
                     {merekAktif.length > 1 && (
                       <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-0.5">
                         {merekAktif.map((m) => (
                           <button
                             key={m.slug}
                             type="button"
-                            onClick={() => { setPilihMerek(m.slug); setUsulan([]); setGalatUsulan(""); }}
+                            onClick={() => {
+                              setPilihMerek(m.slug);
+                              setUsulan([]);
+                              setGalatUsulan("");
+                            }}
                             className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
                               pilihMerek === m.slug
                                 ? "bg-emas text-background"
@@ -962,18 +1813,107 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     )}
                   </div>
 
+                  <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3 text-xs">
+                    <p className="flex items-center gap-1.5 font-semibold text-foreground">
+                      <Lightbulb className="size-3.5 text-emas" /> 4 Pilar Rahasia Reels Viral:
+                    </p>
+                    <div className="grid gap-2 text-[11px] text-zinc-400 sm:grid-cols-2">
+                      <div><b>1. Hook 3 Detik:</b> Sentil luka / rasa penasaran, jangan mulai dengan salam klise.</div>
+                      <div><b>2. Visual Rhythm:</b> Pacing cepat (ganti adegan tiap 2–4 dtk) + sorotan visual.</div>
+                      <div><b>3. Teks Layar Kontras:</b> Teks tebal terbaca jelas meski ditonton tanpa suara.</div>
+                      <div><b>4. CTA Konkret:</b> Ajakan simpel (coba demo, mampir kedai, atau klik WhatsApp).</div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      type="text"
+                      value={topikRiset}
+                      onChange={(e) => setTopikRiset(e.target.value)}
+                      placeholder={`Topik khusus untuk ${merekBank ? (merek.find((m) => m.slug === pilihMerek)?.nama ?? pilihMerek) : namaProduk(pilihProduk)} (opsional)`}
+                      className="h-10 flex-1 rounded-lg border border-input bg-transparent px-3 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={mintaRisetViral}
+                      disabled={merisetViral}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emas px-4 py-2 text-xs font-semibold text-background hover:bg-emas/90 disabled:opacity-60"
+                    >
+                      {merisetViral ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                      Riset 3 Konsep Viral
+                    </button>
+                  </div>
+
+                  {galatRiset && <p className="break-words text-xs text-red-300">{galatRiset}</p>}
+
+                  {konsepViral.length > 0 && (
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {konsepViral.map((k, idx) => (
+                        <div
+                          key={k.judul + idx}
+                          className="flex flex-col justify-between rounded-xl border border-border/80 bg-white/[0.02] p-3.5 text-xs transition hover:border-emas/50"
+                        >
+                          <div className="space-y-2">
+                            <span className="inline-block rounded-md bg-emas/15 px-2 py-0.5 text-[11px] font-semibold text-emas-muda">
+                              {k.judul}
+                            </span>
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Hook 3 Detik</p>
+                              <p className="mt-0.5 text-xs font-medium italic text-foreground">&quot;{k.hook}&quot;</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Teks Layar &amp; Visual</p>
+                              <p className="mt-0.5 text-[11px] text-zinc-400">
+                                <b className="text-zinc-200">[{k.teksLayarKunci}]</b> · {k.alurVisual}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">CTA</p>
+                              <p className="mt-0.5 text-[11px] text-zinc-400">{k.ajakanCta}</p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => pakaiKonsepViral(k.arahanStudio)}
+                            className="mt-3.5 w-full rounded-lg border border-emas/40 bg-emas/10 py-1.5 text-center text-xs font-medium text-emas transition hover:bg-emas hover:text-background"
+                          >
+                            Gunakan di Buat AI →
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                {/* 5c. Pelajari Link / Video Referensi */}
+                <section className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
+                  <div>
+                    <h2 className="flex items-center gap-2 font-heading text-base font-semibold text-foreground">
+                      <Link2 className="size-4 text-sky-400" /> Pelajari Gaya Video Referensi
+                      {daftarRef.length > 0 && (
+                        <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] text-sky-300">
+                          {daftarRef.length}
+                        </span>
+                      )}
+                    </h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Unggah contoh Reels/TikTok atau tempel tautannya. AI akan membedah hook, ritme potongan, dan gaya teksnya.
+                    </p>
+                  </div>
+
                   <div className="space-y-2.5">
-                    <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-sky-400/40 bg-sky-500/5 px-4 py-3 text-center text-xs hover:border-sky-400 hover:bg-sky-500/10 transition">
+                    <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-sky-400/40 bg-sky-500/5 px-4 py-3 text-center text-xs transition hover:border-sky-400 hover:bg-sky-500/10">
                       <div className="flex items-center gap-1.5 font-medium text-sky-300">
                         <Upload className="size-4" />
                         <span>
                           {berkasRef.length > 0
                             ? `${berkasRef.length} berkas dipilih (${berkasRef[0].name})`
-                            : "Unggah Video Reels/TikTok (.mp4) atau 2–5 Screenshot — AI Menonton Langsung!"}
+                            : "Unggah Video Reels/TikTok (.mp4) atau 2–5 Screenshot"}
                         </span>
                       </div>
                       <span className="text-[11px] text-zinc-400">
-                        Paling akurat (anti-blokir login Instagram) · otomatis mengambil 5 bingkai utama dari video
+                        Otomatis mengambil 5 bingkai utama dari video untuk ditonton Vision AI
                       </span>
                       <input
                         type="file"
@@ -989,14 +1929,14 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                         type="url"
                         value={urlRef}
                         onChange={(e) => setUrlRef(e.target.value)}
-                        placeholder="Atau tempel link TikTok / YouTube Shorts (opsional)"
+                        placeholder="Atau tempel link TikTok / Shorts (opsional)"
                         className="h-10 rounded-lg border border-input bg-transparent px-3 text-xs"
                       />
                       <input
                         type="text"
                         value={catatanRef}
                         onChange={(e) => setCatatanRef(e.target.value)}
-                        placeholder="Catatan (mis. sesuaikan dengan menu Lek Kopi)"
+                        placeholder="Catatan (mis. sesuaikan menu Lek Kopi)"
                         className="h-10 rounded-lg border border-input bg-transparent px-3 text-xs"
                       />
                       <button
@@ -1011,7 +1951,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     </div>
                   </div>
 
-                  {galatRef && <p className="text-xs text-red-300 break-words">{galatRef}</p>}
+                  {galatRef && <p className="break-words text-xs text-red-300">{galatRef}</p>}
 
                   {daftarRef.length > 0 && (
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -1023,12 +1963,12 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                             <div className="space-y-1.5">
                               <div className="flex items-start justify-between gap-2">
                                 <div>
-                                  <span className="inline-block rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-300 mr-1.5">
+                                  <span className="mr-1.5 inline-block rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-300">
                                     {b.platform}
                                   </span>
                                   <span className="font-semibold text-foreground">{b.judul}</span>
                                 </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
+                                <div className="flex shrink-0 items-center gap-1.5">
                                   {r.permalink && (
                                     <a href={r.permalink} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-emas" title="Buka video asli">
                                       <ExternalLink className="size-3.5" />
@@ -1041,652 +1981,27 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                               </div>
                               <p className="text-[11px] text-zinc-400">{b.ringkas}</p>
                               <p className="text-[11px] text-zinc-300"><b>Hook:</b> {b.hook3Detik}</p>
-                              <p className="text-[11px] text-zinc-400"><b>Visual & Teks:</b> {b.gayaVisual} · {b.gayaTeks}</p>
+                              <p className="text-[11px] text-zinc-400"><b>Visual &amp; Teks:</b> {b.gayaVisual} · {b.gayaTeks}</p>
                               <p className="text-[10px] text-emas-muda">Preset cocok: <b>{b.presetCocok}</b> · Pacing: {b.pacing}</p>
                             </div>
                             <button
                               type="button"
                               onClick={() => tiruReferensi(r)}
-                              className="mt-3 w-full rounded-lg border border-sky-400/40 bg-sky-500/10 py-1.5 text-center text-xs font-medium text-sky-300 hover:bg-sky-500 hover:text-white transition"
+                              className="mt-3 w-full rounded-lg border border-sky-400/40 bg-sky-500/10 py-1.5 text-center text-xs font-medium text-sky-300 transition hover:bg-sky-500 hover:text-white"
                             >
-                              Tiru Gaya Ini →
+                              Tiru Gaya di Buat AI →
                             </button>
                           </div>
                         );
                       })}
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* ── Panel Jadwal Otomatis Setiap Jam Buka (Story & Opening Lek Kopi) ── */}
-              {bukaRutin && (
-                <div className="mt-4 space-y-4 border-t border-border/50 pt-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h4 className="font-heading text-sm font-semibold text-foreground flex items-center gap-2">
-                        <CalendarClock className="size-4 text-emerald-400" />
-                        Jadwal Otomatis Setiap Jam Buka (Story & Opening)
-                      </h4>
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        Otomatis mengunggah video opening (mis. <b>We Are Open</b>) ke Instagram Story / Reels setiap hari buka sesuai jam yang ditentukan.
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {merek.length > 1 && (
-                        <select
-                          value={merekRutin}
-                          onChange={(e) => setMerekRutin(e.target.value)}
-                          className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-xs"
-                        >
-                          {merek.map((m) => (
-                            <option key={m.slug} value={m.slug} className="bg-card">
-                              {m.nama}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      <button
-                        type="button"
-                        disabled={menyimpanRutin}
-                        onClick={() => void simpanPengaturanRutin({ aktif: !jadwalRutin.aktif })}
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                          jadwalRutin.aktif
-                            ? "bg-emerald-500 text-background hover:bg-emerald-400"
-                            : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500 hover:text-background"
-                        }`}
-                      >
-                        {menyimpanRutin ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                        {jadwalRutin.aktif ? "Jadwal Buka Aktif" : "Aktifkan Jadwal Buka"}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Status waktu tayang berikutnya */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-3.5 py-2.5 text-xs">
-                    <div className="text-zinc-300">
-                      {jadwalRutin.aktif && berikutnyaRutin ? (
-                        <>
-                          ⏰ <b className="text-emerald-300">Tayang otomatis berikutnya:</b>{" "}
-                          {new Date(berikutnyaRutin).toLocaleString("id-ID", {
-                            timeZone: "Asia/Jakarta",
-                            dateStyle: "full",
-                            timeStyle: "short",
-                          })}{" "}
-                          WIB ({jadwalRutin.video.filter((v) => v.aktif).length + (jadwalRutin.aiAktif ? 1 : 0)} konten siap tayang
-                          {jadwalRutin.aiAktif ? ` · termasuk AI ${jadwalRutin.aiFormat === "poster" ? "Poster" : "Animasi"}` : ""})
-                        </>
-                      ) : (
-                        <span className="text-zinc-400">
-                          Jadwal otomatis sedang nonaktif. Klik <b>Aktifkan Jadwal Buka</b> atau atur jam & video di bawah lalu tekan <b>Simpan Jadwal Buka</b>.
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={menyimpanRutin}
-                        onClick={buatPratinjauStoryBuka}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-emas px-3 py-1.5 text-xs font-semibold text-background hover:bg-emas/90 disabled:opacity-50"
-                      >
-                        <Sparkles className="size-3.5" /> Buat Pratinjau Dulu (Cek di Studio & Telegram)
-                      </button>
-                      <button
-                        type="button"
-                        disabled={menyimpanRutin || (!jadwalRutin.aiAktif && jadwalRutin.video.filter((v) => v.aktif).length === 0)}
-                        onClick={tayangkanStoryBukaSekarang}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500 hover:text-background disabled:opacity-50"
-                      >
-                        <Play className="size-3" /> Langsung Tayangkan Sekarang
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Pengaturan Jam Buka, Hari Buka, dan Mode Beberapa Video */}
-                  <div className="grid gap-4 sm:grid-cols-3 rounded-xl border border-border/70 bg-white/[0.02] p-3.5 text-xs">
-                    <div className="space-y-1.5">
-                      <span className="font-medium text-foreground block">Jam Buka (WIB)</span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          type="time"
-                          value={jadwalRutin.jam}
-                          onChange={(e) => setJadwalRutin((j) => ({ ...j, jam: e.target.value || "09:00" }))}
-                          className="h-9 rounded-lg border border-input bg-transparent px-3 font-mono text-sm"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setJadwalRutin((j) => ({ ...j, jam: "09:00" }))}
-                          className={`rounded-md border px-2 py-1 text-[11px] ${
-                            jadwalRutin.jam === "09:00" ? "border-emas bg-emas/15 text-emas" : "border-white/10 text-zinc-400 hover:text-foreground"
-                          }`}
-                        >
-                          09:00 (Video)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setJadwalRutin((j) => ({ ...j, jam: "14:00" }))}
-                          className={`rounded-md border px-2 py-1 text-[11px] ${
-                            jadwalRutin.jam === "14:00" ? "border-emas bg-emas/15 text-emas" : "border-white/10 text-zinc-400 hover:text-foreground"
-                          }`}
-                        >
-                          14:00 (Shift)
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-foreground">Hari Buka</span>
-                        <button
-                          type="button"
-                          onClick={() => setJadwalRutin((j) => ({ ...j, hari: [1, 2, 3, 4, 5, 6] }))}
-                          className="text-[10px] text-emas hover:underline"
-                        >
-                          Senin–Sabtu
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {HARI_WIB.map((h) => {
-                          const dipilih = jadwalRutin.hari.includes(h.kode);
-                          return (
-                            <button
-                              key={h.kode}
-                              type="button"
-                              onClick={() =>
-                                setJadwalRutin((j) => ({
-                                  ...j,
-                                  hari: dipilih ? j.hari.filter((x) => x !== h.kode) : [...j.hari, h.kode],
-                                }))
-                              }
-                              className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
-                                dipilih
-                                  ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-200"
-                                  : "border-white/10 bg-white/[0.02] text-zinc-500 hover:text-zinc-300"
-                              }`}
-                            >
-                              {h.pendek}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <span className="font-medium text-foreground block">Mode Beberapa Video</span>
-                      <select
-                        value={jadwalRutin.mode}
-                        onChange={(e) => setJadwalRutin((j) => ({ ...j, mode: e.target.value as JadwalRutin["mode"] }))}
-                        className="h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-xs"
-                      >
-                        <option value="semua" className="bg-card">Upload semua video aktif sekaligus</option>
-                        <option value="wajib+bergilir" className="bg-card">Video wajib + 1 video pendamping bergilir/hari</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Konten Jam Buka Generated AI (Selalu Baru Tiap Hari — Animasi Remotion / Poster AI) */}
-                  <div className="rounded-xl border border-emas/30 bg-emas/[0.04] p-3.5 text-xs space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(jadwalRutin.aiAktif)}
-                          onChange={(e) => setJadwalRutin((j) => ({ ...j, aiAktif: e.target.checked }))}
-                          className="size-4 accent-[#c9a24b]"
-                        />
-                        <span className="font-semibold text-foreground flex items-center gap-1.5">
-                          <Sparkles className="size-3.5 text-emas" />
-                          Buat Konten Opening Baru oleh AI Setiap Jam Buka (Tanpa Bank Video)
-                        </span>
-                      </label>
-                      <span className="rounded-full bg-emas/15 px-2 py-0.5 text-[10px] font-medium text-emas-muda">
-                        3 Menu Terlaris Asli + Musik & SFX Adaptif
-                      </span>
-                    </div>
-
-                    {jadwalRutin.aiAktif && (
-                      <div className="grid gap-3 sm:grid-cols-3 pt-1">
-                        <label className="grid gap-1">
-                          <span className="text-[11px] text-muted-foreground">Format Konten AI</span>
-                          <select
-                            value={jadwalRutin.aiFormat ?? "video-animasi"}
-                            onChange={(e) =>
-                              setJadwalRutin((j) => ({
-                                ...j,
-                                aiFormat: e.target.value as JadwalRutin["aiFormat"],
-                              }))
-                            }
-                            className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
-                          >
-                            <option value="video-animasi" className="bg-card">🎬 Video Animasi 3 Menu Terlaris (15 dtk + Musik & SFX)</option>
-                            <option value="poster" className="bg-card">🖼 Poster Story AI (9:16, cepat & ringan)</option>
-                          </select>
-                        </label>
-
-                        <label className="grid gap-1">
-                          <span className="text-[11px] text-muted-foreground">Tema Visual</span>
-                          <select
-                            value={jadwalRutin.aiGaya ?? "otomatis"}
-                            onChange={(e) =>
-                              setJadwalRutin((j) => ({
-                                ...j,
-                                aiGaya: e.target.value as JadwalRutin["aiGaya"],
-                              }))
-                            }
-                            className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
-                          >
-                            <option value="otomatis" className="bg-card">Otomatis berganti tiap hari</option>
-                            <option value="hangat-kafe" className="bg-card">Hangat Kafe (Cokelat Emas)</option>
-                            <option value="terang-modern" className="bg-card">Terang Modern (Krem Bersih)</option>
-                            <option value="minimalis-gelap" className="bg-card">Minimalis Gelap (Teal Elegan)</option>
-                          </select>
-                        </label>
-
-                        <label className="grid gap-1">
-                          <span className="text-[11px] text-muted-foreground">Arahan AI (opsional)</span>
-                          <input
-                            type="text"
-                            value={jadwalRutin.aiArahan ?? ""}
-                            onChange={(e) => setJadwalRutin((j) => ({ ...j, aiArahan: e.target.value }))}
-                            placeholder="Kosongkan agar AI pilih menu tiap hari"
-                            className="h-9 rounded-lg border border-input bg-card px-2.5 text-xs"
-                          />
-                        </label>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Daftar Video Jam Buka */}
-                  <div className="space-y-2.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-foreground">
-                        Daftar Video Opening / Story Jam Buka ({jadwalRutin.video.length} video)
-                      </p>
-                      {!jadwalRutin.video.some((v) => v.url.includes("lekkopi-opening-story")) && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setJadwalRutin((j) => ({
-                              ...j,
-                              video: [{ ...VIDEO_OPENING_BAWAAN_LEKKOPI }, ...j.video],
-                            }))
-                          }
-                          className="text-[11px] text-emas hover:underline"
-                        >
-                          + Pulihkan Video Bawaan "We Are Open"
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {jadwalRutin.video.map((v, idx) => (
-                        <div
-                          key={v.id}
-                          className={`flex gap-3 rounded-xl border p-3 text-xs transition ${
-                            v.aktif ? "border-border/80 bg-white/[0.03]" : "border-border/40 bg-white/[0.01] opacity-60"
-                          }`}
-                        >
-                          <div className="shrink-0">
-                            {v.jenis === "video" ? (
-                              <video
-                                src={v.url}
-                                poster={v.sampul ?? undefined}
-                                controls
-                                playsInline
-                                preload="metadata"
-                                className="h-32 w-20 rounded-lg bg-black object-cover"
-                              />
-                            ) : (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={v.url} alt={v.judul} className="h-32 w-20 rounded-lg bg-black object-cover" />
-                            )}
-                          </div>
-
-                          <div className="flex flex-1 flex-col justify-between gap-2 min-w-0">
-                            <div className="space-y-1.5">
-                              <div className="flex items-start justify-between gap-1">
-                                <input
-                                  type="text"
-                                  value={v.judul}
-                                  onChange={(e) =>
-                                    setJadwalRutin((j) => ({
-                                      ...j,
-                                      video: j.video.map((x, i) => (i === idx ? { ...x, judul: e.target.value } : x)),
-                                    }))
-                                  }
-                                  className="h-7 w-full rounded border border-white/10 bg-transparent px-2 text-xs font-semibold text-foreground"
-                                  placeholder="Judul video opening"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setJadwalRutin((j) => ({
-                                      ...j,
-                                      video: j.video.filter((_, i) => i !== idx),
-                                    }))
-                                  }
-                                  className="p-1 text-zinc-400 hover:text-red-400"
-                                  title="Hapus dari jadwal buka"
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </button>
-                              </div>
-
-                              <select
-                                value={v.sasaran}
-                                onChange={(e) =>
-                                  setJadwalRutin((j) => ({
-                                    ...j,
-                                    video: j.video.map((x, i) =>
-                                      i === idx ? { ...x, sasaran: e.target.value as VideoRutin["sasaran"] } : x,
-                                    ),
-                                  }))
-                                }
-                                className="h-7 w-full rounded border border-white/10 bg-transparent px-2 text-[11px]"
-                              >
-                                <option value="story" className="bg-card">📱 Upload ke Story Instagram</option>
-                                <option value="reels+story" className="bg-card">🎬 Upload ke Story + Reels</option>
-                                <option value="reels" className="bg-card">🎬 Upload ke Reels saja</option>
-                              </select>
-
-                              <div className="flex flex-wrap items-center gap-3 pt-0.5 text-[11px]">
-                                <label className="inline-flex items-center gap-1.5 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={v.aktif}
-                                    onChange={(e) =>
-                                      setJadwalRutin((j) => ({
-                                        ...j,
-                                        video: j.video.map((x, i) => (i === idx ? { ...x, aktif: e.target.checked } : x)),
-                                      }))
-                                    }
-                                    className="size-3.5 accent-emerald-500"
-                                  />
-                                  <span>Aktif</span>
-                                </label>
-                                <label className="inline-flex items-center gap-1.5 cursor-pointer" title="Selalu diupload setiap jam buka">
-                                  <input
-                                    type="checkbox"
-                                    checked={v.wajib}
-                                    onChange={(e) =>
-                                      setJadwalRutin((j) => ({
-                                        ...j,
-                                        video: j.video.map((x, i) => (i === idx ? { ...x, wajib: e.target.checked } : x)),
-                                      }))
-                                    }
-                                    className="size-3.5 accent-[#c9a24b]"
-                                  />
-                                  <span className="text-emas-muda">Selalu tayang tiap buka</span>
-                                </label>
-                              </div>
-                            </div>
-
-                            <span className="truncate text-[10px] text-zinc-500">
-                              {v.durasi ? `${v.durasi} dtk · ` : ""}{v.url}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Unggah Video Opening Baru atau Tambah URL */}
-                    <div className="grid gap-2.5 sm:grid-cols-2 pt-1">
-                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-400/40 bg-emerald-500/5 px-4 py-2.5 text-xs font-medium text-emerald-300 hover:border-emerald-400 hover:bg-emerald-500/10 transition">
-                        {mengunggahRutin ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-                        <span>
-                          {mengunggahRutin ? "Mengunggah video ke Studio…" : "Unggah Video/Foto Opening Baru (.mp4 / .mov / .jpg)"}
-                        </span>
-                        <input
-                          type="file"
-                          accept="video/mp4,video/quicktime,video/webm,image/jpeg,image/png"
-                          className="hidden"
-                          disabled={mengunggahRutin}
-                          onChange={(e) => {
-                            const f = e.target.files?.[0];
-                            if (f) void unggahVideoRutin(f);
-                            e.target.value = "";
-                          }}
-                        />
-                      </label>
-
-                      <div className="flex gap-1.5">
-                        <input
-                          type="text"
-                          value={judulBaruRutin}
-                          onChange={(e) => setJudulBaruRutin(e.target.value)}
-                          placeholder="Judul (opsional)"
-                          className="h-10 w-28 rounded-lg border border-input bg-transparent px-2.5 text-xs"
-                        />
-                        <input
-                          type="text"
-                          value={urlBaruRutin}
-                          onChange={(e) => setUrlBaruRutin(e.target.value)}
-                          placeholder="Atau tempel URL video (.mp4)"
-                          className="h-10 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-xs"
-                        />
-                        <button
-                          type="button"
-                          onClick={tambahUrlRutin}
-                          disabled={!urlBaruRutin.trim()}
-                          className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 text-xs hover:border-emas hover:text-emas disabled:opacity-40"
-                        >
-                          <Plus className="size-3.5" /> Tambah
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                    <button
-                      type="button"
-                      disabled={menyimpanRutin}
-                      onClick={() => void simpanPengaturanRutin()}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-emas px-4 py-2 text-xs font-semibold text-background hover:bg-emas/90 disabled:opacity-60"
-                    >
-                      {menyimpanRutin ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-                      Simpan Jadwal Buka
-                    </button>
-                    {pesanRutin && <span className="text-xs text-emerald-300">{pesanRutin}</span>}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={buat} className="mb-8 grid gap-4 rounded-2xl border border-border bg-card p-5 sm:p-6">
-              <h2 className="flex items-center gap-2 font-heading text-lg"><Sparkles className="size-5 text-emas" /> Buat konten promosi</h2>
-              {/* Pilihan merek muncul bila lebih dari satu merek aktif (aktifkan di Sambungan). */}
-              {merekAktif.length > 1 ? (
-                <label className="grid gap-1.5 sm:w-1/2">
-                  <span className="text-xs font-medium text-muted-foreground">Merek</span>
-                  <select name="merek" value={pilihMerek} onChange={(e) => { setPilihMerek(e.target.value); setUsulan([]); setGalatUsulan(""); }} className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm">
-                    {merekAktif.map((m) => <option key={m.slug} value={m.slug} className="bg-card">{m.nama}</option>)}
-                  </select>
-                </label>
-              ) : (
-                <input type="hidden" name="merek" value={merekAktif[0]?.slug ?? "bakafrawi"} />
-              )}
-              {merekBank && (
-                <p className="text-xs text-redup">Video dari bank foto/video {merek.find((m) => m.slug === pilihMerek)?.nama} di Google Drive. Naskah ditulis dulu dari data kedai dan dikirim ke bot untuk disetujui; videonya dibuat setelah naskah disetujui.</p>
-              )}
-              <div hidden={merekBank} className="grid gap-4 sm:grid-cols-2">
-                <label className="grid gap-1.5">
-                  <span className="text-xs font-medium text-muted-foreground">Produk</span>
-                  <select
-                    name="produk"
-                    value={pilihProduk}
-                    onChange={(e) => {
-                      setPilihProduk(e.target.value);
-                      setUsulan([]);
-                      setGalatUsulan("");
-                    }}
-                    className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
-                  >
-                    {situs.produk.map((p) => (
-                      <option key={p.slug} value={p.slug} className="bg-card">{p.nama}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="grid gap-1.5">
-                  <span className="text-xs font-medium text-muted-foreground">Jenis</span>
-                  <select
-                    name="jenis"
-                    value={pilihJenis}
-                    onChange={(e) => {
-                      setPilihJenis(e.target.value as "gambar" | "video");
-                      setPilihGaya("otomatis");
-                    }}
-                    className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
-                  >
-                    <option value="gambar" className="bg-card">Poster (1:1, 4:5, 9:16)</option>
-                    <option value="video" className="bg-card">Video Reels/TikTok (Remotion + animasi)</option>
-                  </select>
-                </label>
+                </section>
               </div>
-              {/* Preset Gaya Desain — tersedia sama untuk Bakafrawi & Lek Kopi */}
-              <label className="grid gap-1.5 sm:w-1/2">
-                <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Palette className="size-3.5 text-emas" /> Gaya Desain {merekBank || pilihJenis === "video" ? "Video" : "Poster"}
-                </span>
-                <select
-                  name="gaya"
-                  value={pilihGaya}
-                  onChange={(e) => setPilihGaya(e.target.value)}
-                  className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
-                >
-                  {(merekBank || pilihJenis === "video" ? PRESET_VIDEO : PRESET_POSTER).map((g) => (
-                    <option key={g.kode} value={g.kode} className="bg-card">{g.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label hidden={merekBank} className="flex items-start gap-2 text-sm">
-                <input type="checkbox" name="latar" className="mt-0.5 size-4 accent-[#c9a24b]" />
-                <span>
-                  Latar gambar AI <span className="text-xs text-redup">(khusus poster: foto suasana — gratis ±60 gambar/hari lewat Cloudflare; video memakai karakter dari Drive)</span>
-                </span>
-              </label>
-              <div className="grid gap-1.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label htmlFor="studio-arahan" className="text-xs font-medium text-muted-foreground">{merekBank ? "Ide video (opsional — kosongkan agar AI memilih otomatis)" : "Arahan untuk AI (opsional)"}</label>
-                  <button type="button" onClick={mintaUsulan} disabled={mengusulkan} className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-xs hover:border-emas hover:text-emas disabled:opacity-60">
-                    {mengusulkan ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />} {merekBank ? "Usulkan ide AI" : "Usulkan arahan"}
-                  </button>
-                </div>
-                <textarea
-                  id="studio-arahan"
-                  ref={kolomArahan}
-                  key={merekBank ? "ide" : "arahan"}
-                  name="arahan"
-                  rows={2}
-                  placeholder={merekBank ? "Opsional: mis. suasana malam minggu, es kopi susu (kosongkan agar AI pilih menu terbaik otomatis)" : "Mis. sasar pemilik warung kopi, tonjolkan fitur struk WhatsApp, nada santai"}
-                  className="rounded-lg border border-input bg-transparent px-3 py-2 text-sm"
-                />
-                {galatUsulan && <p className="text-xs text-red-300">{galatUsulan}</p>}
-                {usulan.length > 0 && (
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {usulan.map((u) => (
-                      <button key={u.judul + u.arahan} type="button" onClick={() => pakaiUsulan(u.arahan)} className="rounded-xl border border-white/10 bg-white/[.03] p-3 text-left text-xs hover:border-emas">
-                        <span className="mb-1 block font-semibold text-emas-muda">{u.judul}</span>
-                        <span className="text-muted-foreground">{u.arahan}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+            )}
 
-              {/* Opsi Jadwal Tayang Otomatis / Custom & Sasaran Instagram */}
-              <div className="rounded-xl border border-border/70 bg-white/[0.02] p-3.5 text-xs space-y-3">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-1.5">
-                    <span className="flex items-center gap-1.5 font-medium text-muted-foreground">
-                      <CalendarClock className="size-3.5 text-emas" /> Jadwal Tayang Setelah Selesai
-                    </span>
-                    <select
-                      value={modeJadwalBuat}
-                      onChange={(e) => setModeJadwalBuat(e.target.value as "persetujuan" | "prime19" | "custom")}
-                      className="h-9 rounded-lg border border-input bg-transparent px-3 text-xs"
-                    >
-                      <option value="persetujuan" className="bg-card">Tunggu persetujuan dulu (bawaan)</option>
-                      <option value="prime19" className="bg-card">Otomatis jadwalkan Prime Time 19.00 WIB</option>
-                      <option value="custom" className="bg-card">Otomatis jadwalkan di tanggal & jam custom…</option>
-                    </select>
-                  </label>
-
-                  <label className="grid gap-1.5">
-                    <span className="font-medium text-muted-foreground">Sasaran Tayang Instagram</span>
-                    <select
-                      value={sasaranBuat}
-                      onChange={(e) => setSasaranBuat(e.target.value as SasaranTayang)}
-                      className="h-9 rounded-lg border border-input bg-transparent px-3 text-xs"
-                    >
-                      {(merekBank || pilihJenis === "video" ? DAFTAR_SASARAN_VIDEO : DAFTAR_SASARAN_GAMBAR).map((s) => (
-                        <option key={s.kode} value={s.kode} className="bg-card">
-                          {s.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                {modeJadwalBuat === "custom" && (
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <input
-                      type="datetime-local"
-                      value={waktuJadwalBuat}
-                      onChange={(e) => setWaktuJadwalBuat(e.target.value)}
-                      className="h-9 rounded-lg border border-input bg-transparent px-3 font-mono text-xs"
-                    />
-                    <div className="flex flex-wrap gap-1.5">
-                      {daftarSlotCepatWIB().map((s) => (
-                        <button
-                          key={s.kode}
-                          type="button"
-                          onClick={() => setWaktuJadwalBuat(s.inputWib)}
-                          className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
-                            waktuJadwalBuat === s.inputWib
-                              ? "border-emas bg-emas/15 text-emas"
-                              : "border-white/10 text-zinc-400 hover:border-white/25 hover:text-foreground"
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <button disabled={sibuk} className="inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
-                  {sibuk ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Buat
-                </button>
-                {pesan && <span className="text-sm text-emas-muda">{pesan}</span>}
-              </div>
-            </form>
-
-            <Sambungan sesi={sesi} />
-
-            <h2 className="mb-3 font-heading text-lg">Riwayat</h2>
-            {daftar.length === 0 && <p className="text-sm text-muted-foreground">Belum ada konten.</p>}
-            <div className="grid gap-4">
-              {daftar.map((t) => (
-                <KartuTugas
-                  key={t.id}
-                  t={t}
-                  nama={
-                    namaMerek(t.merek) +
-                    (t.produk_slug === "rutin-buka"
-                      ? "Story Jam Buka Otomatis"
-                      : t.produk_slug === t.merek
-                      ? "video bank media"
-                      : namaProduk(t.produk_slug))
-                  }
-                  hapus={() => hapus(t)}
-                  tayang={(a, opsi) => tayang(t, a, opsi)}
-                  naskah={(a) => putusNaskah(t, a)}
-                />
-              ))}
-            </div>
+            {/* ══════════ TAB 6: SAMBUNGAN AKUN & BOT ══════════ */}
+            {tabStudio === "sambungan" && <Sambungan sesi={sesi} />}
           </>
         )}
       </main>
@@ -1735,7 +2050,7 @@ function KartuTugas({
           <b>{nama}</b>
           <span className="text-redup">· {new Date(t.dibuat).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           {t.tayang?.sasaran && t.tayang.sasaran !== "otomatis" && (
             <span className="rounded-full bg-purple-500/15 px-2.5 py-1 text-xs text-purple-300 uppercase">
               {t.tayang.sasaran}
@@ -1843,7 +2158,7 @@ function KartuTugas({
                 <X className="size-4" /> Batalkan tayang
               </button>
             )}
-            {t.status_tayang !== "tayang" && t.status_tayang !== "proses" && t.produk_slug !== "rutin-buka" && (
+            {t.status_tayang !== "tayang" && t.status_tayang !== "proses" && t.produk_slug !== "rutin-buka" && t.produk_slug !== "unggah-manual" && (
               <button onClick={() => tayang("ulang")} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground hover:text-foreground">
                 <RefreshCw className="size-4" /> Buat ulang
               </button>

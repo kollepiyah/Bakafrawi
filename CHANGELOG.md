@@ -1,5 +1,21 @@
 # CHANGELOG — bakafrawi.com
 
+## Unggah Video Manual Terjadwal, Story Acak Anti-Ulang, Insight Penonton Story & Tata Ulang UI Studio (23 Nov)
+
+- **Unggah Video / Foto Manual & Jadwal Otomatis (Story maupun Reels):**
+  - Rute baru `/api/studio/unggah` (`src/app/api/studio/unggah/route.ts` & `buatTugasUnggahManual` di `src/lib/studio-server.ts`) untuk unggah langsung ke Supabase Storage bucket `studio` (maks 95 MB), membuat sampul otomatis, lalu memilih **Jadwalkan Otomatis (tanggal & jam WIB + tombol cepat)**, **Tayangkan Sekarang**, atau **Simpan Draf** ke sasaran `Reels`, `Story saja`, `Reels + Story`, `Feed + Story`, atau `Feed saja`.
+  - Tersedia di tab **Unggah & Jadwal** pada Web/PWA (`src/components/admin/studio-unggah.tsx`) maupun tab **Unggah** di APK Android (`LayarStudio.kt` & `Api.kt`).
+- **Story Otomatis Harian — Mode Acak 1 Video/Hari (Anti-Ulang):**
+  - Menambahkan mode `"acak"` + pencatatan riwayat (`riwayatVideo`, `terakhirVideoId`) di `src/lib/jadwal-tayang-murni.ts`, `src/lib/studio-server.ts`, dan mesin worker `studio/studio.mjs`. Setiap hari sistem mengundi 1 video aktif tanpa mengulang video kemarin sampai seluruh koleksi kebagian giliran; dilengkapi info **video pilihan acak berikutnya** dan tombol **Acak Ulang** (`aksi: "acak-ulang"` di `/api/studio/rutin`), serta dukungan unggah banyak video sekaligus.
+  - Memperbaiki bug di APK Android (`Api.kt`) yang sebelumnya mengirim nama kolom tidak cocok (`jamWib`/`modeKonten`) sehingga pengaturan Story Otomatis dari HP sebelumnya tidak tersimpan sempurna; juga memperbaiki `"reels_story"` → `"reels+story"` & `"feed_story"` → `"feed+story"`.
+- **Perbaikan Insight Penonton Story Instagram (`src/lib/instagram-insight.ts`, `deck.tsx`, `Layar.kt`):**
+  - Menemukan 4 akar penyebab penonton Story tidak muncul: (1) `infoIg.story`/`stories` sebelumnya tidak dibaca, (2) endpoint `/{user}/media` tidak mengembalikan Story — kini ikut menarik Story aktif `< 24 jam` dari `/{user}/stories`, (3) metrik `saved` ditolak Meta API untuk Story — kini memakai paket metrik khusus Story (`views,reach,replies,shares` + fallback `impressions,reach`), dan (4) menyimpan snapshot penonton Story ke `studio_tugas.tayang.instagram.story.insight` agar angka terakhir tetap terbaca meski Story sudah lewat 24 jam.
+  - Kartu Insight di Web (`deck.tsx`) dan Android (`Layar.kt`) kini menampilkan lencana **STORY** / **REELS** / **FEED**, jumlah penonton Story, jangkauan akun unik, balasan Story, serta status arsip `>24 jam`.
+- **Penataan Ulang Tampilan Menu Studio (Web/PWA & Android APK v2.2.0):**
+  - Menu Studio Web/PWA (`src/components/admin/studio.tsx`) kini memakai navigasi **6 sub-tab seragam** dengan Android (`Unggah & Jadwal`, `Story Otomatis`, `Buat AI`, `Riwayat`, `Riset & Gaya`, `Sambungan`), header ringkasan status cepat, serta filter Riwayat (`Semua`, `Terjadwal`, `Perlu Cek`, `Tayang`).
+  - APK Android (`v2.2.0`, `versionCode 6`) juga dilengkapi tab Unggah Manual dari galeri HP, daftar & pengelola koleksi video Story Otomatis, filter Riwayat, dan dialog Jadwal Custom (tanggal, jam WIB, & sasaran).
+- Diuji: 33/33 unit test (`npm run uji`), `tsc --noEmit`, `node --check studio/studio.mjs studio/lib/instagram.mjs`, `npm run build` (Web/PWA), dan `gradlew compileDebugKotlin` (Android). **Belum:** commit/push ke GitHub, deploy Vercel, build/rilis APK v2.2.0 ke GitHub Releases, serta uji langsung di HP dengan token Instagram asli.
+
 ## Pembaruan Tampilan Situs Utama — Paket WebGL 3D & Komponen Interaktif (21 Nov)
 
 - **Lanyard 3D Fisika Tali Asli (`lanyard-3d-canvas.tsx` & `kartu-lanyard.tsx`):** ditenagai

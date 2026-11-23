@@ -63,7 +63,7 @@ export async function postingStory(k, mediaUrl, jenis) {
   const adalahVideo = jenis === 'video' || /\.(mp4|mov|webm)(\?|$)/i.test(String(mediaUrl ?? ''));
   const isi = adalahVideo ? { media_type: 'STORIES', video_url: mediaUrl } : { media_type: 'STORIES', image_url: mediaUrl };
   const id = await terbitkan(k, await buatWadah(k, isi, 'Wadah story'), adalahVideo ? 'video story' : 'story', adalahVideo ? 15_000 : 5000);
-  return { id, jenis: adalahVideo ? 'video' : 'gambar' };
+  return { id, jenis: adalahVideo ? 'video' : 'gambar', permalink: await tautan(k, id) };
 }
 
 export async function postingReels(k, videoUrl, caption) {

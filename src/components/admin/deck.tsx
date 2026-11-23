@@ -469,6 +469,20 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
               <div className="space-y-2">
                 {insight.posts.map((p) => {
                   const adalahVideo = p.jenis === "video";
+                  const adalahStory = p.format === "story";
+                  const labelFormat = adalahStory ? "Story" : p.format === "feed" ? "Feed" : "Reels";
+                  const namaProdukLabel =
+                    p.produk === "rutin-buka"
+                      ? "Story Jam Buka"
+                      : p.produk === "unggah-manual"
+                      ? "Unggah Manual"
+                      : p.produk === p.merek
+                      ? adalahStory
+                        ? "Story IG"
+                        : adalahVideo
+                        ? "Video"
+                        : "Postingan"
+                      : p.produk;
                   return (
                     <div
                       key={p.id}
@@ -477,27 +491,68 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
                       <div className="flex items-center gap-3 min-w-0">
                         <Miniatur gambar={p.thumbnail} video={p.videoUrl} adalahVideo={adalahVideo} besar />
                         <div className="min-w-0 space-y-1">
-                          <p className="text-xs font-semibold text-foreground truncate">
-                            {p.merek && p.merek !== "bakafrawi" ? `${p.merek} · ` : ""}{p.produk === p.merek ? (adalahVideo ? "Video" : "Postingan") : p.produk} · {adalahVideo ? "Reels" : "Feed"}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                                adalahStory
+                                  ? "bg-fuchsia-500/20 text-fuchsia-300"
+                                  : p.format === "feed"
+                                  ? "bg-amber-500/15 text-amber-300"
+                                  : "bg-sky-500/15 text-sky-300"
+                              }`}
+                            >
+                              {labelFormat}
+                            </span>
+                            <p className="text-xs font-semibold text-foreground truncate">
+                              {p.merek && p.merek !== "bakafrawi" ? `${p.merek} · ` : ""}
+                              {namaProdukLabel}
+                            </p>
+                            {adalahStory && p.arsipStory && (
+                              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                                Arsip &gt;24 jam
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-muted-foreground truncate max-w-sm">
-                            {p.caption ? p.caption.slice(0, 60) + "…" : "Tanpa caption"}
+                            {p.caption ? p.caption.slice(0, 60) + (p.caption.length > 60 ? "…" : "") : adalahStory ? "Story Instagram" : "Tanpa caption"}
                           </p>
-                          <p className="inline-flex items-center gap-1 rounded-md bg-sky-500/10 px-1.5 py-0.5 font-mono text-[11px] text-sky-300">
-                            <Eye className="size-3" /> {p.views != null ? `${angka(p.views)} kali ditonton` : "tayangan belum tersedia"}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[11px] ${adalahStory ? "bg-fuchsia-500/10 text-fuchsia-300" : "bg-sky-500/10 text-sky-300"}`}>
+                              <Eye className="size-3" />{" "}
+                              {p.views != null
+                                ? `${angka(p.views)} ${adalahStory ? "penonton" : "kali ditonton"}`
+                                : adalahStory && p.arsipStory
+                                ? "kedaluwarsa >24 jam (belum sempat tersimpan)"
+                                : "penonton belum tersedia"}
+                            </p>
+                            {adalahStory && p.reach != null && p.reach !== p.views && (
+                              <span className="rounded-md bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400">
+                                {angka(p.reach)} akun unik
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-0 border-border/30 text-xs">
                         <div className="flex items-center gap-3 text-muted-foreground">
-                          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-red-300">
-                            <Heart className="size-3 text-red-400 fill-red-400/20" /> {p.likes}
-                          </span>
-                          <span className="inline-flex items-center gap-1 font-mono text-[11px] text-sky-300">
-                            <MessageCircle className="size-3 text-sky-400" /> {p.comments}
-                          </span>
-                          {p.reach != null && (
+                          {!adalahStory ? (
+                            <>
+                              <span className="inline-flex items-center gap-1 font-mono text-[11px] text-red-300">
+                                <Heart className="size-3 text-red-400 fill-red-400/20" /> {p.likes}
+                              </span>
+                              <span className="inline-flex items-center gap-1 font-mono text-[11px] text-sky-300">
+                                <MessageCircle className="size-3 text-sky-400" /> {p.comments}
+                              </span>
+                            </>
+                          ) : (
+                            p.replies != null && (
+                              <span className="inline-flex items-center gap-1 font-mono text-[11px] text-fuchsia-300" title="Balasan Story">
+                                <MessageCircle className="size-3 text-fuchsia-400" /> {p.replies} balas
+                              </span>
+                            )
+                          )}
+                          {p.reach != null && !adalahStory && (
                             <span className="inline-flex items-center gap-1 font-mono text-[11px] text-zinc-400" title="Jangkauan (akun unik)">
                               <BarChart3 className="size-3" /> {angka(p.reach)}
                             </span>

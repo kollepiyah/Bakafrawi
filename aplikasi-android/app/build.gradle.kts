@@ -22,8 +22,8 @@ android {
         applicationId = "com.bakafrawi.studio"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "2.1.1"
+        versionCode = 6
+        versionName = "2.2.0"
         // Alamat situs & repo rilis GitHub untuk cek pembaruan APK otomatis.
         buildConfigField("String", "SITUS", "\"https://bakafrawi.com\"")
         buildConfigField("String", "GITHUB_REPO", "\"kollepiyah/Bakafrawi\"")
