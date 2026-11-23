@@ -125,11 +125,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
     return () => clearTimeout(t);
   }, [muat]);
 
-  // Auto-refresh tiap 30 detik
-  useEffect(() => {
-    const iv = setInterval(() => { void muat(false); }, 30_000);
-    return () => clearInterval(iv);
-  }, [muat]);
+  // Tidak lagi auto-polling tiap 30 detik agar hemat kuota & aman dari pembatasan otomatis Meta/GitHub API.
 
   if (!data && !galat) {
     return (
@@ -254,13 +250,13 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
           )}
 
           <button
-            onClick={() => void muat(true)}
+            onClick={() => void muat(tabAktif === "insight")}
             disabled={sedangMuat}
-            title="Segarkan data status & insight"
+            title={tabAktif === "insight" ? "Tarik data terbaru dari Instagram (maks 1× per 15 menit)" : "Segarkan status mesin & tugas (tanpa memanggil API Instagram)"}
             className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:border-emas hover:text-foreground disabled:opacity-50"
           >
             <RefreshCw className={`size-3 ${sedangMuat ? "animate-spin" : ""}`} />
-            <span className="hidden sm:inline">Segarkan</span>
+            <span>{tabAktif === "insight" ? "Tarik dari IG" : "Segarkan"}</span>
           </button>
         </div>
       </div>
@@ -433,15 +429,22 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
           {/* Ringkasan metrik ada di kartu atas; tab ini fokus per postingan. */}
           {/* Daftar Postingan Tayang */}
           <div>
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Postingan Terbaru di Instagram
               </p>
-              {insight?.akun && (
-                <span className="text-[11px] text-muted-foreground">
-                  Akun: <b className="text-foreground">{insight.akun}</b>
-                </span>
-              )}
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                {insight?.diambilPada && (
+                  <span className="rounded bg-white/5 px-1.5 py-0.5 text-[10px]">
+                    {insight.dariCache ? "Cache aman" : "Baru ditarik"} · {waktuRelatif(insight.diambilPada)}
+                  </span>
+                )}
+                {insight?.akun && (
+                  <span>
+                    Akun: <b className="text-foreground">{insight.akun}</b>
+                  </span>
+                )}
+              </div>
             </div>
 
             {insight?.galatInsight && (

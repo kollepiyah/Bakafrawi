@@ -3,9 +3,17 @@ import { rest } from "./db-server";
 
 const VERSI = () => process.env.IG_API_VERSI || "v27.0";
 
-// Cache 3 menit di server agar auto-refresh Beranda (tiap 30 dtk) tidak memicu rate-limit Meta Graph API.
-let cacheInsight: { waktu: number; data: RingkasInsight } | null = null;
-const TTL_CACHE_MS = 3 * 60_000;
+// Rem keras anti-spam Meta Graph API:
+// 1) Pemuatan Beranda normal (paksaSegar = false) TIDAK PERNAH memanggil Meta API — hanya membaca cache Supabase.
+// 2) Penyegaran manual (paksaSegar = true) dibatasi minimal 15 menit sekali per merek (persisten di studio_merek.profil).
+// 3) Maks 1 request metrik ("views,reach") per item, berurutan santai (jeda 250ms), maks 4 post + 2 story aktif per akun.
+// 4) Story > 24 jam = 0 request ke Meta (langsung pakai snapshot tersimpan).
+// 5) Circuit breaker: begitu Meta menolak (rate-limit / OAuth / akun dibatasi), langsung berhenti & jeda 6 jam untuk akun itu.
+const COOLDOWN_SEGAR_MS = 15 * 60_000;
+const JEDA_CIRCUIT_BREAKER_MS = 6 * 3_600_000;
+const JEDA_ANTAR_REQ_MS = 250;
+
+const tidur = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export type PostInsight = {
   id: string;
@@ -40,6 +48,8 @@ export type RingkasInsight = {
   totalStory?: number;
   totalStoryViews?: number;
   posts: PostInsight[];
+  diambilPada?: string | null;
+  dariCache?: boolean;
   pesan?: string;
   galatInsight?: string | null;
 };
@@ -52,6 +62,19 @@ type KredensialIg = {
     ig_user_id?: string;
     ig_akun?: string;
   };
+};
+
+type CacheInsightMerek = {
+  diambil: string;
+  jedaSampai?: string | null;
+  galat?: string | null;
+  posts: PostInsight[];
+};
+
+type BarisMerek = {
+  slug: string;
+  aktif: boolean;
+  profil: (Record<string, unknown> & { insight_cache?: CacheInsightMerek }) | null;
 };
 
 type SnapshotInsightStory = {
@@ -120,61 +143,50 @@ type MediaAkunIg = {
   comments_count?: number;
 };
 
-/** Ambil insight (views/plays/reach/impressions/saved/shares/replies) untuk satu media IG (Reels, Feed, atau Story). */
-async function tarikMetrikMedia(host: string, token: string, mediaId: string, adalahStory = false) {
+function adalahGalatKerasMeta(status: number, errObj?: { code?: number; message?: string } | null): boolean {
+  if (status === 429 || status === 401 || status === 403) return true;
+  const code = Number(errObj?.code);
+  if ([4, 10, 17, 32, 190, 200, 368].includes(code)) return true;
+  const msg = String(errObj?.message ?? "").toLowerCase();
+  return (
+    msg.includes("rate limit") ||
+    msg.includes("request limit") ||
+    msg.includes("checkpoint") ||
+    msg.includes("suspend") ||
+    msg.includes("disabled") ||
+    msg.includes("blocked") ||
+    msg.includes("session")
+  );
+}
+
+/**
+ * Ambil 1 kali saja metrik paling aman (`views,reach`) untuk satu media IG.
+ * Tidak melakukan loop percobaan ulang beruntun agar tidak pernah memicu alarm anti-bot Meta.
+ */
+async function tarikMetrikRingan(host: string, token: string, mediaId: string) {
+  const url = `https://${host}/${VERSI()}/${mediaId}/insights?metric=views,reach&access_token=${token}`;
+  const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(8000) }).catch(() => null);
+  if (!res) return { views: null, reach: null, galat: null, hentikanAkun: false };
+
+  const j = await res.json().catch(() => null);
+  if (!res.ok) {
+    const pesanErr = j?.error?.message ? String(j.error.message) : `HTTP ${res.status}`;
+    const hentikanAkun = adalahGalatKerasMeta(res.status, j?.error);
+    return { views: null, reach: null, galat: hentikanAkun ? pesanErr : null, hentikanAkun };
+  }
+
   let views: number | null = null;
   let reach: number | null = null;
-  let saved: number | null = null;
-  let shares: number | null = null;
-  let replies: number | null = null;
-  let galat: string | null = null;
-
-  // Story tidak mendukung metrik 'saved' (akan ditolak Meta API); gunakan paket metrik khusus Story.
-  const paketMetrik = adalahStory
-    ? ["views,reach,replies,shares", "views,reach", "reach,replies,shares", "impressions,reach", "views", "reach"]
-    : ["views,reach,saved,shares", "views", "reach"];
-
-  for (const metrik of paketMetrik) {
-    const url = `https://${host}/${VERSI()}/${mediaId}/insights?metric=${metrik}&access_token=${token}`;
-    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(9000) }).catch(() => null);
-    if (!res) continue;
-    const j = await res.json().catch(() => null);
-    if (!res.ok) {
-      const pesanErr = j?.error?.message ? String(j.error.message) : null;
-      // Untuk Story yang sudah lewat 24 jam, Meta API mengembalikan error/kosong — jangan timpa galat global izin token.
-      if (!adalahStory && !galat && pesanErr) galat = pesanErr;
-      // Bila error permission/OAuth (#10 / #200 / #190), hentikan percobaan metrik lain agar cepat.
-      if (j?.error?.code === 10 || j?.error?.code === 190 || j?.error?.code === 200) {
-        if (!galat && pesanErr) galat = pesanErr;
-        break;
-      }
-      continue;
-    }
-    if (!Array.isArray(j?.data)) continue;
-
+  if (Array.isArray(j?.data)) {
     for (const item of j.data) {
       const val = Number(item.values?.[0]?.value ?? item.total_value?.value);
       if (!Number.isFinite(val)) continue;
-      if (
-        item.name === "views" ||
-        (item.name === "impressions" && views == null) ||
-        (item.name === "plays" && views == null) ||
-        (item.name === "ig_reels_aggregated_all_plays_count" && views == null)
-      ) {
-        views = val;
-      }
+      if (item.name === "views") views = val;
       if (item.name === "reach") reach = val;
-      if (item.name === "saved") saved = val;
-      if (item.name === "shares") shares = val;
-      if (item.name === "replies") replies = val;
     }
-    if (views != null || (adalahStory && reach != null)) break;
   }
-
-  // Bila Instagram tidak mengembalikan 'views' tetapi ada 'reach', gunakan reach sebagai estimasi penonton.
   if (views == null && reach != null) views = reach;
-
-  return { views, reach, saved, shares, replies, galat };
+  return { views, reach, galat: null, hentikanAkun: false };
 }
 
 /** Simpan snapshot insight Story ke baris studio_tugas agar tetap terbaca meski Story sudah lewat 24 jam. */
@@ -183,217 +195,234 @@ async function simpanSnapshotStory(t: TugasTayang, snap: SnapshotInsightStory) {
   const igLama = t.tayang.instagram;
   const storyLama = igLama.story ?? igLama.stories?.[0];
   if (!storyLama?.id) return;
-
   const snapLama = storyLama.insight;
-  if (
-    snapLama &&
-    snapLama.views === snap.views &&
-    snapLama.reach === snap.reach &&
-    snapLama.replies === snap.replies &&
-    snapLama.shares === snap.shares
-  ) {
-    return;
-  }
+  if (snapLama && snapLama.views === snap.views && snapLama.reach === snap.reach) return;
 
   const storyBaru = { ...storyLama, insight: { ...snap, diambil: new Date().toISOString() } };
   const storiesBaru = Array.isArray(igLama.stories)
     ? igLama.stories.map((s) => (s.id === storyLama.id ? { ...s, insight: storyBaru.insight } : s))
     : igLama.stories;
 
-  const tayangBaru = {
-    ...t.tayang,
-    instagram: {
-      ...igLama,
-      story: storyBaru,
-      ...(storiesBaru ? { stories: storiesBaru } : {}),
-    },
-  };
   await rest(`studio_tugas?id=eq.${encodeURIComponent(t.id)}`, {
     method: "PATCH",
     headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({ tayang: tayangBaru }),
+    body: JSON.stringify({
+      tayang: {
+        ...t.tayang,
+        instagram: {
+          ...igLama,
+          story: storyBaru,
+          ...(storiesBaru ? { stories: storiesBaru } : {}),
+        },
+      },
+    }),
   }).catch(() => {});
 }
 
+/** Simpan cache insight per merek ke studio_merek.profil.insight_cache agar persisten di Vercel Serverless. */
+async function simpanCacheMerek(merek: BarisMerek, cache: CacheInsightMerek) {
+  const profilBaru = { ...(merek.profil ?? {}), insight_cache: cache };
+  await rest(`studio_merek?slug=eq.${encodeURIComponent(merek.slug)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ profil: profilBaru, diubah: new Date().toISOString() }),
+  }).catch(() => {});
+}
+
+function bangunPostDariTugas(t: TugasTayang, refPerMedia: Map<string, ReferensiIg>): PostInsight {
+  const merek = t.merek ?? "bakafrawi";
+  const infoIg = t.tayang?.instagram;
+  const storyUtama = infoIg?.story?.id ? infoIg.story : infoIg?.stories?.find((s) => Boolean(s?.id)) ?? null;
+  const mediaUtama = infoIg?.reels?.id ? infoIg.reels : infoIg?.feed?.id ? infoIg.feed : storyUtama;
+  const format: PostInsight["format"] = infoIg?.reels?.id
+    ? "reels"
+    : infoIg?.feed?.id
+    ? "feed"
+    : storyUtama?.id || t.tayang?.sasaran === "story" || t.produk_slug === "rutin-buka"
+    ? "story"
+    : t.jenis === "video"
+    ? "reels"
+    : "feed";
+  const adalahStory = format === "story";
+  const mediaId = mediaUtama?.id ?? null;
+  const tayangWaktu = infoIg?.waktu ?? t.dibuat;
+  const h = t.hasil ?? [];
+  const thumbnail = h.find((x) => x.rasio === "sampul")?.url ?? h.find((x) => x.jenis === "gambar")?.url ?? null;
+  const videoUrl = h.find((x) => x.jenis === "video")?.url ?? null;
+
+  const ref = mediaId ? refPerMedia.get(mediaId) : undefined;
+  const snapStory = adalahStory ? storyUtama?.insight : undefined;
+  const umurJam = (Date.now() - new Date(tayangWaktu).getTime()) / 3_600_000;
+
+  return {
+    id: t.id,
+    merek,
+    produk: t.produk_slug,
+    jenis: t.jenis,
+    format,
+    caption: t.caption,
+    dibuat: t.dibuat,
+    tayangWaktu,
+    permalink: mediaUtama?.permalink ?? ref?.permalink ?? null,
+    mediaId,
+    thumbnail,
+    videoUrl,
+    likes: Number(ref?.statistik?.suka) || 0,
+    comments: Number(ref?.statistik?.komentar) || 0,
+    views:
+      snapStory?.views != null
+        ? Number(snapStory.views)
+        : ref?.statistik?.tayangan != null
+        ? Number(ref.statistik.tayangan)
+        : null,
+    reach: snapStory?.reach != null ? Number(snapStory.reach) : null,
+    saved: ref?.statistik?.simpan != null ? Number(ref.statistik.simpan) : null,
+    shares:
+      snapStory?.shares != null
+        ? Number(snapStory.shares)
+        : ref?.statistik?.bagikan != null
+        ? Number(ref.statistik.bagikan)
+        : null,
+    replies: snapStory?.replies != null ? Number(snapStory.replies) : null,
+    ...(adalahStory ? { arsipStory: umurJam >= 24 } : {}),
+  };
+}
+
+/**
+ * Ambil ringkasan Insight Instagram.
+ * - `paksaSegar = false` (bawaan saat buka Beranda): 100% BACA CACHE SUPABASE, 0 panggilan ke Meta API!
+ * - `paksaSegar = true` (hanya saat Kyai klik tombol "Segarkan dari IG"): tarik ringan maksimal 1x per 15 menit.
+ */
 export async function ambilInsightInstagram(paksaSegar = false): Promise<RingkasInsight> {
-  if (!paksaSegar && cacheInsight && Date.now() - cacheInsight.waktu < TTL_CACHE_MS) {
-    return cacheInsight.data;
-  }
   try {
-    // 1. Kredensial Instagram semua merek + tugas tayang + cache studio_referensi
-    const [kredList, tugasList, refList] = await Promise.all([
+    const [merekList, kredList, tugasList, refList] = await Promise.all([
+      (rest("studio_merek?select=slug,aktif,profil") as Promise<BarisMerek[] | null>).catch(() => null),
       (rest("studio_kredensial?layanan=eq.instagram&select=merek,data") as Promise<KredensialIg[] | null>).catch(() => null),
       (rest(
         "studio_tugas?status_tayang=eq.tayang&tayang=not.is.null&select=id,merek,produk_slug,jenis,caption,dibuat,status_tayang,tayang,hasil&order=dibuat.desc&limit=10",
       ) as Promise<TugasTayang[] | null>).catch(() => null),
       (rest(
-        "studio_referensi?sumber=eq.ig&select=merek,id,permalink,caption,diposting_at,statistik&order=diposting_at.desc.nullslast&limit=20",
+        "studio_referensi?sumber=eq.ig&select=merek,id,permalink,caption,diposting_at,statistik&order=diposting_at.desc.nullslast&limit=15",
       ) as Promise<ReferensiIg[] | null>).catch(() => null),
     ]);
 
-    const daftarKred = kredList ?? [];
-    const kredPer = new Map(daftarKred.map((k) => [k.merek, k.data]));
+    const daftarMerek = merekList ?? [];
+    const petaMerek = new Map(daftarMerek.map((m) => [m.slug, m]));
+    const daftarKred = (kredList ?? []).filter((k) => petaMerek.get(k.merek)?.aktif !== false);
     const tersambung = daftarKred.some((k) => Boolean(k.data?.ig_token && k.data?.ig_user_id));
     const akun = daftarKred.map((k) => k.data?.ig_akun).filter(Boolean).join(", ") || null;
 
-    // Peta statistik dari studio_referensi (key: mediaId tanpa prefix "ig:")
     const refPerMedia = new Map<string, ReferensiIg>();
     for (const r of refList ?? []) {
-      const mId = r.id.replace(/^ig:/, "");
-      refPerMedia.set(mId, r);
+      refPerMedia.set(r.id.replace(/^ig:/, ""), r);
     }
 
-    const mediaSudah = new Set<string>();
-    const posts: PostInsight[] = [];
-    let galatInsightPertama: string | null = null;
-
-    // 2. Proses tugas yang ditayangkan dari Studio (Reels, Feed, maupun Story)
-    if (tugasList && tugasList.length > 0) {
-      const hasilTugas = await Promise.all(
-        tugasList.map(async (t): Promise<PostInsight> => {
-          const merek = t.merek ?? "bakafrawi";
-          const kred = kredPer.get(merek);
-          const token = kred?.ig_token;
-          const host = kred?.ig_host === "facebook" ? "graph.facebook.com" : "graph.instagram.com";
-          const infoIg = t.tayang?.instagram;
-          const storyUtama = infoIg?.story?.id ? infoIg.story : infoIg?.stories?.find((s) => Boolean(s?.id)) ?? null;
-          const mediaUtama = infoIg?.reels?.id ? infoIg.reels : infoIg?.feed?.id ? infoIg.feed : storyUtama;
-          const format: PostInsight["format"] = infoIg?.reels?.id
-            ? "reels"
-            : infoIg?.feed?.id
-            ? "feed"
-            : storyUtama?.id || t.tayang?.sasaran === "story" || t.produk_slug === "rutin-buka"
-            ? "story"
-            : t.jenis === "video"
-            ? "reels"
-            : "feed";
-          const adalahStory = format === "story";
-          const mediaId = mediaUtama?.id ?? null;
-          if (mediaId) mediaSudah.add(mediaId);
-
-          let permalink = mediaUtama?.permalink ?? null;
-          const tayangWaktu = infoIg?.waktu ?? t.dibuat;
-          const h = t.hasil ?? [];
-          let thumbnail: string | null =
-            h.find((x) => x.rasio === "sampul")?.url ?? h.find((x) => x.jenis === "gambar")?.url ?? null;
-          const videoUrl = h.find((x) => x.jenis === "video")?.url ?? null;
-
-          const ref = mediaId ? refPerMedia.get(mediaId) : undefined;
-          const snapStory = adalahStory ? storyUtama?.insight : undefined;
-          let likes = Number(ref?.statistik?.suka) || 0;
-          let comments = Number(ref?.statistik?.komentar) || 0;
-          let views: number | null =
-            snapStory?.views != null
-              ? Number(snapStory.views)
-              : ref?.statistik?.tayangan != null
-              ? Number(ref.statistik.tayangan)
-              : null;
-          let reach: number | null = snapStory?.reach != null ? Number(snapStory.reach) : null;
-          let saved: number | null = ref?.statistik?.simpan != null ? Number(ref.statistik.simpan) : null;
-          let shares: number | null =
-            snapStory?.shares != null
-              ? Number(snapStory.shares)
-              : ref?.statistik?.bagikan != null
-              ? Number(ref.statistik.bagikan)
-              : null;
-          let replies: number | null = snapStory?.replies != null ? Number(snapStory.replies) : null;
-          const umurJam = (Date.now() - new Date(tayangWaktu).getTime()) / 3_600_000;
-          let arsipStory = adalahStory && umurJam >= 24;
-
-          if (token && mediaId) {
-            try {
-              const fieldsMedia = adalahStory
-                ? "id,permalink,thumbnail_url,media_url,media_type"
-                : "id,like_count,comments_count,permalink,thumbnail_url,media_url,media_type";
-              const urlMedia = `https://${host}/${VERSI()}/${mediaId}?fields=${fieldsMedia}&access_token=${token}`;
-              const res = await fetch(urlMedia, { cache: "no-store", signal: AbortSignal.timeout(9000) }).catch(() => null);
-              if (res && res.ok) {
-                const j = await res.json();
-                if (!adalahStory) {
-                  likes = Number(j.like_count) || likes;
-                  comments = Number(j.comments_count) || comments;
-                }
-                if (j.permalink) permalink = j.permalink;
-                // Pertahankan sampul Studio (frame detik 1.5); hanya pakai thumbnail IG bila belum ada.
-                if (!thumbnail && j.thumbnail_url) thumbnail = j.thumbnail_url;
-                else if (!thumbnail && j.media_type === "IMAGE" && j.media_url) thumbnail = j.media_url;
-              }
-
-              const m = await tarikMetrikMedia(host, token, mediaId, adalahStory);
-              if (m.galat && !galatInsightPertama) galatInsightPertama = m.galat;
-              if (m.views != null) views = m.views;
-              if (m.reach != null) reach = m.reach;
-              if (m.saved != null) saved = m.saved;
-              if (m.shares != null) shares = m.shares;
-              if (m.replies != null) replies = m.replies;
-
-              if (adalahStory && (m.views != null || m.reach != null)) {
-                arsipStory = false;
-                void simpanSnapshotStory(t, { views, reach, replies, shares });
-              }
-            } catch {
-              // Gunakan data fallback/snapshot bila gagal jaringan atau Story sudah > 24 jam
-            }
-          }
-
-          return {
-            id: t.id,
-            merek,
-            produk: t.produk_slug,
-            jenis: t.jenis,
-            format,
-            caption: t.caption,
-            dibuat: t.dibuat,
-            tayangWaktu,
-            permalink,
-            mediaId,
-            thumbnail,
-            videoUrl,
-            likes,
-            comments,
-            views,
-            reach,
-            saved,
-            shares,
-            replies,
-            ...(adalahStory ? { arsipStory } : {}),
-          };
-        }),
-      );
-      posts.push(...hasilTugas);
-    }
-
-    // 3. Tarik juga postingan (Feed/Reels) & Story aktif (<24 jam) langsung dari akun IG yang tersambung
-    for (const k of daftarKred) {
-      const token = k.data?.ig_token;
-      const userId = k.data?.ig_user_id;
-      if (!token || !userId) continue;
-
-      const host = k.data.ig_host === "facebook" ? "graph.facebook.com" : "graph.instagram.com";
-      const milik = k.data.ig_host === "facebook" ? userId : "me";
-
-      // 3a. Story aktif (<24 jam) — endpoint /{user}/stories (/{user}/media tidak pernah mengembalikan Story!)
-      const qStory = new URLSearchParams({
-        fields: "id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp",
-        access_token: token,
+    const postsGabung = new Map<string, PostInsight>();
+    const masukkanPost = (p: PostInsight) => {
+      const kunci = p.mediaId || p.id;
+      const lama = postsGabung.get(kunci);
+      if (!lama) {
+        postsGabung.set(kunci, p);
+        return;
+      }
+      // Gabungkan tanpa menghilangkan sampul lokal Studio atau snapshot views yang sudah ada
+      postsGabung.set(kunci, {
+        ...lama,
+        ...p,
+        thumbnail: lama.thumbnail ?? p.thumbnail,
+        videoUrl: lama.videoUrl ?? p.videoUrl,
+        views: p.views ?? lama.views,
+        reach: p.reach ?? lama.reach,
+        likes: Math.max(lama.likes, p.likes),
+        comments: Math.max(lama.comments, p.comments),
       });
-      const resStory = await fetch(`https://${host}/${VERSI()}/${milik}/stories?${qStory}`, {
-        cache: "no-store",
-        signal: AbortSignal.timeout(9000),
-      }).catch(() => null);
-      if (resStory && resStory.ok) {
-        const js = await resStory.json().catch(() => null);
-        const daftarStory = (js?.data ?? []) as MediaAkunIg[];
-        const tambahanStory = await Promise.all(
-          daftarStory
-            .filter((s) => s.id && !mediaSudah.has(s.id))
-            .slice(0, 8)
-            .map(async (s): Promise<PostInsight> => {
-              mediaSudah.add(s.id);
+    };
+
+    // 1. Selalu muat tugas yang sudah tayang dari database lokal (0 request Meta)
+    for (const t of tugasList ?? []) {
+      masukkanPost(bangunPostDariTugas(t, refPerMedia));
+    }
+
+    // 2. Muat cache insight terakhir yang tersimpan di studio_merek.profil.insight_cache (0 request Meta)
+    let diambilTerbaru: string | null = null;
+    let galatInsight: string | null = null;
+    let dariCache = true;
+    const sekarangMs = Date.now();
+
+    for (const m of daftarMerek) {
+      if (!m.aktif) continue;
+      const cache = m.profil?.insight_cache;
+      if (cache?.diambil && (!diambilTerbaru || cache.diambil > diambilTerbaru)) {
+        diambilTerbaru = cache.diambil;
+      }
+      if (cache?.galat && !galatInsight) {
+        galatInsight = cache.galat;
+      }
+      for (const p of cache?.posts ?? []) {
+        masukkanPost(p);
+      }
+    }
+
+    // 3. HANYA tarik dari Meta Graph API jika Kyai menekan "Segarkan dari IG" secara manual (paksaSegar = true)
+    if (paksaSegar && tersambung) {
+      for (const k of daftarKred) {
+        const barisMerek = petaMerek.get(k.merek);
+        if (!barisMerek || !barisMerek.aktif) continue;
+
+        const token = k.data?.ig_token;
+        const userId = k.data?.ig_user_id;
+        if (!token || !userId) continue;
+
+        const cacheLama = barisMerek.profil?.insight_cache;
+        // Cek circuit breaker (jeda 6 jam bila akun sedang kena batas / galat keras Meta)
+        if (cacheLama?.jedaSampai && new Date(cacheLama.jedaSampai).getTime() > sekarangMs) {
+          galatInsight =
+            cacheLama.galat ??
+            `Penarikan otomatis untuk ${k.data?.ig_akun ?? k.merek} sedang dijeda sementara demi keamanan akun.`;
+          continue;
+        }
+        // Cek cooldown 15 menit persisten di database
+        if (cacheLama?.diambil && sekarangMs - new Date(cacheLama.diambil).getTime() < COOLDOWN_SEGAR_MS) {
+          continue;
+        }
+
+        dariCache = false;
+        const host = k.data.ig_host === "facebook" ? "graph.facebook.com" : "graph.instagram.com";
+        const milik = k.data.ig_host === "facebook" ? userId : "me";
+        const hasilMerek: PostInsight[] = [];
+        let galatMerek: string | null = null;
+        let hentikan = false;
+
+        // 3a. Ambil maks 2 Story aktif (<24 jam) dari /{milik}/stories secara berurutan santai
+        const qStory = new URLSearchParams({
+          fields: "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp",
+          access_token: token,
+        });
+        const resStory = await fetch(`https://${host}/${VERSI()}/${milik}/stories?${qStory}`, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(8000),
+        }).catch(() => null);
+
+        if (resStory) {
+          const js = await resStory.json().catch(() => null);
+          if (!resStory.ok) {
+            if (adalahGalatKerasMeta(resStory.status, js?.error)) {
+              hentikan = true;
+              galatMerek = String(js?.error?.message ?? `HTTP ${resStory.status}`);
+            }
+          } else if (Array.isArray(js?.data)) {
+            const daftarStory = (js.data as MediaAkunIg[]).slice(0, 2);
+            for (const s of daftarStory) {
+              if (!s.id || hentikan) break;
+              await tidur(JEDA_ANTAR_REQ_MS);
+              const met = await tarikMetrikRingan(host, token, s.id);
+              if (met.hentikanAkun) {
+                hentikan = true;
+                galatMerek = met.galat;
+                break;
+              }
               const adalahVideo = s.media_type === "VIDEO";
-              const metrik = await tarikMetrikMedia(host, token, s.id, true);
-              if (metrik.galat && !galatInsightPertama) galatInsightPertama = metrik.galat;
-              return {
+              const postStory: PostInsight = {
                 id: `ig-story-${s.id}`,
                 merek: k.merek,
                 produk: k.merek,
@@ -407,84 +436,107 @@ export async function ambilInsightInstagram(paksaSegar = false): Promise<Ringkas
                 thumbnail: s.thumbnail_url ?? (!adalahVideo ? s.media_url ?? null : null),
                 videoUrl: adalahVideo ? s.media_url ?? null : null,
                 likes: 0,
-                comments: metrik.replies ?? 0,
-                views: metrik.views,
-                reach: metrik.reach,
+                comments: 0,
+                views: met.views,
+                reach: met.reach,
                 saved: null,
-                shares: metrik.shares,
-                replies: metrik.replies,
+                shares: null,
                 arsipStory: false,
               };
-            }),
-        );
-        posts.push(...tambahanStory);
+              hasilMerek.push(postStory);
+              masukkanPost(postStory);
+
+              // Jika Story ini cocok dengan tugas Studio, simpan snapshotnya agar awet >24 jam
+              const tugasCocok = (tugasList ?? []).find(
+                (t) =>
+                  t.tayang?.instagram?.story?.id === s.id ||
+                  t.tayang?.instagram?.stories?.some((x) => x.id === s.id),
+              );
+              if (tugasCocok && (met.views != null || met.reach != null)) {
+                void simpanSnapshotStory(tugasCocok, { views: met.views, reach: met.reach });
+              }
+            }
+          }
+        }
+
+        // 3b. Ambil maks 4 Feed/Reels terbaru dari /{milik}/media (hanya bila tidak dihentikan circuit breaker)
+        if (!hentikan) {
+          await tidur(JEDA_ANTAR_REQ_MS);
+          const qMedia = new URLSearchParams({
+            fields: "id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count",
+            limit: "4",
+            access_token: token,
+          });
+          const resMedia = await fetch(`https://${host}/${VERSI()}/${milik}/media?${qMedia}`, {
+            cache: "no-store",
+            signal: AbortSignal.timeout(8000),
+          }).catch(() => null);
+
+          if (resMedia) {
+            const jm = await resMedia.json().catch(() => null);
+            if (!resMedia.ok) {
+              if (adalahGalatKerasMeta(resMedia.status, jm?.error)) {
+                hentikan = true;
+                galatMerek = String(jm?.error?.message ?? `HTTP ${resMedia.status}`);
+              }
+            } else if (Array.isArray(jm?.data)) {
+              for (const m of (jm.data as MediaAkunIg[]).slice(0, 4)) {
+                if (!m.id || hentikan) break;
+                await tidur(JEDA_ANTAR_REQ_MS);
+                const met = await tarikMetrikRingan(host, token, m.id);
+                if (met.hentikanAkun) {
+                  hentikan = true;
+                  galatMerek = met.galat;
+                  break;
+                }
+                const adalahVideo = m.media_type === "VIDEO" || m.media_product_type === "REELS";
+                const format: PostInsight["format"] =
+                  m.media_product_type === "STORY" ? "story" : adalahVideo ? "reels" : "feed";
+                const postMedia: PostInsight = {
+                  id: `ig-${m.id}`,
+                  merek: k.merek,
+                  produk: k.merek,
+                  jenis: adalahVideo ? "video" : "gambar",
+                  format,
+                  caption: m.caption ?? null,
+                  dibuat: m.timestamp ?? new Date().toISOString(),
+                  tayangWaktu: m.timestamp ?? null,
+                  permalink: m.permalink ?? null,
+                  mediaId: m.id,
+                  thumbnail: m.thumbnail_url ?? (!adalahVideo ? m.media_url ?? null : null),
+                  videoUrl: adalahVideo ? m.media_url ?? null : null,
+                  likes: Number(m.like_count) || 0,
+                  comments: Number(m.comments_count) || 0,
+                  views: met.views,
+                  reach: met.reach,
+                  saved: null,
+                  shares: null,
+                };
+                hasilMerek.push(postMedia);
+                masukkanPost(postMedia);
+              }
+            }
+          }
+        }
+
+        const waktuKini = new Date().toISOString();
+        diambilTerbaru = waktuKini;
+        if (galatMerek && !galatInsight) galatInsight = galatMerek;
+
+        await simpanCacheMerek(barisMerek, {
+          diambil: waktuKini,
+          jedaSampai: hentikan ? new Date(Date.now() + JEDA_CIRCUIT_BREAKER_MS).toISOString() : null,
+          galat: galatMerek,
+          posts: hasilMerek.length > 0 ? hasilMerek : (cacheLama?.posts ?? []),
+        });
       }
-
-      // 3b. Feed & Reels terbaru dari /{user}/media
-      const q = new URLSearchParams({
-        fields: "id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count",
-        limit: "8",
-        access_token: token,
-      });
-
-      const res = await fetch(`https://${host}/${VERSI()}/${milik}/media?${q}`, {
-        cache: "no-store",
-        signal: AbortSignal.timeout(9000),
-      }).catch(() => null);
-      if (!res || !res.ok) continue;
-      const j = await res.json().catch(() => null);
-      const daftarMedia = (j?.data ?? []) as MediaAkunIg[];
-
-      const tambahan = await Promise.all(
-        daftarMedia
-          .filter((m) => m.id && !mediaSudah.has(m.id))
-          .slice(0, 6)
-          .map(async (m): Promise<PostInsight> => {
-            mediaSudah.add(m.id);
-            const ref = refPerMedia.get(m.id);
-            const adalahVideo = m.media_type === "VIDEO" || m.media_product_type === "REELS";
-            const format: PostInsight["format"] = m.media_product_type === "STORY"
-              ? "story"
-              : adalahVideo
-              ? "reels"
-              : "feed";
-            const metrik = await tarikMetrikMedia(host, token, m.id, format === "story");
-            if (metrik.galat && !galatInsightPertama) galatInsightPertama = metrik.galat;
-            const views = metrik.views ?? (ref?.statistik?.tayangan != null ? Number(ref.statistik.tayangan) : null);
-
-            return {
-              id: `ig-${m.id}`,
-              merek: k.merek,
-              produk: k.merek,
-              jenis: adalahVideo ? "video" : "gambar",
-              format,
-              caption: m.caption ?? ref?.caption ?? null,
-              dibuat: m.timestamp ?? ref?.diposting_at ?? new Date().toISOString(),
-              tayangWaktu: m.timestamp ?? ref?.diposting_at ?? null,
-              permalink: m.permalink ?? ref?.permalink ?? null,
-              mediaId: m.id,
-              thumbnail: m.thumbnail_url ?? (!adalahVideo ? m.media_url ?? null : null),
-              videoUrl: adalahVideo ? m.media_url ?? null : null,
-              likes: Number(m.like_count ?? ref?.statistik?.suka) || 0,
-              comments: Number(m.comments_count ?? ref?.statistik?.komentar) || 0,
-              views,
-              reach: metrik.reach,
-              saved: metrik.saved ?? (ref?.statistik?.simpan != null ? Number(ref.statistik.simpan) : null),
-              shares: metrik.shares ?? (ref?.statistik?.bagikan != null ? Number(ref.statistik.bagikan) : null),
-              replies: metrik.replies,
-            };
-          }),
-      );
-      posts.push(...tambahan);
     }
 
-    // 4. Bila token IG belum aktif atau gagal, tapi ada data di studio_referensi, tampilkan dari cache referensi
-    if (posts.length === 0 && (refList?.length ?? 0) > 0) {
+    // 4. Fallback data dari studio_referensi jika masih kosong (0 request Meta)
+    if (postsGabung.size === 0 && (refList?.length ?? 0) > 0) {
       for (const r of refList ?? []) {
         const mId = r.id.replace(/^ig:/, "");
-        if (mediaSudah.has(mId)) continue;
-        mediaSudah.add(mId);
-        posts.push({
+        masukkanPost({
           id: r.id,
           merek: r.merek,
           produk: r.merek,
@@ -507,32 +559,36 @@ export async function ambilInsightInstagram(paksaSegar = false): Promise<Ringkas
       }
     }
 
-    posts.sort((a, b) => new Date(b.tayangWaktu ?? b.dibuat).getTime() - new Date(a.tayangWaktu ?? a.dibuat).getTime());
+    const posts = [...postsGabung.values()].sort(
+      (a, b) => new Date(b.tayangWaktu ?? b.dibuat).getTime() - new Date(a.tayangWaktu ?? a.dibuat).getTime(),
+    );
 
     const totalLikes = posts.reduce((a, b) => a + b.likes, 0);
     const totalComments = posts.reduce((a, b) => a + b.comments, 0);
     const totalViews = posts.reduce((a, b) => a + (b.views ?? 0), 0);
     const daftarStoryPost = posts.filter((p) => p.format === "story");
-    const totalStory = daftarStoryPost.length;
-    const totalStoryViews = daftarStoryPost.reduce((a, b) => a + (b.views ?? 0), 0);
 
-    const hasilAkhir: RingkasInsight = {
+    return {
       tersambung,
       akun,
       totalTayang: posts.length,
       totalLikes,
       totalComments,
       totalViews,
-      totalStory,
-      totalStoryViews,
+      totalStory: daftarStoryPost.length,
+      totalStoryViews: daftarStoryPost.reduce((a, b) => a + (b.views ?? 0), 0),
       posts,
-      galatInsight: galatInsightPertama,
+      diambilPada: diambilTerbaru,
+      dariCache,
+      galatInsight,
       ...(posts.length === 0
-        ? { pesan: tersambung ? "Belum ada konten yang diposting ke Instagram." : "Instagram belum tersambung." }
+        ? {
+            pesan: tersambung
+              ? "Mode hemat Meta aktif — tekan tombol Segarkan dari IG (maks 1× per 15 menit) untuk menarik data terbaru."
+              : "Instagram belum tersambung.",
+          }
         : {}),
     };
-    cacheInsight = { waktu: Date.now(), data: hasilAkhir };
-    return hasilAkhir;
   } catch (e) {
     return {
       tersambung: false,

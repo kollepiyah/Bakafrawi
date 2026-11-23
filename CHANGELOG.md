@@ -1,5 +1,12 @@
 # CHANGELOG — bakafrawi.com
 
+## Rem Keras & Pengamanan Meta/Instagram API (23 Nov)
+
+- **Mode Cache-First (0 Request Meta Otomatis):** `ambilInsightInstagram()` (`src/lib/instagram-insight.ts`) kini hanya membaca cache persisten dari Supabase (`studio_merek.profil.insight_cache`, `studio_tugas`, `studio_referensi`) saat Beranda dibuka. Meta Graph API hanya dihubungi saat tombol **Tarik dari IG** ditekan manual (`?segar=1`).
+- **Cooldown 15 Menit & Circuit Breaker 6 Jam:** penyegaran manual dibatasi maksimal 1× per 15 menit per merek aktif; bila Meta mengembalikan galat rate-limit/OAuth/checkpoint/pembatasan akun (`429/401/403`, kode `4/10/17/32/190/200/368`), akun tersebut langsung dijeda otomatis 6 jam tanpa mencoba ulang.
+- **Anti-Burst & 0 Request Story >24 Jam:** menghapus `Promise.all` serentak & loop 6× percobaan metrik — diganti maksimal 1 panggilan ringan (`views,reach`) secara berurutan dengan jeda 250ms untuk maks 2 Story aktif `< 24 jam` dan 4 postingan terbaru.
+- **Matikan Auto-Refresh 30 Detik (`src/components/admin/deck.tsx`):** menghapus `setInterval(..., 30_000)` di panel Deck agar tab Admin yang dibiarkan terbuka tidak pernah melakukan polling berulang ke server/Meta.
+
 ## Unggah Video Manual Terjadwal, Story Acak Anti-Ulang, Insight Penonton Story & Tata Ulang UI Studio (23 Nov)
 
 - **Unggah Video / Foto Manual & Jadwal Otomatis (Story maupun Reels):**
