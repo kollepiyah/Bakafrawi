@@ -1,11 +1,23 @@
 import { permintaanDariAdmin } from "@/lib/admin-server";
 import { kenaliTokenInstagram } from "@/lib/instagram-server";
-import { adaKunciServer, aturAktifMerek, bacaKredensial, bacaPengaturan, daftarMerek, hapusKredensial, simpanKredensial } from "@/lib/studio-server";
+import {
+  adaKunciServer,
+  aturAktifMerek,
+  bacaKredensial,
+  bacaPengaturan,
+  daftarMerek,
+  hapusKredensial,
+  normalisasiSuaraFavorit,
+  POLA_VOICE_ID,
+  simpanKredensial,
+  simpanSuaraFavorit,
+  type SuaraFavorit,
+} from "@/lib/studio-server";
 import { adaBot, infoWebhook, pasangWebhook } from "@/lib/telegram-server";
 import { adaTiktok, urlIzinTiktok } from "@/lib/tiktok-server";
 
-// Status & pengaturan sambungan Studio (Instagram per merek, Telegram) untuk panel admin. Token tak
-// pernah dikirim balik ke browser — hanya nama akun & tanggal kedaluwarsa.
+// Status & pengaturan sambungan Studio (Instagram per merek, Telegram, Voice ID favorit ElevenLabs)
+// untuk panel admin. Token tak pernah dikirim balik ke browser — hanya nama akun & kedaluwarsa.
 export async function GET(req: Request) {
   if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
   if (!adaKunciServer()) return Response.json({ ok: true, siap: false, pesan: "SUPABASE_SERVICE_KEY belum diisi di Vercel." });
@@ -21,13 +33,55 @@ export async function GET(req: Request) {
       };
     }),
   );
-  return Response.json({ ok: true, siap: true, instagram, tiktokSiap: adaTiktok(), telegram: { bot: adaBot(), terdaftar: Boolean(p.telegram_chat_id), webhook } });
+  const suaraFavorit = normalisasiSuaraFavorit(merek.find((m) => m.slug === "bakafrawi")?.profil?.suara_elevenlabs);
+  return Response.json({ ok: true, siap: true, instagram, tiktokSiap: adaTiktok(), suaraFavorit, telegram: { bot: adaBot(), terdaftar: Boolean(p.telegram_chat_id), webhook } });
 }
 
 export async function POST(req: Request) {
   if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });
-  const isi = (await req.json()) as { merek?: string; aktif?: boolean; igToken?: string; igId?: string; putusIg?: boolean; mulaiTiktok?: boolean; putusTiktok?: boolean; pasangWebhook?: boolean };
+  const isi = (await req.json()) as {
+    merek?: string;
+    aktif?: boolean;
+    igToken?: string;
+    igId?: string;
+    putusIg?: boolean;
+    mulaiTiktok?: boolean;
+    putusTiktok?: boolean;
+    pasangWebhook?: boolean;
+    tambahSuara?: { id?: string; nama?: string; catatan?: string };
+    hapusSuaraId?: string;
+    suaraFavorit?: SuaraFavorit[];
+  };
   try {
+    if (isi.tambahSuara) {
+      const id = String(isi.tambahSuara.id ?? "").trim();
+      if (!POLA_VOICE_ID.test(id)) {
+        throw new Error("Voice ID tidak valid. Salin kode Voice ID dari ElevenLabs (minimal 8 huruf/angka).");
+      }
+      const m = (await daftarMerek()).find((x) => x.slug === "bakafrawi");
+      const lama = normalisasiSuaraFavorit(m?.profil?.suara_elevenlabs);
+      const baru: SuaraFavorit = {
+        id,
+        nama: String(isi.tambahSuara.nama ?? "").trim().slice(0, 40) || id.slice(0, 12),
+        ...(String(isi.tambahSuara.catatan ?? "").trim() ? { catatan: String(isi.tambahSuara.catatan ?? "").trim().slice(0, 80) } : {}),
+      };
+      const gabungan = lama.some((s) => s.id === id)
+        ? lama.map((s) => (s.id === id ? baru : s))
+        : [...lama, baru];
+      const suaraFavorit = await simpanSuaraFavorit(gabungan);
+      return Response.json({ ok: true, pesan: `Suara favorit "${baru.nama}" disimpan.`, suaraFavorit });
+    }
+    if (typeof isi.hapusSuaraId === "string" && isi.hapusSuaraId.trim()) {
+      const target = isi.hapusSuaraId.trim();
+      const m = (await daftarMerek()).find((x) => x.slug === "bakafrawi");
+      const lama = normalisasiSuaraFavorit(m?.profil?.suara_elevenlabs);
+      const suaraFavorit = await simpanSuaraFavorit(lama.filter((s) => s.id !== target));
+      return Response.json({ ok: true, pesan: "Suara favorit dihapus.", suaraFavorit });
+    }
+    if (Array.isArray(isi.suaraFavorit)) {
+      const suaraFavorit = await simpanSuaraFavorit(isi.suaraFavorit);
+      return Response.json({ ok: true, pesan: "Daftar suara favorit diperbarui.", suaraFavorit });
+    }
     if (isi.mulaiTiktok || isi.putusTiktok) {
       const m = (await daftarMerek()).find((x) => x.slug === isi.merek);
       if (!m) throw new Error("Merek tidak dikenal.");

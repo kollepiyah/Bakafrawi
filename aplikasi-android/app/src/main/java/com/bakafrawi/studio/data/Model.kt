@@ -232,12 +232,19 @@ data class SambunganMerek(
     val tiktokAkun: String?,
 )
 
+data class SuaraFavorit(
+    val id: String,
+    val nama: String,
+    val catatan: String = "",
+)
+
 data class DataSambungan(
     val siap: Boolean,
     val pesan: String?,
     val merek: List<SambunganMerek>,
     val telegramTerdaftar: Boolean,
     val telegramWebhook: String?,
+    val suaraFavorit: List<SuaraFavorit> = emptyList(),
 )
 
 data class AdeganFlow(

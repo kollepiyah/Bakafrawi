@@ -179,7 +179,7 @@ export function keNaskah(k, { nama, logo, utama = WARNA.utama, kedua = WARNA.ked
  * Semua bahan disalin ke `folder/publik` (jadi --public-dir); musik: berkas lokal atau buatan ffmpeg.
  * → { berkas, sampul, durasi }
  */
-export async function renderIklan({ naskah, aset, folder, musik = null, suara = undefined, keluar, log = console.log }) {
+export async function renderIklan({ naskah, aset, folder, musik = null, suara = undefined, opsiSuara = {}, keluar, log = console.log }) {
   const publik = path.join(folder, 'publik');
   await mkdir(publik, { recursive: true });
   const n = structuredClone(naskah);
@@ -213,7 +213,7 @@ export async function renderIklan({ naskah, aset, folder, musik = null, suara = 
   };
   let pakaiSuaraBaru = false;
   try {
-    const hasilSuara = await suaraAdegan(n.adegan.map((a) => a.narasi), folder);
+    const hasilSuara = await suaraAdegan(n.adegan.map((a) => a.narasi), folder, opsiSuara);
     if (hasilSuara.berkas?.length === n.adegan.length) {
       for (const [i, a] of n.adegan.entries()) {
         const sumber = hasilSuara.berkas[i];
@@ -224,7 +224,10 @@ export async function renderIklan({ naskah, aset, folder, musik = null, suara = 
         const durasi = Number(info.durasi) || 4.5;
         const kataAdegan = hasilSuara.kata?.[i]?.length ? hasilSuara.kata[i] : perkirakanKata(a.narasi, durasi);
         n.suara.push({ berkas: nama, durasi, kata: kataAdegan });
-        log(`🎙 ${i + 1}. ${a.jenis} (${hasilSuara.jalur}/${hasilSuara.profil ?? 'auto'}): ${durasi.toFixed(2)} dtk`);
+        const infoSuara = hasilSuara.voiceId
+          ? `${hasilSuara.jalur}:${hasilSuara.voiceId.slice(0, 8)}`
+          : `${hasilSuara.jalur}/${hasilSuara.profil ?? 'auto'}`;
+        log(`🎙 ${i + 1}. ${a.jenis} (${infoSuara}): ${durasi.toFixed(2)} dtk`);
       }
       pakaiSuaraBaru = true;
     }

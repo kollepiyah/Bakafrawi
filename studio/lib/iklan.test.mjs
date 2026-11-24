@@ -197,6 +197,85 @@ test('suaraAdegan: ElevenLabs gagal → fallback berjenjang ke Gemini/Edge denga
   }
 });
 
+test('daftarVoiceElevenLabs & pilihVoiceElevenLabs: gabung favorit DB + env multi-ID, deduplikasi, rotasi deterministik & prioritas manual', async () => {
+  const { daftarVoiceElevenLabs, pilihVoiceElevenLabs } = await import('./bank/suara.mjs');
+  const gabung = daftarVoiceElevenLabs(
+    [
+      { id: 'VoiceFavorit1Abc', nama: 'Hangat' },
+      { id: 'pendek', nama: 'Salah' },
+      'VoiceFavorit1Abc',
+    ],
+    'VoiceEnvDua999, VoiceFavorit1Abc\nVoiceEnvTiga888 ; bad',
+  );
+  assert.deepEqual(gabung, ['VoiceFavorit1Abc', 'VoiceEnvDua999', 'VoiceEnvTiga888']);
+
+  // Pilihan manual selalu menang meski daftar banyak
+  assert.equal(
+    pilihVoiceElevenLabs({
+      voiceId: 'ManualVoiceIdXYZ',
+      daftarVoice: gabung,
+      benih: 'Promo Lek Kopi',
+    }),
+    'ManualVoiceIdXYZ',
+  );
+
+  // Tanpa pilihan manual: rotasi deterministik berdasarkan teks naskah (case-sensitive)
+  const pilih1a = pilihVoiceElevenLabs({ daftarVoice: gabung, benih: 'Promo Kopi Hari Senin' });
+  const pilih1b = pilihVoiceElevenLabs({ daftarVoice: gabung, benih: 'Promo Kopi Hari Senin' });
+  assert.equal(pilih1a, pilih1b);
+  assert.ok(gabung.includes(pilih1a));
+
+  // Kosong semua → fallback profil
+  assert.equal(
+    pilihVoiceElevenLabs({ daftarVoice: [], envNilai: '', profil: { elevenVoiceId: 'ProfilVoice12345' } }),
+    'ProfilVoice12345',
+  );
+});
+
+test('uraiPilihanSuara: bedakan profil bawaan vs Voice ID ElevenLabs (case-sensitive)', async () => {
+  const { uraiPilihanSuara } = await import('./bank/suara.mjs');
+  assert.deepEqual(uraiPilihanSuara('[Gaya: dial-menu] [Suara: jawa_timur] Promo kopi'), {
+    profilSuara: 'jawa_timur',
+    voiceId: null,
+  });
+  assert.deepEqual(uraiPilihanSuara('[Suara: AbCdEfGh123456] Tolong buatkan video'), {
+    profilSuara: null,
+    voiceId: 'AbCdEfGh123456',
+  });
+  assert.deepEqual(uraiPilihanSuara('Video promo biasa tanpa tag suara'), {
+    profilSuara: null,
+    voiceId: null,
+  });
+});
+
+test('suaraAdegan: meneruskan voiceId pilihan / hasil rotasi ke jalur elevenlabs dan mengembalikannya', async () => {
+  const { mkdtemp, rm, writeFile } = await import('node:fs/promises');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { suaraAdegan } = await import('./bank/suara.mjs');
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'uji-suara-voiceid-'));
+  try {
+    const terekam = [];
+    const h = await suaraAdegan(['Adegan satu', 'Adegan dua'], dir, {
+      jalur: 'elevenlabs',
+      voiceId: 'CustomVoiceIdABC12',
+      buat: async (_t, k, j, info) => {
+        terekam.push({ j, voiceId: info?.voiceId });
+        await writeFile(k, 'mp3-stub');
+        return { kata: [] };
+      },
+    });
+    assert.equal(h.jalur, 'elevenlabs');
+    assert.equal(h.voiceId, 'CustomVoiceIdABC12');
+    assert.deepEqual(terekam, [
+      { j: 'elevenlabs', voiceId: 'CustomVoiceIdABC12' },
+      { j: 'elevenlabs', voiceId: 'CustomVoiceIdABC12' },
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('bersihkanTepi: hijau di tepi setengah tembus dibuang, piksel padat tak disentuh', async () => {
   const { bersihkanTepi } = await import('./latar.mjs');
   const d = Buffer.from([10, 200, 20, 128, 10, 200, 20, 255, 0, 0, 0, 0]);

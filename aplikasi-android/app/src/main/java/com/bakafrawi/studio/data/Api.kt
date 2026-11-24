@@ -766,13 +766,45 @@ class Api(private val sesi: Sesi) {
             )
         } ?: emptyList()
         val tg = runCatching { isi["telegram"]?.jsonObject }.getOrNull()
+        val suara = runCatching { isi["suaraFavorit"]?.jsonArray }.getOrNull()?.mapNotNull { el ->
+            val o = runCatching { el.jsonObject }.getOrNull() ?: return@mapNotNull null
+            val id = o.teks("id") ?: return@mapNotNull null
+            SuaraFavorit(
+                id = id,
+                nama = o.teks("nama") ?: id.take(12),
+                catatan = o.teks("catatan") ?: "",
+            )
+        } ?: emptyList()
         DataSambungan(
             siap = siap,
             pesan = isi.teks("pesan"),
             merek = merek,
             telegramTerdaftar = tg?.get("terdaftar")?.jsonPrimitive?.booleanOrNull == true,
             telegramWebhook = runCatching { tg?.get("webhook")?.jsonObject }.getOrNull()?.teks("url"),
+            suaraFavorit = suara,
         )
+    }
+
+    suspend fun tambahSuaraFavorit(nama: String, voiceId: String, catatan: String = ""): String = withContext(Dispatchers.IO) {
+        val isi = situs(
+            "/api/studio/sambungan",
+            buildJsonObject {
+                put(
+                    "tambahSuara",
+                    buildJsonObject {
+                        put("nama", nama.trim())
+                        put("id", voiceId.trim())
+                        if (catatan.isNotBlank()) put("catatan", catatan.trim())
+                    },
+                )
+            },
+        )
+        isi.teks("pesan") ?: "Suara favorit disimpan."
+    }
+
+    suspend fun hapusSuaraFavorit(voiceId: String): String = withContext(Dispatchers.IO) {
+        val isi = situs("/api/studio/sambungan", buildJsonObject { put("hapusSuaraId", voiceId.trim()) })
+        isi.teks("pesan") ?: "Suara favorit dihapus."
     }
 
     suspend fun ubahAktifMerek(merek: String, aktif: Boolean): String = withContext(Dispatchers.IO) {

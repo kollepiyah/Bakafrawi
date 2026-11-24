@@ -1,5 +1,16 @@
 # CHANGELOG — bakafrawi.com
 
+## Multi-Voice ID ElevenLabs & Pemilih Suara Favorit di Studio (24 Nov)
+
+- **Daftar Suara Favorit di Sambungan Studio (`src/lib/studio-server.ts`, `/api/studio/sambungan`, `studio-sambungan.tsx`, `Api.kt`, `LayarStudio.kt`):**
+  - Menambahkan penyimpanan **Daftar Suara Favorit ElevenLabs** (maks 20 Voice ID dengan nama & catatan) di `studio_merek.profil.suara_elevenlabs` milik `bakafrawi` tanpa migrasi tabel baru.
+  - Kyai kini bisa menambah/menamai beberapa Voice ID favorit atau menghapusnya dari Web Admin maupun APK Android, sementara `ELEVENLABS_API_KEY` tetap disimpan aman sekali saja di GitHub Secrets.
+- **Pemilih Suara Saat Buat Video (`studio.tsx`, `LayarStudio.kt`):**
+  - Saat memilih jenis **Video**, muncul pilihan **Suara Narasi (ElevenLabs / AI)** berisi mode **Otomatis (Rotasi)**, seluruh **Suara Favorit ElevenLabs**, dan **6 profil gaya bawaan**, dikirim lewat tag `[Suara: ...]`.
+- **Dukungan Multi-ID & Rotasi Otomatis di Worker (`studio/lib/bank/suara.mjs`, `studio/lib/video.mjs`, `studio/studio.mjs`):**
+  - `daftarVoiceElevenLabs()`, `pilihVoiceElevenLabs()`, dan `uraiPilihanSuara()` mendukung daftar suara favorit DB + banyak ID dipisah koma pada secret `ELEVENLABS_VOICE_ID` (case-sensitive), melakukan rotasi deterministik per video bila mode `otomatis`, membersihkan tag `[Suara: ...]` sebelum dikirim ke LLM naskah, dan meneruskan pilihan suara untuk Bakafrawi (`renderIklan`) maupun Lek Kopi (`suaraAdegan`).
+- Diuji: 20/20 unit test worker (`node --test studio/lib/iklan.test.mjs`), 40/40 unit test web (`npm run uji`), `node --check` worker, `npx tsc --noEmit`, `eslint` pada berkas terkait, `npm run build` (Next.js 16.4.6), dan `gradlew.bat compileDebugKotlin` (Android). **Belum:** uji render video ElevenLabs langsung dengan `ELEVENLABS_API_KEY` aktif di GitHub Secrets, uji tampilan/form langsung di HP/browser produksi, serta build & rilis berkas APK Android baru ke HP.
+
 ## Integrasi Jalur Suara ElevenLabs + Timestamps Remotion (24 Nov)
 
 - **ElevenLabs TTS Prioritas Utama + Fallback Berjenjang (`studio/lib/bank/suara.mjs`, `studio/lib/video.mjs`, `.github/workflows/studio.yml`):**

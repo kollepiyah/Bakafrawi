@@ -27,6 +27,7 @@ import {
   TrendingUp,
   Upload,
   Video,
+  Volume2,
   Wand2,
   X,
 } from "lucide-react";
@@ -70,6 +71,17 @@ const PRESET_VIDEO = [
   { kode: "dark-keynote", label: "Dark Tech / Apple Keynote" },
   { kode: "pov-chat", label: "POV / Storytelling & Chat WA" },
   { kode: "split-hook", label: "Split-Screen / Fast Hook" },
+];
+
+type SuaraFavorit = { id: string; nama: string; catatan?: string };
+
+const PROFIL_SUARA_BAWAAN = [
+  { kode: "santai_indo", label: "Profil AI: Santai Indonesia (Hangat & Ramah)" },
+  { kode: "jawa_timur", label: "Profil AI: Logat Jawa Timur / Sidoarjo" },
+  { kode: "storytelling_hangat", label: "Profil AI: Storytelling Hangat (Reels)" },
+  { kode: "iklan_energik", label: "Profil AI: Iklan Energik & Cepat" },
+  { kode: "narator_sinematik", label: "Profil AI: Narator Sinematik" },
+  { kode: "jawa_krama_ngoko", label: "Profil AI: Bahasa Jawa Krama / Ngoko" },
 ];
 
 type BingkaiUnggah = { mimeType: string; data: string };
@@ -196,11 +208,12 @@ const LABEL_STATUS: Record<Tugas["status"], { teks: string; kelas: string }> = {
 
 export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNode }) {
   const [situs, setSitus] = useState<Situs>(situsBawaan);
-  const [merek, setMerek] = useState<{ slug: string; nama: string; aktif: boolean; profil: { bahan?: string[] } }[]>([]);
+  const [merek, setMerek] = useState<{ slug: string; nama: string; aktif: boolean; profil: { bahan?: string[]; suara_elevenlabs?: SuaraFavorit[] } }[]>([]);
   const [pilihMerek, setPilihMerek] = useState("bakafrawi");
   const [pilihProduk, setPilihProduk] = useState("maktaba-pos");
   const [pilihJenis, setPilihJenis] = useState<"gambar" | "video">("gambar");
   const [pilihGaya, setPilihGaya] = useState("otomatis");
+  const [pilihSuara, setPilihSuara] = useState("otomatis");
   const [daftar, setDaftar] = useState<Tugas[]>([]);
   const [pesan, setPesan] = useState("");
   const [sibuk, setSibuk] = useState(false);
@@ -255,13 +268,20 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     else setDaftar(data as Tugas[]);
   }, []);
 
+  const muatMerek = useCallback(async () => {
+    const { data } = await supabase().from("studio_merek").select("slug,nama,aktif,profil").order("urutan");
+    if (data) setMerek(data);
+  }, []);
+
   useEffect(() => {
     if (jalurGudang !== "supabase") return;
     muatKonten().then((k) => k && setSitus(k)).catch(() => {});
-    supabase().from("studio_merek").select("slug,nama,aktif,profil").order("urutan").then(({ data }) => data && setMerek(data));
-    const t = setTimeout(muat, 0);
+    const t = setTimeout(() => {
+      void muatMerek();
+      void muat();
+    }, 0);
     return () => clearTimeout(t);
-  }, [muat]);
+  }, [muat, muatMerek]);
 
   // Selama ada tugas yang belum selesai, perbarui daftar tiap 10 detik.
   const masihJalan = daftar.some((t) => (t.status === "naskah" && !t.naskah) || t.status === "antre" || t.status === "proses" || t.status_tayang === "antre" || t.status_tayang === "proses");
@@ -659,7 +679,8 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     setPesan("");
     const arahanMentah = String(d.get("arahan") ?? "").trim();
     const prefiksGaya = pilihGaya !== "otomatis" ? `[Gaya: ${pilihGaya}] ` : "";
-    const arahanAkhir = prefiksGaya + arahanMentah;
+    const prefiksSuara = pilihJenis === "video" && pilihSuara !== "otomatis" ? `[Suara: ${pilihSuara}] ` : "";
+    const arahanAkhir = prefiksGaya + prefiksSuara + arahanMentah;
 
     let jadwalOtomatisIso: string | null = null;
     if (modeJadwalBuat === "prime19") {
@@ -766,6 +787,19 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     slug;
   const merekAktif = merek.filter((m) => m.aktif);
   const adalahBakafrawi = pilihMerek === "bakafrawi";
+  const suaraFavorit: SuaraFavorit[] = (() => {
+    const mentah = merek.find((m) => m.slug === "bakafrawi")?.profil?.suara_elevenlabs;
+    if (!Array.isArray(mentah)) return [];
+    const hasil: SuaraFavorit[] = [];
+    const sudah = new Set<string>();
+    for (const s of mentah) {
+      const id = String(s?.id ?? "").trim();
+      if (!id || sudah.has(id)) continue;
+      sudah.add(id);
+      hasil.push({ id, nama: String(s?.nama ?? "").trim() || id.slice(0, 12), ...(s?.catatan ? { catatan: String(s.catatan) } : {}) });
+    }
+    return hasil;
+  })();
   const namaMerek = (slug: string) => (merekAktif.length > 1 || slug !== "bakafrawi" ? `${merek.find((m) => m.slug === slug)?.nama ?? slug} · ` : "");
 
   const jumlahTerjadwal = daftar.filter((t) => t.status_tayang === "dijadwalkan" || t.status_tayang === "antre").length;
@@ -1524,21 +1558,65 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   </label>
                 </div>
 
-                <label className="grid gap-1.5 sm:w-1/2">
-                  <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                    <Palette className="size-3.5 text-emas" /> Gaya Desain {pilihJenis === "video" ? "Video" : "Poster"}
-                  </span>
-                  <select
-                    name="gaya"
-                    value={pilihGaya}
-                    onChange={(e) => setPilihGaya(e.target.value)}
-                    className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
-                  >
-                    {(pilihJenis === "video" ? PRESET_VIDEO : PRESET_POSTER).map((g) => (
-                      <option key={g.kode} value={g.kode} className="bg-card">{g.label}</option>
-                    ))}
-                  </select>
-                </label>
+                <div className={pilihJenis === "video" ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
+                  <label className={pilihJenis === "video" ? "grid gap-1.5" : "grid gap-1.5 sm:w-1/2"}>
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Palette className="size-3.5 text-emas" /> Gaya Desain {pilihJenis === "video" ? "Video" : "Poster"}
+                    </span>
+                    <select
+                      name="gaya"
+                      value={pilihGaya}
+                      onChange={(e) => setPilihGaya(e.target.value)}
+                      className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+                    >
+                      {(pilihJenis === "video" ? PRESET_VIDEO : PRESET_POSTER).map((g) => (
+                        <option key={g.kode} value={g.kode} className="bg-card">{g.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {pilihJenis === "video" && (
+                    <div className="grid gap-1.5">
+                      <label htmlFor="studio-pilih-suara" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <Volume2 className="size-3.5 text-emas" /> Suara Narasi (ElevenLabs / AI)
+                      </label>
+                      <select
+                        id="studio-pilih-suara"
+                        name="suara"
+                        value={pilihSuara}
+                        onChange={(e) => setPilihSuara(e.target.value)}
+                        className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+                      >
+                        <option value="otomatis" className="bg-card">
+                          Otomatis (Rotasi {suaraFavorit.length > 0 ? `${suaraFavorit.length} suara favorit` : "suara favorit / AI"})
+                        </option>
+                        {suaraFavorit.length > 0 && (
+                          <optgroup label="Suara Favorit ElevenLabs" className="bg-card">
+                            {suaraFavorit.map((s) => (
+                              <option key={s.id} value={s.id} className="bg-card">
+                                ★ {s.nama} ({s.id.slice(0, 8)}…)
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        <optgroup label="Profil Gaya Suara Bawaan" className="bg-card">
+                          {PROFIL_SUARA_BAWAAN.map((p) => (
+                            <option key={p.kode} value={p.kode} className="bg-card">{p.label}</option>
+                          ))}
+                        </optgroup>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setTabStudio("sambungan")}
+                        className="w-fit text-[11px] text-emas hover:underline"
+                      >
+                        {suaraFavorit.length > 0
+                          ? `Kelola ${suaraFavorit.length} Voice ID favorit di Sambungan →`
+                          : "Tambah / kelola daftar Voice ID ElevenLabs di Sambungan →"}
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <label className="flex items-start gap-2 text-sm">
                   <input type="checkbox" name="latar" defaultChecked className="mt-0.5 size-4 accent-[#c9a24b]" />
@@ -2040,7 +2118,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
             )}
 
             {/* ══════════ TAB 6: SAMBUNGAN AKUN & BOT ══════════ */}
-            {tabStudio === "sambungan" && <Sambungan sesi={sesi} />}
+            {tabStudio === "sambungan" && <Sambungan sesi={sesi} onSuaraBerubah={muatMerek} />}
           </>
         )}
       </main>

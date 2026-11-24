@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Send, Trash2, Volume2 } from "lucide-react";
 import { IkonSosial } from "@/components/situs/ikon-sosial";
 
 type AkunMerek = {
@@ -12,22 +12,31 @@ type AkunMerek = {
   akun: { akun: string; kedaluwarsa: string | null; host: string } | null;
   tiktok: { akun: string; kedaluwarsa: string | null } | null;
 };
+type SuaraFavorit = {
+  id: string;
+  nama: string;
+  catatan?: string;
+};
 type Status = {
   siap: boolean;
   pesan?: string;
   instagram: AkunMerek[];
   tiktokSiap: boolean;
+  suaraFavorit?: SuaraFavorit[];
   telegram: { bot: boolean; terdaftar: boolean; webhook: { url: string; galat?: string } | null };
 };
 
-/** Kotak sambungan Instagram (per merek) & Telegram di Studio. Token hanya dikirim ke server, tak pernah dibaca balik. */
-export function Sambungan({ sesi }: { sesi: Session | null }) {
+/** Kotak sambungan Instagram (per merek), Telegram, & daftar Voice ID favorit ElevenLabs. Token tak pernah dibaca balik. */
+export function Sambungan({ sesi, onSuaraBerubah }: { sesi: Session | null; onSuaraBerubah?: () => void }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [pesan, setPesan] = useState("");
   const [sibuk, setSibuk] = useState(false);
   const [token, setToken] = useState("");
   const [idIg, setIdIg] = useState("");
   const [merek, setMerek] = useState("bakafrawi");
+  const [namaSuara, setNamaSuara] = useState("");
+  const [voiceIdBaru, setVoiceIdBaru] = useState("");
+  const [catatanSuara, setCatatanSuara] = useState("");
   const kepala = { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" };
 
   const muat = useCallback(async () => {
@@ -40,14 +49,22 @@ export function Sambungan({ sesi }: { sesi: Session | null }) {
     return () => clearTimeout(t);
   }, [muat]);
 
-  async function kirim(isi: Record<string, unknown>) {
+  async function kirim(isi: Record<string, unknown>, opsi?: { segarkanSuara?: boolean }) {
     setSibuk(true);
     setPesan("");
     const res = await fetch("/api/studio/sambungan", { method: "POST", headers: kepala, body: JSON.stringify(isi) });
     const j = await res.json().catch(() => ({}));
     if (j.ok && j.url) return void window.location.assign(j.url); // izin TikTok: pindah ke halaman TikTok
     setPesan(j.pesan ?? (j.ok ? "Tersimpan." : "Gagal."));
-    if (j.ok) setToken("");
+    if (j.ok) {
+      setToken("");
+      if (opsi?.segarkanSuara) {
+        setNamaSuara("");
+        setVoiceIdBaru("");
+        setCatatanSuara("");
+        onSuaraBerubah?.();
+      }
+    }
     setSibuk(false);
     muat();
   }
@@ -56,16 +73,18 @@ export function Sambungan({ sesi }: { sesi: Session | null }) {
   const tg = status.telegram;
   const webhookKeSini = Boolean(tg?.webhook?.url?.endsWith("/api/telegram"));
   const daftarIg = status.instagram ?? [];
+  const daftarSuara = status.suaraFavorit ?? [];
   const igUtama = daftarIg.find((m) => m.merek === "bakafrawi")?.akun;
   const dipilih = daftarIg.find((m) => m.merek === merek);
   const tanggal = (s: string | null) => (s ? new Date(s).toLocaleDateString("id-ID", { dateStyle: "medium" }) : null);
 
   return (
-    <details className="mb-8 rounded-2xl border border-border bg-card p-5 sm:p-6" open={!igUtama || !tg?.terdaftar}>
+    <details className="mb-8 rounded-2xl border border-border bg-card p-5 sm:p-6" open={!igUtama || !tg?.terdaftar || daftarSuara.length > 0}>
       <summary className="cursor-pointer font-heading text-lg">
         Sambungan{" "}
         <span className="font-sans text-sm text-muted-foreground">
           · Instagram {daftarIg.filter((m) => m.akun).length}/{daftarIg.length} merek · Telegram {tg?.terdaftar ? "✅" : "belum"}
+          {daftarSuara.length > 0 ? ` · Suara ${daftarSuara.length}` : ""}
         </span>
       </summary>
       {!status.siap ? (
@@ -144,6 +163,67 @@ export function Sambungan({ sesi }: { sesi: Session | null }) {
                 </p>
               </>
             )}
+          </section>
+
+          <section className="grid gap-3 text-sm">
+            <h3 className="flex items-center gap-2 font-semibold"><Volume2 className="size-4 text-emas" /> Suara Favorit ElevenLabs</h3>
+            <p className="text-xs text-redup">
+              Simpan beberapa Voice ID favorit agar bisa dipilih langsung di <b>Buat Konten AI</b> atau dirotasi otomatis saat pilih <b>Otomatis</b>.{" "}
+              (<code>ELEVENLABS_API_KEY</code> tetap disimpan aman di GitHub Secrets, bukan di sini.)
+            </p>
+            {daftarSuara.length > 0 ? (
+              <ul className="grid gap-1.5">
+                {daftarSuara.map((s) => (
+                  <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
+                    <div className="min-w-0">
+                      <b className="text-foreground">{s.nama}</b>{" "}
+                      <code className="rounded bg-white/10 px-1.5 py-0.5 text-[11px] text-emas-muda">{s.id}</code>
+                      {s.catatan && <span className="ml-2 text-muted-foreground">· {s.catatan}</span>}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={sibuk}
+                      onClick={() => kirim({ hapusSuaraId: s.id }, { segarkanSuara: true })}
+                      className="inline-flex items-center gap-1 text-red-400 hover:text-red-300 disabled:opacity-50"
+                      title="Hapus suara favorit"
+                    >
+                      <Trash2 className="size-3.5" /> Hapus
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground">Belum ada suara favorit tersimpan. Tambahkan Voice ID di bawah.</p>
+            )}
+            <div className="grid gap-2 sm:grid-cols-[160px_1fr_1fr_auto]">
+              <input
+                value={namaSuara}
+                onChange={(e) => setNamaSuara(e.target.value)}
+                placeholder="Mis. Narator Hangat"
+                className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+              />
+              <input
+                value={voiceIdBaru}
+                onChange={(e) => setVoiceIdBaru(e.target.value)}
+                placeholder="Voice ID ElevenLabs (mis. EXAVITQu4vr4...)"
+                autoComplete="off"
+                className="h-10 rounded-lg border border-input bg-transparent px-3 font-mono text-xs"
+              />
+              <input
+                value={catatanSuara}
+                onChange={(e) => setCatatanSuara(e.target.value)}
+                placeholder="Catatan (opsional, mis. promo/Jawa)"
+                className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+              />
+              <button
+                type="button"
+                disabled={!voiceIdBaru.trim() || sibuk}
+                onClick={() => kirim({ tambahSuara: { nama: namaSuara, id: voiceIdBaru, catatan: catatanSuara } }, { segarkanSuara: true })}
+                className="h-10 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                {sibuk ? <Loader2 className="size-4 animate-spin" /> : "Tambah Suara"}
+              </button>
+            </div>
           </section>
           {pesan && <p className="text-sm text-emas-muda">{pesan}</p>}
         </div>

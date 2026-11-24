@@ -229,9 +229,47 @@ export async function aturTayang(id: string, aksi: AksiTayang, opsi?: OpsiAturTa
 
 export type Merek = { slug: string; nama: string; aktif: boolean; urutan: number; profil: Record<string, unknown> };
 export type Layanan = "instagram" | "tiktok";
+export type SuaraFavorit = { id: string; nama: string; catatan?: string };
+
+export const POLA_VOICE_ID = /^[A-Za-z0-9_-]{8,64}$/;
+
+/** Bersihkan daftar Voice ID ElevenLabs favorit (case-sensitive, maks 20 item). */
+export function normalisasiSuaraFavorit(mentah: unknown): SuaraFavorit[] {
+  if (!Array.isArray(mentah)) return [];
+  const hasil: SuaraFavorit[] = [];
+  const sudah = new Set<string>();
+  for (const item of mentah) {
+    if (!item || typeof item !== "object") continue;
+    const obj = item as Record<string, unknown>;
+    const id = String(obj.id ?? "").trim();
+    if (!POLA_VOICE_ID.test(id) || sudah.has(id)) continue;
+    sudah.add(id);
+    const nama = String(obj.nama ?? "").trim().slice(0, 40) || id.slice(0, 12);
+    const catatan = String(obj.catatan ?? "").trim().slice(0, 80);
+    hasil.push(catatan ? { id, nama, catatan } : { id, nama });
+    if (hasil.length >= 20) break;
+  }
+  return hasil;
+}
 
 export async function daftarMerek(): Promise<Merek[]> {
   return rest("studio_merek?select=slug,nama,aktif,urutan,profil&order=urutan.asc");
+}
+
+/** Simpan daftar Voice ID favorit ElevenLabs ke profil merek utama (`bakafrawi`). */
+export async function simpanSuaraFavorit(daftar: SuaraFavorit[]): Promise<SuaraFavorit[]> {
+  const bersih = normalisasiSuaraFavorit(daftar);
+  const m = (await daftarMerek()).find((x) => x.slug === "bakafrawi");
+  if (!m) throw new Error("Profil Studio utama tidak ditemukan.");
+  await rest("studio_merek?slug=eq.bakafrawi", {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      profil: { ...(m.profil ?? {}), suara_elevenlabs: bersih },
+      diubah: new Date().toISOString(),
+    }),
+  });
+  return bersih;
 }
 
 export async function aturAktifMerek(slug: string, aktif: boolean) {

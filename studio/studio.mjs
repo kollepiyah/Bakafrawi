@@ -15,7 +15,7 @@ import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } 
 import { ffmpeg, probe } from './lib/bank/alat.mjs';
 import { ASET_LOKAL, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihMusik, renderIklan, renderSinematikRemotion, salinAsetDrive, suaraKarakter, WARNA } from './lib/video.mjs';
 import { buatNaskah, buatNaskahVideo, buatNaskahVideoFullAi } from './lib/naskah.mjs';
-import { suaraAdegan } from './lib/bank/suara.mjs';
+import { suaraAdegan, uraiPilihanSuara } from './lib/bank/suara.mjs';
 import { renderOpeningAI } from './lib/opening-ai.mjs';
 import { bukaPeramban, potret, potretLayar } from './lib/peramban.mjs';
 import { adaTelegram, kirimHasil, kirimMediaTayang, kirimTeks } from './lib/telegram.mjs';
@@ -205,12 +205,27 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   const catatan = [];
   const cocokGaya = String(tugas.arahan ?? '').match(/\[Gaya:\s*([a-z0-9-]+)\]/i);
   const gayaPilihan = cocokGaya ? cocokGaya[1].toLowerCase() : '';
+  const pilihanSuara = uraiPilihanSuara(tugas.arahan);
+  const arahanNaskah = String(tugas.arahan ?? '').replace(/\[Suara:\s*[A-Za-z0-9_-]+\]\s*/gi, '').trim();
   const pakaiAi = tugas.latar === 'ai' || gayaPilihan === 'photo-floating';
 
   // Video software Bakafrawi: tangkapan layar ASLI aplikasi + animasi UI + latar AI + maskot.
   // Video non-software (mis. Lek Kopi): Video Storytelling Full AI tanpa tangkapan layar aplikasi.
   const dirMaskot = path.join(ASET_LOKAL, 'maskot'), dirMusik = path.join(ASET_LOKAL, 'musik');
   if (tugas.jenis === 'video') await salinAsetDrive().catch(() => {});
+  const daftarSuaraFavorit =
+    tugas.jenis === 'video'
+      ? merek?.slug === 'bakafrawi'
+        ? merek.profil?.suara_elevenlabs
+        : siapDb()
+        ? (await bacaMerek('bakafrawi').catch(() => null))?.profil?.suara_elevenlabs
+        : []
+      : [];
+  const opsiSuara = {
+    profilSuara: pilihanSuara.profilSuara ?? undefined,
+    voiceId: pilihanSuara.voiceId ?? undefined,
+    daftarVoice: Array.isArray(daftarSuaraFavorit) ? daftarSuaraFavorit : [],
+  };
   const layarApp = tugas.jenis === 'video' && adalahSoftware ? await kumpulkanLayar(produk, situs, peramban, folder, catatan) : [];
   if (tugas.jenis === 'video' && adalahSoftware && !layarApp.length) {
     throw new Error('Produk ini belum punya layar aplikasi (tautan/skenario demo atau gambar layar HP) untuk video.');
@@ -218,9 +233,9 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   const karakter = tugas.jenis === 'video' && adalahSoftware ? kelompokKarakter(await readdir(dirMaskot, { recursive: true }).catch(() => [])) : new Map();
   const naskah = tugas.jenis === 'video'
     ? (adalahSoftware
-        ? await buatNaskahVideo(produk, situs, tugas.arahan, merek, layarApp, kecilkan, [...karakter.keys()])
-        : await buatNaskahVideoFullAi(produk, situs, tugas.arahan, merek))
-    : await buatNaskah(produk, situs, tugas.arahan, tugas.jenis, merek);
+        ? await buatNaskahVideo(produk, situs, arahanNaskah, merek, layarApp, kecilkan, [...karakter.keys()])
+        : await buatNaskahVideoFullAi(produk, situs, arahanNaskah, merek))
+    : await buatNaskah(produk, situs, arahanNaskah, tugas.jenis, merek);
 
   // Standar caption & hashtag konsisten per merek (anti-duplikat, maks 10 hashtag)
   let caption;
@@ -257,9 +272,13 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     // Video Storytelling Full AI untuk merek non-software (seperti Lek Kopi): visual gambar AI + suara TTS variatif + Remotion Sinematik.
     const logoVideo = logo ? await ambilLokal(logo.startsWith('file:') ? logo : mutlak(logo, situs), berkas('logo-sumber')) : null;
     const teksNarasi = naskah.adegan.map((a) => a.narasi);
-    const hasilSuara = await suaraAdegan(teksNarasi, folder);
+    const hasilSuara = await suaraAdegan(teksNarasi, folder, opsiSuara);
     if (hasilSuara.catatan) catatan.push(hasilSuara.catatan);
-    catatan.push(`mode: video Full AI · suara: ${hasilSuara.jalur}/${hasilSuara.profil ?? 'otomatis'}`);
+    catatan.push(
+      `mode: video Full AI · suara: ${hasilSuara.jalur}${
+        hasilSuara.voiceId ? ` (${hasilSuara.voiceId.slice(0, 8)})` : `/${hasilSuara.profil ?? 'otomatis'}`
+      }`,
+    );
 
     const segmen = [];
     let gambarTerakhir = null;
@@ -342,7 +361,7 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     if (tokoh) naskah.karakter = tokoh;
     const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
     const musik = process.env.STUDIO_MUSIK || (lagu && path.join(dirMusik, lagu));
-    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot, latarGambar: latarGambarAi }, folder, musik, suara: suaraKarakter(tokoh), keluar: berkas('video.mp4') });
+    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot, latarGambar: latarGambarAi }, folder, musik, suara: suaraKarakter(tokoh), opsiSuara, keluar: berkas('video.mp4') });
     hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') });
     hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   }

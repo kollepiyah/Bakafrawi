@@ -61,6 +61,7 @@ import com.bakafrawi.studio.data.JadwalRutinData
 import com.bakafrawi.studio.data.MerekStudio
 import com.bakafrawi.studio.data.PaketFlow
 import com.bakafrawi.studio.data.ProdukRingkas
+import com.bakafrawi.studio.data.SuaraFavorit
 import com.bakafrawi.studio.data.TugasStudio
 import com.bakafrawi.studio.data.UsulanArahan
 import com.bakafrawi.studio.jamWib
@@ -102,6 +103,15 @@ private val PRESET_POSTER = listOf(
     "before-after" to "Before vs After",
     "bold-typo" to "Bold Typography",
     "photo-floating" to "Foto AI + UI",
+)
+
+private val PROFIL_SUARA_BAWAAN = listOf(
+    "santai_indo" to "Santai Indo",
+    "jawa_timur" to "Jawa Timur",
+    "storytelling_hangat" to "Storytelling Hangat",
+    "iklan_energik" to "Iklan Energik",
+    "narator_sinematik" to "Narator Sinematik",
+    "jawa_krama_ngoko" to "Jawa Krama/Ngoko",
 )
 
 private val SASARAN_VIDEO = listOf(
@@ -162,9 +172,11 @@ fun LayarStudio(
     var sub by remember { mutableStateOf(SubStudio.Unggah) }
     var daftarMerek by remember { mutableStateOf<List<MerekStudio>>(emptyList()) }
     var daftarProduk by remember { mutableStateOf<List<ProdukRingkas>>(emptyList()) }
+    var daftarSuara by remember { mutableStateOf<List<SuaraFavorit>>(emptyList()) }
     var daftarTugas by remember { mutableStateOf<List<TugasStudio>?>(null) }
     var arahanBawaan by remember { mutableStateOf("") }
     var segarkanTugas by remember { mutableStateOf(0) }
+    var segarkanSuara by remember { mutableStateOf(0) }
 
     LaunchedEffect(muatUlang) {
         try {
@@ -173,8 +185,15 @@ fun LayarStudio(
             }
             daftarProduk = api.daftarProdukSitus()
             daftarTugas = api.daftarTugasStudio()
+            daftarSuara = runCatching { api.bacaSambungan().suaraFavorit }.getOrDefault(emptyList())
         } catch (e: Exception) {
             galat(e)
+        }
+    }
+
+    LaunchedEffect(segarkanSuara) {
+        if (segarkanSuara > 0) {
+            runCatching { api.bacaSambungan().suaraFavorit }.onSuccess { daftarSuara = it }
         }
     }
 
@@ -248,7 +267,9 @@ fun LayarStudio(
                     api = api,
                     merek = merekAktif,
                     produk = daftarProduk,
+                    suaraFavorit = daftarSuara,
                     arahanAwal = arahanBawaan,
+                    bukaSambungan = { sub = SubStudio.Sambungan },
                     kabar = kabar,
                     galat = galat,
                     selesaiBuat = {
@@ -287,6 +308,7 @@ fun LayarStudio(
                 )
                 SubStudio.Sambungan -> TabSambunganStudio(
                     api = api,
+                    onSuaraBerubah = { segarkanSuara++ },
                     kabar = kabar,
                     galat = galat,
                 )
@@ -868,7 +890,9 @@ private fun TabBuatKonten(
     api: Api,
     merek: List<MerekStudio>,
     produk: List<ProdukRingkas>,
+    suaraFavorit: List<SuaraFavorit>,
     arahanAwal: String,
+    bukaSambungan: () -> Unit,
     kabar: (String) -> Unit,
     galat: (Exception) -> Unit,
     selesaiBuat: () -> Unit,
@@ -877,6 +901,7 @@ private fun TabBuatKonten(
     var jenis by remember { mutableStateOf("gambar") }
     var pilihProduk by remember(produk) { mutableStateOf(produk.firstOrNull()?.slug ?: "maktaba-pos") }
     var gaya by remember { mutableStateOf("otomatis") }
+    var suara by remember { mutableStateOf("otomatis") }
     var latarAi by remember { mutableStateOf(true) }
     var sasaran by remember { mutableStateOf("otomatis") }
     var modeJadwal by remember { mutableStateOf("draf") }
@@ -957,6 +982,40 @@ private fun TabBuatKonten(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     daftarPreset.forEach { (kode, label) ->
                         FilterChip(selected = gaya == kode, onClick = { gaya = kode }, label = { Text(label, fontSize = 12.sp) })
+                    }
+                }
+                if (jenis == "video") {
+                    Text("Suara Narasi (ElevenLabs / AI)", color = Redup, fontSize = 12.sp)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        FilterChip(
+                            selected = suara == "otomatis",
+                            onClick = { suara = "otomatis" },
+                            label = {
+                                val teksAuto = if (suaraFavorit.isNotEmpty()) "Otomatis (${suaraFavorit.size} favorit)" else "Otomatis"
+                                Text(teksAuto, fontSize = 12.sp)
+                            },
+                        )
+                        suaraFavorit.forEach { s ->
+                            FilterChip(
+                                selected = suara == s.id,
+                                onClick = { suara = s.id },
+                                label = { Text("★ ${s.nama}", fontSize = 12.sp) },
+                            )
+                        }
+                        PROFIL_SUARA_BAWAAN.forEach { (kode, label) ->
+                            FilterChip(
+                                selected = suara == kode,
+                                onClick = { suara = kode },
+                                label = { Text(label, fontSize = 12.sp) },
+                            )
+                        }
+                    }
+                    TextButton(onClick = bukaSambungan, contentPadding = PaddingValues(0.dp)) {
+                        Text(
+                            if (suaraFavorit.isEmpty()) "Tambah Voice ID ElevenLabs di Sambungan →" else "Kelola Voice ID di Sambungan →",
+                            fontSize = 11.sp,
+                            color = Emas,
+                        )
                     }
                 }
                 Text("Sasaran Instagram", color = Redup, fontSize = 12.sp)
@@ -1055,7 +1114,9 @@ private fun TabBuatKonten(
                         kabar("Format tanggal/jam custom salah atau sudah lewat (gunakan YYYY-MM-DD & HH:MM WIB).")
                         return@Button
                     }
-                    val prefiks = if (gaya != "otomatis") "[Gaya: $gaya] " else ""
+                    val prefiksGaya = if (gaya != "otomatis") "[Gaya: $gaya] " else ""
+                    val prefiksSuara = if (jenis == "video" && suara != "otomatis") "[Suara: $suara] " else ""
+                    val prefiks = prefiksGaya + prefiksSuara
                     sibukBuat = true
                     cakupan.launch {
                         try {
@@ -1539,11 +1600,15 @@ private fun TabRisetViral(
 @Composable
 private fun TabSambunganStudio(
     api: Api,
+    onSuaraBerubah: () -> Unit,
     kabar: (String) -> Unit,
     galat: (Exception) -> Unit,
 ) {
     var data by remember { mutableStateOf<DataSambungan?>(null) }
     var sibuk by remember { mutableStateOf(false) }
+    var namaSuara by remember { mutableStateOf("") }
+    var voiceIdBaru by remember { mutableStateOf("") }
+    var catatanSuara by remember { mutableStateOf("") }
     val cakupan = rememberCoroutineScope()
 
     fun muat() {
@@ -1603,6 +1668,99 @@ private fun TabSambunganStudio(
                         },
                         enabled = !sibuk,
                     ) { Text("Pasang Ulang Webhook Telegram") }
+                }
+            }
+            item {
+                KartuStudio("Suara Favorit ElevenLabs") {
+                    Text(
+                        "Simpan beberapa Voice ID favorit agar bisa dipilih di Buat AI atau dirotasi otomatis.",
+                        color = Redup,
+                        fontSize = 12.sp,
+                    )
+                    if (d.suaraFavorit.isEmpty()) {
+                        Text("Belum ada suara favorit tersimpan.", color = Redup, fontSize = 12.sp)
+                    } else {
+                        d.suaraFavorit.forEach { s ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0x14FFFFFF), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(s.nama, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                    Text(
+                                        if (s.catatan.isNotBlank()) "${s.id} · ${s.catatan}" else s.id,
+                                        color = Redup,
+                                        fontSize = 11.sp,
+                                    )
+                                }
+                                TextButton(
+                                    onClick = {
+                                        sibuk = true
+                                        cakupan.launch {
+                                            try {
+                                                kabar(api.hapusSuaraFavorit(s.id))
+                                                muat()
+                                                onSuaraBerubah()
+                                            } catch (e: Exception) {
+                                                galat(e)
+                                            } finally {
+                                                sibuk = false
+                                            }
+                                        }
+                                    },
+                                    enabled = !sibuk,
+                                ) {
+                                    Text("Hapus", color = Color(0xFFF87171), fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = namaSuara,
+                        onValueChange = { namaSuara = it },
+                        label = { Text("Nama suara (mis. Narator Hangat)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = voiceIdBaru,
+                        onValueChange = { voiceIdBaru = it },
+                        label = { Text("Voice ID ElevenLabs") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = catatanSuara,
+                        onValueChange = { catatanSuara = it },
+                        label = { Text("Catatan (opsional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    Button(
+                        onClick = {
+                            sibuk = true
+                            cakupan.launch {
+                                try {
+                                    kabar(api.tambahSuaraFavorit(namaSuara, voiceIdBaru, catatanSuara))
+                                    namaSuara = ""
+                                    voiceIdBaru = ""
+                                    catatanSuara = ""
+                                    muat()
+                                    onSuaraBerubah()
+                                } catch (e: Exception) {
+                                    galat(e)
+                                } finally {
+                                    sibuk = false
+                                }
+                            }
+                        },
+                        enabled = voiceIdBaru.isNotBlank() && !sibuk,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Tambah Suara Favorit") }
                 }
             }
         }

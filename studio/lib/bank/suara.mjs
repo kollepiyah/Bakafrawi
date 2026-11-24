@@ -299,6 +299,71 @@ async function narasiSekaligus(teks, berkas, minta) {
 
 // ------------------------------------------------------------------ ElevenLabs
 
+const POLA_VOICE_ID = /^[A-Za-z0-9_-]{8,64}$/
+
+/**
+ * Kumpulkan daftar Voice ID ElevenLabs valid dari daftar favorit DB (`tambahan`) dan env
+ * `ELEVENLABS_VOICE_ID` (mendukung banyak ID dipisah koma / spasi / baris baru). Case-sensitive.
+ */
+export function daftarVoiceElevenLabs(tambahan = [], envNilai = ELEVENLABS_VOICE_ID()) {
+  const calon = []
+  if (Array.isArray(tambahan)) {
+    for (const item of tambahan) {
+      const id = typeof item === 'string' ? item : item?.id
+      if (id) calon.push(String(id).trim())
+    }
+  }
+  const dariEnv = String(envNilai ?? '').split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean)
+  calon.push(...dariEnv)
+
+  const hasil = []
+  const sudah = new Set()
+  for (const id of calon) {
+    if (!POLA_VOICE_ID.test(id) || sudah.has(id)) continue
+    sudah.add(id)
+    hasil.push(id)
+  }
+  return hasil
+}
+
+/**
+ * Pilih 1 Voice ID ElevenLabs:
+ * 1) `voiceId` pilihan manual dari Studio jika valid,
+ * 2) Rotasi deterministik per video dari daftar favorit + `ELEVENLABS_VOICE_ID` multi-ID,
+ * 3) Fallback ke `profil.elevenVoiceId` / bawaan.
+ */
+export function pilihVoiceElevenLabs({
+  voiceId = null,
+  daftarVoice = [],
+  profil = null,
+  benih = '',
+  envNilai = ELEVENLABS_VOICE_ID(),
+} = {}) {
+  const eksplisit = String(voiceId ?? '').trim()
+  if (POLA_VOICE_ID.test(eksplisit)) return eksplisit
+
+  const kolam = daftarVoiceElevenLabs(daftarVoice, envNilai)
+  if (kolam.length === 1) return kolam[0]
+  if (kolam.length > 1) {
+    const teksBenih = Array.isArray(benih) ? benih.join(' ') : String(benih || '')
+    let hash = 0
+    for (let i = 0; i < teksBenih.length; i++) hash = (hash * 31 + teksBenih.charCodeAt(i)) >>> 0
+    return kolam[hash % kolam.length]
+  }
+  return profil?.elevenVoiceId || 'EXAVITQu4vr4xnSDxMaL'
+}
+
+/** Baca tag `[Suara: ...]` dari arahan Studio → profil bawaan ATAU Voice ID ElevenLabs (case-sensitive). */
+export function uraiPilihanSuara(arahan) {
+  const cocok = String(arahan ?? '').match(/\[Suara:\s*([A-Za-z0-9_-]+)\]/i)
+  if (!cocok) return { profilSuara: null, voiceId: null }
+  const nilaiAsli = cocok[1].trim()
+  const kode = nilaiAsli.toLowerCase()
+  if (PROFIL_SUARA[kode]) return { profilSuara: kode, voiceId: null }
+  if (POLA_VOICE_ID.test(nilaiAsli)) return { profilSuara: null, voiceId: nilaiAsli }
+  return { profilSuara: null, voiceId: null }
+}
+
 /**
  * Ubah `alignment` karakter-per-karakter dari ElevenLabs `/with-timestamps` menjadi
  * daftar kata `[{ teks, mulai, selesai }]` (dalam detik) untuk subtitle Remotion. Murni.
@@ -339,10 +404,15 @@ export function kataDariAlignmentElevenLabs(alignment) {
   return hasil
 }
 
-async function mintaElevenLabs(teks, keluar, profil) {
+async function mintaElevenLabs(teks, keluar, profil, opsi = {}) {
   const kunci = process.env.ELEVENLABS_API_KEY
   if (!kunci) throw new Error('ELEVENLABS_API_KEY belum diisi.')
-  const voiceId = ELEVENLABS_VOICE_ID() || profil?.elevenVoiceId || 'EXAVITQu4vr4xnSDxMaL'
+  const voiceId = pilihVoiceElevenLabs({
+    voiceId: opsi?.voiceId,
+    daftarVoice: opsi?.daftarVoice,
+    profil,
+    benih: teks,
+  })
   const badan = JSON.stringify({
     text: String(teks ?? '').trim(),
     model_id: ELEVENLABS_MODEL(),
@@ -358,7 +428,7 @@ async function mintaElevenLabs(teks, keluar, profil) {
     const j = await r.json()
     if (!j?.audio_base64) throw new Error('ElevenLabs mengembalikan respons tanpa audio_base64.')
     await writeFile(keluar, Buffer.from(j.audio_base64, 'base64'))
-    return { kata: kataDariAlignmentElevenLabs(j.normalized_alignment ?? j.alignment) }
+    return { kata: kataDariAlignmentElevenLabs(j.normalized_alignment ?? j.alignment), voiceId }
   }
   if (r.status === 404) {
     const rPolos = await fetch(
@@ -367,13 +437,13 @@ async function mintaElevenLabs(teks, keluar, profil) {
     )
     if (!rPolos.ok) throw new Error(`ElevenLabs TTS ${rPolos.status}: ${(await rPolos.text().catch(() => '')).slice(0, 200)}`)
     await writeFile(keluar, Buffer.from(await rPolos.arrayBuffer()))
-    return { kata: [] }
+    return { kata: [], voiceId }
   }
   throw new Error(`ElevenLabs TTS ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
 }
 
-async function elevenlabs(teks, keluar, profil) {
-  return mintaElevenLabs(teks, keluar, profil)
+async function elevenlabs(teks, keluar, profil, opsi = {}) {
+  return mintaElevenLabs(teks, keluar, profil, opsi)
 }
 
 // --------------------------------------------------------------- pemakai
@@ -381,25 +451,31 @@ async function elevenlabs(teks, keluar, profil) {
 const PEMBUAT = { elevenlabs, gemini, azure, edge }
 const EKSTENSI = { elevenlabs: 'mp3', gemini: 'wav', azure: 'mp3', edge: 'mp3' }
 
-export async function buatSuara(teks, keluar, jalur = jalurSuara(), profil = null) {
-  return PEMBUAT[jalur](teks, keluar, profil)
+export async function buatSuara(teks, keluar, jalur = jalurSuara(), profil = null, opsi = {}) {
+  return PEMBUAT[jalur](teks, keluar, profil, opsi)
 }
 
 /**
- * Suara semua adegan satu video dengan SATU jalur & SATU profil suara (suara yang berganti di
- * tengah video terdengar janggal). Profil suara otomatis bervariasi per video bila tidak ditentukan.
+ * Suara semua adegan satu video dengan SATU jalur & SATU profil/Voice ID (suara yang berganti di
+ * tengah video terdengar janggal). Profil/Voice ID otomatis bervariasi per video bila tidak ditentukan.
  * Bila jalur utama gagal, otomatis beralih berjenjang: ElevenLabs → Gemini → Edge TTS.
  */
 export async function suaraAdegan(teks, folder, opsi = {}) {
   const profil = pilihProfilSuara(opsi.profilSuara, teks)
-  const buat = opsi.buat ?? ((t, k, j) => buatSuara(t, k, j, profil))
+  const voiceId = pilihVoiceElevenLabs({
+    voiceId: opsi.voiceId,
+    daftarVoice: opsi.daftarVoice,
+    profil,
+    benih: teks,
+  })
+  const buat = opsi.buat ?? ((t, k, j, info) => buatSuara(t, k, j, info?.profil ?? profil, { voiceId: info?.voiceId ?? voiceId }))
   const jalurAwal = opsi.jalur ?? jalurSuara()
   const nama = (j) => teks.map((_, i) => path.join(folder, `suara_${i}.${EKSTENSI[j] ?? 'mp3'}`))
   const perAdegan = async (j) => {
     const berkas = nama(j)
     const kata = []
     for (const [i, t] of teks.entries()) {
-      const r = await buat(t, berkas[i], j)
+      const r = await buat(t, berkas[i], j, { profil, voiceId })
       if (j === 'elevenlabs' && Array.isArray(r?.kata)) kata[i] = r.kata
     }
     return { berkas, ...(kata.length ? { kata } : {}) }
@@ -438,6 +514,7 @@ export async function suaraAdegan(teks, folder, opsi = {}) {
         ...res,
         jalur: j,
         profil: profil.kode,
+        ...(j === 'elevenlabs' ? { voiceId } : {}),
         catatan: galatUtama ? `suara cadangan ${j} (${jalurAwal} gagal: ${galatUtama})` : null,
       }
     } catch (e) {
