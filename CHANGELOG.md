@@ -1,5 +1,12 @@
 # CHANGELOG — bakafrawi.com
 
+## Integrasi Jalur Suara ElevenLabs + Timestamps Remotion (24 Nov)
+
+- **ElevenLabs TTS Prioritas Utama + Fallback Berjenjang (`studio/lib/bank/suara.mjs`, `studio/lib/video.mjs`, `.github/workflows/studio.yml`):**
+  - Menambahkan jalur `elevenlabs` dengan endpoint `/with-timestamps` + `kataDariAlignmentElevenLabs()` sehingga narasi Bahasa Indonesia jauh lebih natural dan subtitle kata-per-kata di Remotion (`renderIklan`) memakai waktu bicara asli.
+  - Memasang rantai fallback otomatis `ElevenLabs → Gemini TTS → Edge TTS` apabila kuota bulanan ElevenLabs habis atau belum diisi.
+  - Mendaftarkan `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, dan `ELEVENLABS_MODEL` di workflow GitHub Actions serta menambahkan 3 unit test baru di `studio/lib/iklan.test.mjs`.
+
 ## Audit Performa IG Hemat AI & 3 Preset Gaya Google Flow Baru (24 Nov)
 
 - **Audit Performa Instagram Tanpa Claude / Tanpa Porter Metrics (`src/lib/audit-ig-murni.ts`, `src/lib/audit-ig-server.ts`, `/api/studio/audit-ig`, `deck.tsx`, `bot-ai.ts`):**

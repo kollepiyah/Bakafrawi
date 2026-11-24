@@ -1,14 +1,11 @@
 // suara.mjs — suara Indonesia tiap adegan (KB §77, §91, §93).
 //
-// Tiga jalur, dipilih otomatis (STUDIO_JALUR_SUARA=gemini|azure|edge memaksa salah satunya):
-//   • gemini — Gemini TTS lewat kunci GEMINI_API_KEY (AI Studio, free tier tanpa kartu). Paling
-//     alami; gaya bicaranya diatur kalimat (STUDIO_GEMINI_GAYA). Free tier hanya 10 permintaan
-//     per hari per model, jadi seluruh narasi satu video diminta SEKALI lalu dipotong per adegan,
-//     dan model Flash-Lite TTS (kuota sendiri) dicoba bila model utama habis kuotanya.
-//   • azure  — Azure AI Speech, kalau AZURE_SPEECH_KEY & REGION diisi. Pendaftaran Kyai gagal
-//     di verifikasi kartu (14 Nov 2026).
-//   • edge   — edge-tts (paket msedge-tts, TIDAK resmi, tanpa akun). Suaranya SAMA dengan Azure
-//     (id-ID-GadisNeural), dan jadi cadangan bila jalur lain gagal.
+// Empat jalur, dipilih otomatis (STUDIO_JALUR_SUARA=elevenlabs|gemini|azure|edge memaksa salah satunya):
+//   • elevenlabs — ElevenLabs TTS lewat ELEVENLABS_API_KEY (suara manusia paling natural +
+//     timestamps kata-per-kata resmi untuk Remotion; akun gratis 10.000 karakter/bulan).
+//   • gemini     — Gemini TTS lewat kunci GEMINI_API_KEY (AI Studio, free tier tanpa kartu).
+//   • azure      — Azure AI Speech, kalau AZURE_SPEECH_KEY & REGION diisi.
+//   • edge       — edge-tts (paket msedge-tts, TIDAK resmi, tanpa akun). Cadangan terakhir bila jalur lain gagal.
 import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -17,6 +14,8 @@ import { ssml } from './rakit.mjs'
 
 const SUARA = () => process.env.STUDIO_SUARA || 'id-ID-GadisNeural'
 const LAJU = () => process.env.STUDIO_LAJU || '+5%'
+const ELEVENLABS_MODEL = () => process.env.ELEVENLABS_MODEL || 'eleven_multilingual_v2'
+const ELEVENLABS_VOICE_ID = () => String(process.env.ELEVENLABS_VOICE_ID ?? '').trim()
 const GEMINI_MODEL = () => process.env.STUDIO_GEMINI_MODEL || 'gemini-3.8-flash-tts'
 const GEMINI_MODEL_CADANGAN = 'gemini-3.8-flash-lite-tts'
 const GEMINI_SUARA = () => process.env.STUDIO_GEMINI_SUARA || 'Sulafat'
@@ -26,36 +25,42 @@ const GEMINI_GAYA = () => process.env.STUDIO_GEMINI_GAYA
 /** Katalog profil suara & gaya bicara agar video tidak monoton (dipilih otomatis bergilir atau manual). */
 export const PROFIL_SUARA = {
   santai_indo: {
+    elevenVoiceId: 'EXAVITQu4vr4xnSDxMaL',
     geminiSuara: 'Sulafat',
     geminiGaya: 'natural everyday Indonesian, warm, friendly, conversational like talking to a close friend, relaxed pacing with natural breath pauses',
     edgeSuara: 'id-ID-GadisNeural',
     laju: '+4%',
   },
   jawa_timur: {
+    elevenVoiceId: 'TX3LPaxmHKxFdv7VOQHJ',
     geminiSuara: 'Puck',
     geminiGaya: 'casual friendly East Javanese / Sidoarjo Indonesian speaker, warm down-to-earth neighborhood vibe, natural subtle East Java intonation, expressive and authentic like chatting at a local coffee shop',
     edgeSuara: 'id-ID-ArdiNeural',
     laju: '+5%',
   },
   storytelling_hangat: {
+    elevenVoiceId: 'XB0fDUnXU5powFXDhCwa',
     geminiSuara: 'Aoede',
     geminiGaya: 'warm expressive Indonesian storyteller, gentle emotional delivery, clear pauses for dramatic effect, engaging and heartfelt like a viral Instagram Reels narrator',
     edgeSuara: 'id-ID-GadisNeural',
     laju: '+0%',
   },
   iklan_energik: {
+    elevenVoiceId: 'TX3LPaxmHKxFdv7VOQHJ',
     geminiSuara: 'Fenrir',
     geminiGaya: 'upbeat energetic Indonesian content creator, crisp and confident hook delivery, lively modern rhythm for short-form Reels and TikTok ads',
     edgeSuara: 'id-ID-ArdiNeural',
     laju: '+8%',
   },
   narator_sinematik: {
+    elevenVoiceId: 'pNInz6obpgDQGcFmaJgB',
     geminiSuara: 'Charon',
     geminiGaya: 'deep calm authoritative Indonesian documentary narrator, steady thoughtful cadence, rich cinematic tone',
     edgeSuara: 'id-ID-ArdiNeural',
     laju: '-2%',
   },
   jawa_krama_ngoko: {
+    elevenVoiceId: 'JBFqnCBsd6RMkjVDRZzb',
     geminiSuara: 'Kore',
     geminiGaya: 'authentic natural Javanese speaker (Ngoko/Krama East Java dialect), relaxed conversational storytelling tone, warm and expressive',
     edgeSuara: 'jv-ID-DimasNeural',
@@ -83,6 +88,7 @@ export function pilihProfilSuara(kode, benih = '') {
   }
   return {
     kode: 'bawaan',
+    elevenVoiceId: 'EXAVITQu4vr4xnSDxMaL',
     geminiSuara: GEMINI_SUARA(),
     geminiGaya: GEMINI_GAYA(),
     edgeSuara: SUARA(),
@@ -95,7 +101,8 @@ const JEDA_ADEGAN = ' <long pause> '
 
 export function jalurSuara() {
   const paksa = String(process.env.STUDIO_JALUR_SUARA ?? '').trim().toLowerCase()
-  if (['gemini', 'azure', 'edge'].includes(paksa)) return paksa
+  if (['elevenlabs', 'gemini', 'azure', 'edge'].includes(paksa)) return paksa
+  if (process.env.ELEVENLABS_API_KEY) return 'elevenlabs'
   if (process.env.GEMINI_API_KEY) return 'gemini'
   return process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? 'azure' : 'edge'
 }
@@ -290,10 +297,89 @@ async function narasiSekaligus(teks, berkas, minta) {
   return jawab.model
 }
 
+// ------------------------------------------------------------------ ElevenLabs
+
+/**
+ * Ubah `alignment` karakter-per-karakter dari ElevenLabs `/with-timestamps` menjadi
+ * daftar kata `[{ teks, mulai, selesai }]` (dalam detik) untuk subtitle Remotion. Murni.
+ */
+export function kataDariAlignmentElevenLabs(alignment) {
+  const chars = alignment?.characters
+  const starts = alignment?.character_start_times_seconds
+  const ends = alignment?.character_end_times_seconds
+  if (!Array.isArray(chars) || !Array.isArray(starts) || !Array.isArray(ends) || !chars.length) return []
+
+  const hasil = []
+  let teksKata = ''
+  let mulaiKata = null
+  let selesaiKata = null
+
+  const dorong = () => {
+    if (teksKata && mulaiKata !== null && selesaiKata !== null) {
+      hasil.push({ teks: teksKata, mulai: mulaiKata, selesai: Math.max(mulaiKata, selesaiKata) })
+    }
+    teksKata = ''
+    mulaiKata = null
+    selesaiKata = null
+  }
+
+  for (let i = 0; i < chars.length; i++) {
+    const ch = String(chars[i] ?? '')
+    const s = Number(starts[i])
+    const e = Number(ends[i])
+    if (!ch || /^\s+$/.test(ch)) {
+      dorong()
+      continue
+    }
+    if (!teksKata) mulaiKata = Number.isFinite(s) ? s : 0
+    teksKata += ch
+    selesaiKata = Number.isFinite(e) ? e : (Number.isFinite(s) ? s : (selesaiKata ?? 0))
+  }
+  dorong()
+  return hasil
+}
+
+async function mintaElevenLabs(teks, keluar, profil) {
+  const kunci = process.env.ELEVENLABS_API_KEY
+  if (!kunci) throw new Error('ELEVENLABS_API_KEY belum diisi.')
+  const voiceId = ELEVENLABS_VOICE_ID() || profil?.elevenVoiceId || 'EXAVITQu4vr4xnSDxMaL'
+  const badan = JSON.stringify({
+    text: String(teks ?? '').trim(),
+    model_id: ELEVENLABS_MODEL(),
+    voice_settings: { stability: 0.45, similarity_boost: 0.78, style: 0.25, use_speaker_boost: true },
+  })
+  const headers = { 'xi-api-key': kunci, 'Content-Type': 'application/json' }
+
+  const r = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/with-timestamps?output_format=mp3_44100_128`,
+    { method: 'POST', headers, body: badan, signal: AbortSignal.timeout(60_000) },
+  )
+  if (r.ok) {
+    const j = await r.json()
+    if (!j?.audio_base64) throw new Error('ElevenLabs mengembalikan respons tanpa audio_base64.')
+    await writeFile(keluar, Buffer.from(j.audio_base64, 'base64'))
+    return { kata: kataDariAlignmentElevenLabs(j.normalized_alignment ?? j.alignment) }
+  }
+  if (r.status === 404) {
+    const rPolos = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
+      { method: 'POST', headers, body: badan, signal: AbortSignal.timeout(60_000) },
+    )
+    if (!rPolos.ok) throw new Error(`ElevenLabs TTS ${rPolos.status}: ${(await rPolos.text().catch(() => '')).slice(0, 200)}`)
+    await writeFile(keluar, Buffer.from(await rPolos.arrayBuffer()))
+    return { kata: [] }
+  }
+  throw new Error(`ElevenLabs TTS ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
+}
+
+async function elevenlabs(teks, keluar, profil) {
+  return mintaElevenLabs(teks, keluar, profil)
+}
+
 // --------------------------------------------------------------- pemakai
 
-const PEMBUAT = { gemini, azure, edge }
-const EKSTENSI = { gemini: 'wav', azure: 'mp3', edge: 'mp3' }
+const PEMBUAT = { elevenlabs, gemini, azure, edge }
+const EKSTENSI = { elevenlabs: 'mp3', gemini: 'wav', azure: 'mp3', edge: 'mp3' }
 
 export async function buatSuara(teks, keluar, jalur = jalurSuara(), profil = null) {
   return PEMBUAT[jalur](teks, keluar, profil)
@@ -302,37 +388,61 @@ export async function buatSuara(teks, keluar, jalur = jalurSuara(), profil = nul
 /**
  * Suara semua adegan satu video dengan SATU jalur & SATU profil suara (suara yang berganti di
  * tengah video terdengar janggal). Profil suara otomatis bervariasi per video bila tidak ditentukan.
+ * Bila jalur utama gagal, otomatis beralih berjenjang: ElevenLabs → Gemini → Edge TTS.
  */
 export async function suaraAdegan(teks, folder, opsi = {}) {
   const profil = pilihProfilSuara(opsi.profilSuara, teks)
   const buat = opsi.buat ?? ((t, k, j) => buatSuara(t, k, j, profil))
-  const jalur = opsi.jalur ?? jalurSuara()
+  const jalurAwal = opsi.jalur ?? jalurSuara()
   const nama = (j) => teks.map((_, i) => path.join(folder, `suara_${i}.${EKSTENSI[j] ?? 'mp3'}`))
   const perAdegan = async (j) => {
     const berkas = nama(j)
-    for (const [i, t] of teks.entries()) await buat(t, berkas[i], j)
-    return berkas
-  }
-  try {
-    if (jalur === 'gemini' && (opsi.minta || !opsi.buat)) {
-      const berkas = nama('gemini')
-      try {
-        const minta = opsi.minta ?? ((arr) => mintaGemini(arr, profil))
-        const model = await narasiSekaligus(teks, berkas, minta)
-        const cadangan = model && model !== GEMINI_MODEL()
-        return { berkas, jalur, profil: profil.kode, catatan: cadangan ? `suara Gemini model cadangan ${model} (kuota model utama habis)` : null }
-      } catch (e) {
-        if (!e.jeda) throw e // kuota/jaringan: per adegan pun akan gagal
-      }
+    const kata = []
+    for (const [i, t] of teks.entries()) {
+      const r = await buat(t, berkas[i], j)
+      if (j === 'elevenlabs' && Array.isArray(r?.kata)) kata[i] = r.kata
     }
-    return { berkas: await perAdegan(jalur), jalur, profil: profil.kode, catatan: null }
-  } catch (e) {
-    if (jalur === 'edge') throw e
-    return {
-      berkas: await perAdegan('edge'),
-      jalur: 'edge',
-      profil: profil.kode,
-      catatan: `suara cadangan edge-tts (${jalur} gagal: ${String(e?.message ?? e).slice(0, 120)})`,
+    return { berkas, ...(kata.length ? { kata } : {}) }
+  }
+
+  const urutan =
+    jalurAwal === 'elevenlabs'
+      ? ['elevenlabs', ...(process.env.GEMINI_API_KEY ? ['gemini'] : []), 'edge']
+      : jalurAwal === 'gemini'
+      ? ['gemini', 'edge']
+      : jalurAwal === 'azure'
+      ? ['azure', 'edge']
+      : ['edge']
+
+  let galatUtama = null
+  for (const j of urutan) {
+    try {
+      if (j === 'gemini' && (opsi.minta || !opsi.buat)) {
+        const berkas = nama('gemini')
+        try {
+          const minta = opsi.minta ?? ((arr) => mintaGemini(arr, profil))
+          const model = await narasiSekaligus(teks, berkas, minta)
+          const cadangan = model && model !== GEMINI_MODEL()
+          const cat = galatUtama
+            ? `suara cadangan gemini (${jalurAwal} gagal: ${galatUtama})`
+            : cadangan
+            ? `suara Gemini model cadangan ${model} (kuota model utama habis)`
+            : null
+          return { berkas, jalur: j, profil: profil.kode, catatan: cat }
+        } catch (e) {
+          if (!e.jeda) throw e // kuota/jaringan: per adegan pun akan gagal
+        }
+      }
+      const res = await perAdegan(j)
+      return {
+        ...res,
+        jalur: j,
+        profil: profil.kode,
+        catatan: galatUtama ? `suara cadangan ${j} (${jalurAwal} gagal: ${galatUtama})` : null,
+      }
+    } catch (e) {
+      if (j === urutan.at(-1)) throw e
+      if (!galatUtama) galatUtama = String(e?.message ?? e).slice(0, 120)
     }
   }
 }

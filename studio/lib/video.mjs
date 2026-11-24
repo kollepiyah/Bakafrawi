@@ -199,7 +199,7 @@ export async function renderIklan({ naskah, aset, folder, musik = null, suara = 
     n.latarGambar = namaLatar;
   }
   n.suara = [];
-  // Utamakan Gemini TTS + 6 profil suara kreatif (suara.mjs); bila gagal, jatuh ke edge-tts (suaraKata).
+  // Utamakan ElevenLabs / Gemini TTS + 6 profil suara kreatif (suara.mjs); bila gagal, jatuh ke edge-tts (suaraKata).
   const perkirakanKata = (kalimat, durasi) => {
     const k = String(kalimat ?? '').split(/\s+/).filter(Boolean);
     const total = k.reduce((acc, w) => acc + w.length + 2, 0) || 1;
@@ -222,7 +222,8 @@ export async function renderIklan({ naskah, aset, folder, musik = null, suara = 
         await copyFile(sumber, path.join(publik, nama));
         const info = await probe(sumber).catch(() => ({ durasi: 4.5 }));
         const durasi = Number(info.durasi) || 4.5;
-        n.suara.push({ berkas: nama, durasi, kata: perkirakanKata(a.narasi, durasi) });
+        const kataAdegan = hasilSuara.kata?.[i]?.length ? hasilSuara.kata[i] : perkirakanKata(a.narasi, durasi);
+        n.suara.push({ berkas: nama, durasi, kata: kataAdegan });
         log(`🎙 ${i + 1}. ${a.jenis} (${hasilSuara.jalur}/${hasilSuara.profil ?? 'auto'}): ${durasi.toFixed(2)} dtk`);
       }
       pakaiSuaraBaru = true;

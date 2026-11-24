@@ -119,6 +119,84 @@ test('suaraKarakter: nama karakter perempuan → suara wanita, lainnya pria', as
   assert.equal(suaraKarakter(null, 'x'), 'x');
 });
 
+test('kataDariAlignmentElevenLabs: mengubah karakter & timestamp menjadi array kata Remotion', async () => {
+  const { kataDariAlignmentElevenLabs } = await import('./bank/suara.mjs');
+  const alignment = {
+    characters: ['H', 'a', 'l', 'o', ',', ' ', ' ', 'K', 'y', 'a', 'i', '!'],
+    character_start_times_seconds: [0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55],
+    character_end_times_seconds: [0.05, 0.1, 0.15, 0.2, 0.24, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.62],
+  };
+  assert.deepEqual(kataDariAlignmentElevenLabs(alignment), [
+    { teks: 'Halo,', mulai: 0.0, selesai: 0.24 },
+    { teks: 'Kyai!', mulai: 0.35, selesai: 0.62 },
+  ]);
+  assert.deepEqual(kataDariAlignmentElevenLabs(null), []);
+});
+
+test('jalurSuara: prioritas ElevenLabs → Gemini → Edge dan override STUDIO_JALUR_SUARA', async () => {
+  const { jalurSuara } = await import('./bank/suara.mjs');
+  const simpan = {
+    el: process.env.ELEVENLABS_API_KEY,
+    gem: process.env.GEMINI_API_KEY,
+    azk: process.env.AZURE_SPEECH_KEY,
+    azr: process.env.AZURE_SPEECH_REGION,
+    paksa: process.env.STUDIO_JALUR_SUARA,
+  };
+  try {
+    delete process.env.STUDIO_JALUR_SUARA;
+    delete process.env.AZURE_SPEECH_KEY;
+    delete process.env.AZURE_SPEECH_REGION;
+    process.env.ELEVENLABS_API_KEY = 'el-test';
+    process.env.GEMINI_API_KEY = 'gem-test';
+    assert.equal(jalurSuara(), 'elevenlabs');
+
+    delete process.env.ELEVENLABS_API_KEY;
+    assert.equal(jalurSuara(), 'gemini');
+
+    delete process.env.GEMINI_API_KEY;
+    assert.equal(jalurSuara(), 'edge');
+
+    process.env.STUDIO_JALUR_SUARA = 'edge';
+    process.env.ELEVENLABS_API_KEY = 'el-test';
+    assert.equal(jalurSuara(), 'edge');
+  } finally {
+    if (simpan.el === undefined) delete process.env.ELEVENLABS_API_KEY; else process.env.ELEVENLABS_API_KEY = simpan.el;
+    if (simpan.gem === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = simpan.gem;
+    if (simpan.azk === undefined) delete process.env.AZURE_SPEECH_KEY; else process.env.AZURE_SPEECH_KEY = simpan.azk;
+    if (simpan.azr === undefined) delete process.env.AZURE_SPEECH_REGION; else process.env.AZURE_SPEECH_REGION = simpan.azr;
+    if (simpan.paksa === undefined) delete process.env.STUDIO_JALUR_SUARA; else process.env.STUDIO_JALUR_SUARA = simpan.paksa;
+  }
+});
+
+test('suaraAdegan: ElevenLabs gagal → fallback berjenjang ke Gemini/Edge dengan catatan jelas', async () => {
+  const { mkdtemp, rm, writeFile } = await import('node:fs/promises');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { suaraAdegan } = await import('./bank/suara.mjs');
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'uji-suara-fallback-'));
+  const gemLama = process.env.GEMINI_API_KEY;
+  try {
+    process.env.GEMINI_API_KEY = 'gem-test';
+    const dicoba = [];
+    const h = await suaraAdegan(['Adegan satu', 'Adegan dua'], dir, {
+      jalur: 'elevenlabs',
+      buat: async (_t, k, j) => {
+        dicoba.push(j);
+        if (j === 'elevenlabs') throw new Error('ElevenLabs TTS 429: quota habis');
+        if (j === 'gemini') throw new Error('Gemini TTS 429: limit harian');
+        await writeFile(k, 'mp3-stub');
+      },
+    });
+    assert.equal(h.jalur, 'edge');
+    assert.equal(h.berkas.length, 2);
+    assert.match(h.catatan ?? '', /elevenlabs gagal.*ElevenLabs TTS 429/);
+    assert.deepEqual(dicoba, ['elevenlabs', 'gemini', 'edge', 'edge']);
+  } finally {
+    if (gemLama === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = gemLama;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('bersihkanTepi: hijau di tepi setengah tembus dibuang, piksel padat tak disentuh', async () => {
   const { bersihkanTepi } = await import('./latar.mjs');
   const d = Buffer.from([10, 200, 20, 128, 10, 200, 20, 255, 0, 0, 0, 0]);
