@@ -19,9 +19,12 @@ export const UKURAN_RASIO = { '9:16': [720, 1280], '4:5': [1024, 1280], '1:1': [
 export function promptGambar(deskripsi) {
   const teks = String(deskripsi).trim()
   const adalahProduk = /kopi|coffee|latte|espresso|milkshake|matcha|minuman|drink|cup|cangkir|gelas|glass|es |iced |tea|teh|cake|kue|cireng|snack|cemilan|croissant|studio|editorial|minimalis|minimalist|krem|cream|#f3ebdf|#f4ece0|splash|floating|pour/i.test(teks)
+  const adalahKafe = /kafe|cafe|barista|kedai|nongkrong|warung kopi/i.test(teks)
   const gaya = adalahProduk
     ? 'Clean commercial cafe tabletop product photography, single beverage or food item centered on a warm wooden or marble cafe table, soft natural daylight from a side window, warm minimalist cafe bokeh background, appetizing editorial magazine quality. No people, no faces, no street, no motorcycles.'
-    : 'Photorealistic cozy Indonesian coffee shop atmosphere, warm natural cinematic lighting, clean composition.'
+    : adalahKafe
+    ? 'Photorealistic cozy Indonesian coffee shop atmosphere, warm natural cinematic lighting, clean composition.'
+    : 'Photorealistic Indonesian cinematic storytelling scene, natural authentic lighting, shallow depth of field, modern editorial film still quality, clean composition.'
   return `${teks}\n\n${gaya} `
     + 'Absolutely no text, no letters, no labels, no logos, no watermarks, no signage, no readable screens.'
 }

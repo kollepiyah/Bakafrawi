@@ -169,6 +169,96 @@ function daftarPenyediaWorker(adaGambar) {
 const PETUNJUK_JSON_POSTER = `\n\nJawab HANYA dengan JSON valid (tanpa markdown) berstruktur:\n{"judul":"...","sub":"...","poin":["...","...","..."],"ajakan":"...","narasi":["..."],"caption":"...","hashtag":["..."],"adegan":["english prompt 1","english prompt 2"]}`;
 const PETUNJUK_JSON_VIDEO = `\n\nJawab HANYA dengan JSON valid (tanpa markdown) berstruktur:\n{"adegan":[{"jenis":"hook|layar|kasir|alur|daftar|penutup","narasi":"...","kunci":["..."],"pose":"kaget|tunjuk|hp|jempol|lambai","badge":"","label":"","judul":"","tekan":"","sub":"","coretan":"","dari":"","ke":"","layar":0,"fokus_x":0.5,"fokus_y":0.3,"sorotan":"","produk":[],"total":"","lencana":"","struk":"","simpul":[],"notifikasi":"","hitung_label":"","hitung_dari":0,"hitung_ke":0,"label_angka":"","angka":"","catatan":"","daftar":[],"tombol":""}],"karakter":"","ajakan":"...","caption":"...","hashtag":["..."]}`;
 
+export const SkemaVideoFullAi = z.object({
+  judul: z.string().describe('Judul konsep Reels 3-7 kata yang memancing penasaran'),
+  adegan: z
+    .array(
+      z.object({
+        narasi: z.string().describe('Narasi lisan santai & natural 1-2 kalimat pendek (Bahasa Indonesia sehari-hari, boleh sentuhan Jawa Timur ringan), total 5-6 adegan sekitar 25-35 detik'),
+        teksLayar: z.string().describe('Teks sorotan pendek 2-5 kata yang tampil di layar'),
+        bidikan: z.string().describe('Deskripsi visual sinematik dalam bahasa Inggris untuk generator gambar AI vertikal 9:16 (orang Indonesia, ekspresi, pencahayaan, suasana nyata sesuai cerita, TANPA teks/tulisan/watermark/layar HP terbaca)'),
+      }),
+    )
+    .min(4)
+    .max(7),
+  ajakan: z.string().describe('Ajakan bertindak singkat maksimal 6 kata'),
+  caption: z.string().describe('Caption Instagram 2-3 kalimat, santai, tanpa hashtag & tanpa link/alamat'),
+  hashtag: z.array(z.string()).describe('3-5 hashtag kontekstual tanpa tanda #'),
+});
+
+const PETUNJUK_JSON_FULL_AI = `\n\nJawab HANYA dengan JSON valid (tanpa markdown) berstruktur:\n{"judul":"...","adegan":[{"narasi":"...","teksLayar":"...","bidikan":"english cinematic vertical 9:16 visual prompt, no text, no watermark"}],"ajakan":"...","caption":"...","hashtag":["..."]}`;
+
+/** Naskah Video Storytelling Full AI (5-6 adegan gambar AI sinematik + narasi natural). */
+export async function buatNaskahVideoFullAi(produk, situs, arahan, merek = null) {
+  const penyediaAktif = daftarPenyediaWorker(false);
+  const templat = () => {
+    const t = naskahTemplat(produk, situs, merek);
+    return {
+      judul: t.judul,
+      adegan: [
+        { narasi: `Masih sering pusing ngurus kerjaan manual tiap hari?`, teksLayar: 'Capek Cara Lama?', bidikan: 'Tired Indonesian small business owner sitting at a desk in the evening surrounded by paper notebooks, warm moody tungsten lamp light, cinematic vertical 9:16 film still' },
+        ...produk.fitur.slice(0, 3).map((f) => ({
+          narasi: `${f.judul}: ${f.isi}.`,
+          teksLayar: f.judul.slice(0, 28),
+          bidikan: 'Confident smiling Indonesian entrepreneur working smoothly in a modern tidy shop or office, warm golden natural window light, cinematic vertical 9:16 photography',
+        })),
+        { narasi: `Yuk cobain ${produk.nama} sekarang, cek link di bio ya!`, teksLayar: `Coba ${produk.nama}`, bidikan: 'Happy Indonesian business owner relaxing with a warm smile in a bright thriving modern shop, sunset golden hour glow, cinematic vertical 9:16 film still' },
+      ],
+      narasi: t.narasi,
+      ajakan: t.ajakan,
+      caption: t.caption,
+      hashtag: t.hashtag,
+      sumber: 'templat-full-ai',
+    };
+  };
+  if (!penyediaAktif.length) return templat();
+
+  const system = (merek?.profil?.gaya || GAYA_BAWAAN)
+    + ' Kamu membuat naskah VIDEO STORYTELLING FULL AI vertikal 9:16 (bukan demo screenshot layar). Buat alur cerita sinematik 5 adegan yang memikat sejak 2 detik pertama: Adegan 1 Hook menyentil masalah nyata, Adegan 2-4 Cerita perubahan & manfaat nyata, Adegan 5 Penutup & ajakan hangat.';
+  const prompt = `Buat naskah video Reels/TikTok Storytelling Full AI (5 adegan) untuk produk berikut.\n\n${ringkasProduk(produk, situs)}\n\nArahan tambahan dari pemilik: ${arahan || '(pilih sudut cerita paling segar & relatable untuk audiens Indonesia)'}`;
+
+  const galat = [];
+  for (const p of penyediaAktif) {
+    try {
+      if (p.nama === 'claude') {
+        const client = new Anthropic();
+        const res = await client.messages.parse({
+          model: MODEL,
+          max_tokens: 6000,
+          output_config: { effort: 'low', format: zodOutputFormat(SkemaVideoFullAi) },
+          system,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        if (res.stop_reason === 'refusal' || !res.parsed_output?.adegan?.length) throw new Error(`Claude menolak (${res.stop_reason}).`);
+        return {
+          ...res.parsed_output,
+          narasi: res.parsed_output.adegan.map((a) => a.narasi),
+          sumber: `full-ai:${MODEL}`,
+          pemakaian: [catatBiaya('naskah video full ai', res.usage, 'claude', MODEL)],
+        };
+      }
+      const r = p.nama === 'nvidia'
+        ? await panggilNvidiaWorker({ system: system + PETUNJUK_JSON_FULL_AI, prompt, maksToken: 4096 })
+        : p.nama === 'gemini'
+        ? await panggilGeminiWorker({ system: system + PETUNJUK_JSON_FULL_AI, prompt, maksToken: 4096 })
+        : await panggilCloudflareWorker({ system: system + PETUNJUK_JSON_FULL_AI, prompt, maksToken: 4096 });
+      const cek = SkemaVideoFullAi.safeParse(r.data);
+      if (!cek.success || !cek.data.adegan?.length) throw new Error(`Format JSON Full AI tidak cocok (${cek.error?.issues[0]?.path?.join('.') || 'adegan'})`);
+      return {
+        ...cek.data,
+        narasi: cek.data.adegan.map((a) => a.narasi),
+        sumber: `full-ai:${r.penyedia}:${r.model}`,
+        pemakaian: [catatBiaya('naskah video full ai', r.usage, r.penyedia, r.model)],
+      };
+    } catch (e) {
+      galat.push(`${p.nama}: ${e.message}`);
+      console.warn(`Naskah video Full AI ${p.nama} gagal, coba penyedia berikutnya:`, e.message);
+    }
+  }
+  console.error('Semua penyedia naskah video Full AI gagal, memakai templat:', galat.join(' | '));
+  return { ...templat(), sumber: `templat-full-ai (${galat[0]?.slice(0, 100) ?? 'galat'})` };
+}
+
 // Cadangan bila profil merek belum berisi gaya (isi utamanya ada di studio_merek.profil.gaya).
 const GAYA_BAWAAN =
   'Kamu copywriter iklan media sosial untuk Bakafrawi Project, software developer di Sidoarjo yang membuat website & aplikasi custom serta menjual aplikasi siap pakai. ' +
