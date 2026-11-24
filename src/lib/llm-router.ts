@@ -2,10 +2,10 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 
 // Router teks AI hemat biaya untuk fitur Studio di Vercel (usulan arahan, riset Reels, naskah bank).
-// Urutan bawaan: Gemini (free tier/murah) → Cloudflare Workers AI (kuota gratis harian) → Claude (cadangan).
-// STUDIO_AI_PROVIDER=gemini|cf|claude memaksa satu penyedia didahulukan (sisanya tetap jadi cadangan).
+// Urutan bawaan: NVIDIA NIM (kredit developer gratis) → Gemini (free tier/murah) → Cloudflare Workers AI (kuota gratis harian) → Claude (cadangan terakhir).
+// STUDIO_AI_PROVIDER=nvidia|gemini|cf|claude memaksa satu penyedia didahulukan (sisanya tetap jadi cadangan).
 
-export type Penyedia = "gemini" | "cloudflare" | "claude";
+export type Penyedia = "nvidia" | "gemini" | "cloudflare" | "claude";
 
 /** Bentuk pemakaian yang disimpan di naskah.pemakaian (sama dengan studio/lib/bank/otak.mjs + penyedia/tahap). */
 export type PemakaianLlm = {
@@ -40,6 +40,7 @@ export type OpsiLlm = {
 
 // Harga per 1 juta token (USD), perkiraan.
 const HARGA: Record<string, { input: number; output: number }> = {
+  nvidia: { input: 0, output: 0 },
   gemini: { input: 0.3, output: 2.5 },
   cloudflare: { input: 0.29, output: 2.25 },
   "claude-haiku": { input: 0.1, output: 0.5 },
@@ -64,6 +65,71 @@ function ekstrakJson(teks: string): string {
 
 const teksSkema = (skema?: Record<string, unknown>) =>
   skema ? `\n\nJawab HANYA dengan JSON valid (tanpa markdown, tanpa komentar) yang mengikuti JSON Schema ini:\n${JSON.stringify(skema)}` : "";
+
+async function panggilNvidia(opsi: OpsiLlm) {
+  const kunci = process.env.NVIDIA_API_KEY!;
+  const baseUrl = (process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1").replace(/\/+$/, "");
+  const kandidatModel = [
+    ...new Set(
+      [
+        process.env.STUDIO_NVIDIA_TEKS,
+        "qwen/qwen2.5-72b-instruct",
+        "deepseek-ai/deepseek-v3.2",
+        "meta/llama-3.3-70b-instruct",
+      ].filter(Boolean) as string[],
+    ),
+  ];
+
+  let j: {
+    choices?: { message?: { content?: string } }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  } | null = null;
+  let modelDipakai = kandidatModel[0];
+  let galatTerakhir: unknown = null;
+
+  for (const model of kandidatModel) {
+    modelDipakai = model;
+    try {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        signal: AbortSignal.timeout(25_000),
+        headers: { Authorization: `Bearer ${kunci}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: opsi.system + teksSkema(opsi.skema) },
+            { role: "user", content: opsi.prompt },
+          ],
+          temperature: opsi.suhu ?? 0.7,
+          max_tokens: opsi.maksToken ?? 4096,
+        }),
+      });
+      if (!res.ok) {
+        const msg = `NVIDIA ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`;
+        if (res.status === 404) {
+          galatTerakhir = new Error(msg);
+          continue;
+        }
+        throw new Error(msg);
+      }
+      j = await res.json();
+      break;
+    } catch (e) {
+      galatTerakhir = e;
+      if (!String(e).includes("NVIDIA 404")) throw e;
+    }
+  }
+
+  if (!j) throw galatTerakhir ?? new Error("NVIDIA NIM gagal merespons.");
+  const teks = String(j.choices?.[0]?.message?.content ?? "{}");
+  const data = JSON.parse(ekstrakJson(teks));
+  const input = Number(j.usage?.prompt_tokens) || Math.round((opsi.system.length + opsi.prompt.length) / 4);
+  const output = Number(j.usage?.completion_tokens) || Math.round(teks.length / 4);
+  return {
+    data,
+    pemakaian: { penyedia: "nvidia" as const, model: modelDipakai, input, output, biayaUsd: biaya(input, output, HARGA.nvidia) },
+  };
+}
 
 async function panggilGemini(opsi: OpsiLlm) {
   const kunci = process.env.GEMINI_API_KEY!;
@@ -203,6 +269,7 @@ async function panggilClaude(opsi: OpsiLlm) {
 type HasilPanggil = { data: unknown; pemakaian: Omit<PemakaianLlm, "tahap"> };
 
 const PENYEDIA: { nama: Penyedia; kode: string[]; ada: () => boolean; panggil: (o: OpsiLlm) => Promise<HasilPanggil> }[] = [
+  { nama: "nvidia", kode: ["nvidia", "nim"], ada: () => !!process.env.NVIDIA_API_KEY, panggil: panggilNvidia },
   { nama: "gemini", kode: ["gemini"], ada: () => !!process.env.GEMINI_API_KEY, panggil: panggilGemini },
   { nama: "cloudflare", kode: ["cf", "cloudflare"], ada: () => !!(process.env.CF_ACCOUNT_ID && process.env.CF_API_TOKEN), panggil: panggilCloudflare },
   { nama: "claude", kode: ["claude", "anthropic"], ada: () => !!process.env.ANTHROPIC_API_KEY, panggil: panggilClaude },
@@ -214,11 +281,17 @@ const PENYEDIA: { nama: Penyedia; kode: string[]; ada: () => boolean; panggil: (
  */
 export async function panggilLlmJson<T>(opsi: OpsiLlm, tahap?: string): Promise<{ data: T; pemakaian: PemakaianLlm }> {
   const paksa = process.env.STUDIO_AI_PROVIDER?.toLowerCase();
-  const urut = [...PENYEDIA].sort((a, b) => Number(b.kode.includes(paksa ?? "")) - Number(a.kode.includes(paksa ?? "")));
+  const urut = [...PENYEDIA].sort((a, b) => {
+    const skorPaksa = Number(b.kode.includes(paksa ?? "")) - Number(a.kode.includes(paksa ?? ""));
+    if (skorPaksa !== 0) return skorPaksa;
+    // Bila membutuhkan Google Search Grounding (riset tren live), dahulukan Gemini bila tersedia.
+    if (opsi.pakaiSearch) return Number(b.nama === "gemini") - Number(a.nama === "gemini");
+    return 0;
+  });
   const galat: string[] = [];
   for (const p of urut.filter((x) => x.ada())) {
-    // Cloudflare Llama teks belum mendukung gambar vision — lewati bila ada input gambar.
-    if (opsi.gambar?.length && p.nama === "cloudflare") continue;
+    // NVIDIA teks & Cloudflare Llama teks belum mendukung gambar vision — lewati bila ada input gambar.
+    if (opsi.gambar?.length && (p.nama === "cloudflare" || p.nama === "nvidia")) continue;
     try {
       const r = await p.panggil(opsi);
       if (opsi.valid && !opsi.valid(r.data)) throw new Error("jawaban tidak sesuai format");
@@ -228,6 +301,6 @@ export async function panggilLlmJson<T>(opsi: OpsiLlm, tahap?: string): Promise<
       console.warn(`AI ${p.nama} gagal, coba penyedia berikutnya.`, galat.at(-1));
     }
   }
-  if (!galat.length) throw new Error("Belum ada kunci AI (isi GEMINI_API_KEY, CF_ACCOUNT_ID + CF_API_TOKEN, atau ANTHROPIC_API_KEY di Vercel).");
+  if (!galat.length) throw new Error("Belum ada kunci AI (isi NVIDIA_API_KEY, GEMINI_API_KEY, CF_ACCOUNT_ID + CF_API_TOKEN, atau ANTHROPIC_API_KEY di Vercel).");
   throw new Error(`Semua penyedia AI gagal — ${galat.join(" | ")}`);
 }

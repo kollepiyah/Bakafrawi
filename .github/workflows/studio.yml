@@ -24,10 +24,10 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      # Latar gambar AI (Gemini) dan kabar/hasil ke bot Telegram — keduanya opsional.
+      # Latar gambar AI (Cloudflare → NVIDIA → Gemini) dan kabar/hasil ke bot Telegram — opsional.
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      # Latar AI dicoba berurutan: Cloudflare Workers AI (gratis harian) dulu, Gemini cadangan.
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

@@ -249,7 +249,7 @@ class Api(private val sesi: Sesi) {
                 totalLikes = ig.bulat("totalLikes"),
                 totalComments = ig.bulat("totalComments"),
                 totalViews = ig.bulat("totalViews"),
-                posts = posts.take(6),
+                posts = posts.take(30),
                 pesan = ig.teks("pesan"),
                 galatInsight = ig.teks("galatInsight"),
             )
@@ -549,6 +549,68 @@ class Api(private val sesi: Sesi) {
             },
         )
         buat.teks("pesan") ?: "Konten berhasil diunggah!"
+    }
+
+    /** Buat caption & hashtag konsisten merek otomatis untuk unggahan manual. */
+    suspend fun buatCaptionOtomatis(
+        merek: String,
+        judul: String,
+        konteks: String,
+        jenis: String,
+        sasaran: String,
+    ): String = withContext(Dispatchers.IO) {
+        val res = situs(
+            "/api/studio/caption",
+            buildJsonObject {
+                put("merek", merek)
+                put("judul", judul)
+                if (konteks.isNotBlank()) put("konteks", konteks)
+                put("jenis", jenis)
+                put("sasaran", sasaran)
+            },
+        )
+        res.teks("caption") ?: throw GalatApi("Server tidak mengembalikan caption.")
+    }
+
+    /** Buat paket storyboard + prompt siap-copy Google Flow (Veo 3) per adegan + caption konsisten. */
+    suspend fun buatPaketGoogleFlow(
+        merek: String,
+        topik: String,
+        bahasa: String,
+        gaya: String,
+        jumlahAdegan: Int,
+    ): PaketFlow = withContext(Dispatchers.IO) {
+        val res = situs(
+            "/api/studio/google-flow",
+            buildJsonObject {
+                put("merek", merek)
+                if (topik.isNotBlank()) put("topik", topik)
+                put("bahasa", bahasa)
+                put("gaya", gaya)
+                put("jumlahAdegan", jumlahAdegan)
+            },
+        )
+        val p = res.obj("paket") ?: throw GalatApi(res.teks("pesan") ?: "Paket Google Flow kosong.")
+        val adegan = p.arr("adegan")?.mapIndexedNotNull { idx, el ->
+            val o = runCatching { el.jsonObject }.getOrNull() ?: return@mapIndexedNotNull null
+            AdeganFlow(
+                nomor = o.bulat("nomor").takeIf { it > 0 } ?: (idx + 1),
+                durasiDetik = o.bulat("durasiDetik").takeIf { it > 0 } ?: 8,
+                ringkasAksi = o.teks("ringkasAksi") ?: "",
+                dialog = o.teks("dialog") ?: "",
+                arahanLogat = o.teks("arahanLogat") ?: "",
+                teksLayar = o.teks("teksLayar") ?: "",
+                promptGoogleFlow = o.teks("promptGoogleFlow") ?: "",
+            )
+        } ?: emptyList()
+        PaketFlow(
+            judul = p.teks("judul") ?: "Konsep Video AI",
+            ringkasanKonsep = p.teks("ringkasanKonsep") ?: "",
+            karakterBible = p.teks("karakterBible") ?: "",
+            adegan = adegan,
+            caption = p.teks("caption") ?: "",
+            penyedia = res.teks("penyedia") ?: "",
+        )
     }
 
     /** Unggah 1 video/foto ke koleksi Story Otomatis (rutin-buka) dan kembalikan item baru. */

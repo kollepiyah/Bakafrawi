@@ -85,6 +85,7 @@ export function PanelUnggahManual({
   const [progres, setProgres] = useState("");
   const [galat, setGalat] = useState("");
   const [sibuk, setSibuk] = useState(false);
+  const [sedangBuatCaption, setSedangBuatCaption] = useState(false);
 
   useEffect(() => {
     if (merekDaftar.length > 0 && !merekDaftar.some((m) => m.slug === merek)) {
@@ -131,6 +132,81 @@ export function PanelUnggahManual({
       };
     } else {
       setDurasi(0);
+    }
+  }
+
+  async function buatCaptionOtomatis() {
+    setSedangBuatCaption(true);
+    setGalat("");
+    try {
+      const tok = await tokenSegar();
+      if (!tok) throw new Error("Sesi login tidak ditemukan — coba muat ulang halaman.");
+
+      // Ambil 1 bingkai ringan (maks 540px) agar AI bisa melihat isi foto/video bila Vision tersedia
+      let gambarBase64: { mimeType: string; data: string }[] | undefined;
+      if (berkas) {
+        try {
+          if (jenis === "video") {
+            const { blob } = await buatSampulVideo(berkas);
+            if (blob) {
+              const b64 = await new Promise<string>((ok) => {
+                const fr = new FileReader();
+                fr.onload = () => ok(String(fr.result ?? "").split(",")[1] ?? "");
+                fr.readAsDataURL(blob);
+              });
+              if (b64) gambarBase64 = [{ mimeType: "image/jpeg", data: b64 }];
+            }
+          } else {
+            const url = URL.createObjectURL(berkas);
+            try {
+              const img = new Image();
+              img.src = url;
+              await new Promise<void>((ok) => {
+                img.onload = () => ok();
+                img.onerror = () => ok();
+              });
+              if (img.naturalWidth > 0) {
+                const rasio = Math.min(1, 540 / img.naturalWidth);
+                const canvas = document.createElement("canvas");
+                canvas.width = Math.max(1, Math.round(img.naturalWidth * rasio));
+                canvas.height = Math.max(1, Math.round(img.naturalHeight * rasio));
+                const ctx = canvas.getContext("2d");
+                if (ctx) {
+                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                  const b64 = canvas.toDataURL("image/jpeg", 0.78).split(",")[1] ?? "";
+                  if (b64) gambarBase64 = [{ mimeType: "image/jpeg", data: b64 }];
+                }
+              }
+            } finally {
+              URL.revokeObjectURL(url);
+            }
+          }
+        } catch {
+          // Lanjut pakai judul/konteks teks saja bila ekstraksi bingkai gagal
+        }
+      }
+
+      const res = await fetch("/api/studio/caption", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          merek,
+          judul: judul.trim() || berkas?.name || "",
+          konteks: caption.trim() || undefined,
+          jenis,
+          sasaran,
+          gambar: gambarBase64,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok || !j.caption) {
+        throw new Error(j.pesan ?? "Gagal membuat caption otomatis.");
+      }
+      setCaption(String(j.caption));
+    } catch (e) {
+      setGalat(e instanceof Error ? e.message : "Gagal membuat caption otomatis.");
+    } finally {
+      setSedangBuatCaption(false);
     }
   }
 
@@ -392,16 +468,27 @@ export function PanelUnggahManual({
 
       {/* Caption (untuk Reels / Feed) */}
       {perluCaption && (
-        <label className="grid gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Caption & Hashtag Instagram (opsional)</span>
+        <div className="grid gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-medium text-muted-foreground">Caption & Hashtag Instagram (standar konsisten merek)</span>
+            <button
+              type="button"
+              onClick={() => void buatCaptionOtomatis()}
+              disabled={sedangBuatCaption || sibuk}
+              className="inline-flex items-center gap-1.5 rounded-full border border-emas/40 bg-emas/10 px-3 py-1 text-[11px] font-medium text-emas-muda transition hover:bg-emas/20 disabled:opacity-50"
+            >
+              {sedangBuatCaption ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+              {sedangBuatCaption ? "Menyusun caption…" : "Buat Caption & Hashtag Otomatis"}
+            </button>
+          </div>
           <textarea
-            rows={3}
+            rows={5}
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
-            placeholder="Tulis caption untuk Reels / Feed di sini…"
+            placeholder="Tulis catatan singkat atau klik tombol 'Buat Caption & Hashtag Otomatis' agar AI menyusun caption + CTA + hashtag konsisten…"
             className="rounded-xl border border-input bg-transparent px-3 py-2 text-sm"
           />
-        </label>
+        </div>
       )}
 
       {/* Pengaturan Waktu Tayang */}

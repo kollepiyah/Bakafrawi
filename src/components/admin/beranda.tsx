@@ -39,9 +39,9 @@ export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: 
   const salam = jam === null ? "Assalamu'alaikum" : jam < 11 ? "Selamat pagi" : jam < 15 ? "Selamat siang" : jam < 18 ? "Selamat sore" : "Selamat malam";
 
   return (
-    <div className="pb-16">
+    <div className="min-w-0 overflow-x-clip pb-16">
       {kepala}
-      <main className="mx-auto max-w-4xl space-y-6 px-4 pt-6">
+      <main className="mx-auto w-full max-w-4xl min-w-0 space-y-6 px-4 pt-6">
         <div>
           <h1 className="font-heading text-2xl">{salam}, Kyai</h1>
           {r && <p className="text-sm text-muted-foreground">{namaTanggal(r.tanggal)}</p>}
@@ -120,7 +120,7 @@ export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: 
             </Kartu>
 
             {r.pengunjung && (
-              <section className="rounded-2xl border border-border bg-card p-5">
+              <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card p-4 sm:p-5">
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <h2 className="flex items-center gap-2 font-heading text-lg">
                     <Users className="size-5 text-emas" /> Pengunjung Situs
@@ -170,10 +170,10 @@ export function Beranda({ sesi, kepala, buka }: { sesi: Session | null; kepala: 
 
 function Kartu({ judul, ikon, aksi, children }: { judul: string; ikon: ReactNode; aksi: () => void; children: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-border bg-card p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 font-heading text-lg">{ikon}{judul}</h2>
-        <button onClick={aksi} className="text-xs text-muted-foreground hover:text-emas">Buka →</button>
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card p-4 sm:p-5">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="flex min-w-0 items-center gap-2 font-heading text-lg">{ikon}<span className="truncate">{judul}</span></h2>
+        <button onClick={aksi} className="shrink-0 text-xs text-muted-foreground hover:text-emas">Buka →</button>
       </div>
       {children}
     </section>

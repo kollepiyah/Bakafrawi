@@ -59,6 +59,7 @@ import com.bakafrawi.studio.data.DataRiset
 import com.bakafrawi.studio.data.DataSambungan
 import com.bakafrawi.studio.data.JadwalRutinData
 import com.bakafrawi.studio.data.MerekStudio
+import com.bakafrawi.studio.data.PaketFlow
 import com.bakafrawi.studio.data.ProdukRingkas
 import com.bakafrawi.studio.data.TugasStudio
 import com.bakafrawi.studio.data.UsulanArahan
@@ -79,6 +80,7 @@ private enum class SubStudio(val label: String) {
     Unggah("Unggah"),
     Rutin("Story Otomatis"),
     Buat("Buat AI"),
+    Flow("Google Flow"),
     Riwayat("Riwayat"),
     Riset("Riset"),
     Sambungan("Sambungan"),
@@ -248,6 +250,16 @@ fun LayarStudio(
                         sub = SubStudio.Riwayat
                     },
                 )
+                SubStudio.Flow -> TabGoogleFlow(
+                    api = api,
+                    merek = merekAktif,
+                    kabar = kabar,
+                    galat = galat,
+                    selesaiUnggah = {
+                        segarkanTugas++
+                        sub = SubStudio.Riwayat
+                    },
+                )
                 SubStudio.Riwayat -> TabRiwayatStudio(
                     api = api,
                     daftar = daftarTugas,
@@ -299,6 +311,7 @@ private fun TabUnggahManual(
     var tglJadwal by remember { mutableStateOf(LocalDate.now(WIB).toString()) }
     var jamJadwal by remember { mutableStateOf("19:00") }
     var sibuk by remember { mutableStateOf(false) }
+    var sedangBuatCaption by remember { mutableStateOf(false) }
 
     val pemilih = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -392,12 +405,44 @@ private fun TabUnggahManual(
                     }
                 }
                 if (sasaran != "story") {
+                    OutlinedButton(
+                        onClick = {
+                            sedangBuatCaption = true
+                            cakupan.launch {
+                                try {
+                                    val hasil = api.buatCaptionOtomatis(
+                                        merek = pilihMerek,
+                                        judul = judul.ifBlank { berkas?.nama ?: "Konten terbaru" },
+                                        konteks = caption,
+                                        jenis = if (berkas?.adalahGambar == true) "gambar" else "video",
+                                        sasaran = sasaran,
+                                    )
+                                    caption = hasil
+                                    kabar("Caption & hashtag konsisten siap dipakai!")
+                                } catch (e: Exception) {
+                                    galat(e)
+                                } finally {
+                                    sedangBuatCaption = false
+                                }
+                            }
+                        },
+                        enabled = !sedangBuatCaption && !sibuk,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (sedangBuatCaption) {
+                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.size(8.dp))
+                            Text("Menyusun caption…")
+                        } else {
+                            Text("Buat Caption & Hashtag Otomatis (AI)")
+                        }
+                    }
                     OutlinedTextField(
                         value = caption,
                         onValueChange = { caption = it },
-                        label = { Text("Caption & hashtag (opsional)") },
+                        label = { Text("Caption & hashtag konsisten") },
                         modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
+                        minLines = 4,
                     )
                 }
             }
@@ -1547,6 +1592,276 @@ private fun TabSambunganStudio(
                         },
                         enabled = !sibuk,
                     ) { Text("Pasang Ulang Webhook Telegram") }
+                }
+            }
+        }
+        item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TabGoogleFlow(
+    api: Api,
+    merek: List<MerekStudio>,
+    kabar: (String) -> Unit,
+    galat: (Exception) -> Unit,
+    selesaiUnggah: () -> Unit,
+) {
+    val konteks = LocalContext.current
+    val cakupan = rememberCoroutineScope()
+
+    var pilihMerek by remember(merek) { mutableStateOf(merek.firstOrNull()?.slug ?: "lekkopi") }
+    var bahasa by remember { mutableStateOf("jawa_campur") }
+    var gaya by remember { mutableStateOf("storytelling_hangat") }
+    var jumlahAdegan by remember { mutableStateOf(4) }
+    var topik by remember { mutableStateOf("") }
+    var sedangBuat by remember { mutableStateOf(false) }
+    var paket by remember { mutableStateOf<PaketFlow?>(null) }
+
+    var berkas by remember { mutableStateOf<BerkasTerpilih?>(null) }
+    var caption by remember { mutableStateOf("") }
+    var sasaran by remember { mutableStateOf("reels") }
+    var modeTayang by remember { mutableStateOf("jadwal") }
+    var tglJadwal by remember { mutableStateOf(LocalDate.now(WIB).toString()) }
+    var jamJadwal by remember { mutableStateOf("19:00") }
+    var sibukUpload by remember { mutableStateOf(false) }
+
+    val pemilihVideo = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val meta = bacaMetaBerkas(konteks, uri)
+            if (meta.ukuranByte > 95L * 1024L * 1024L) {
+                kabar("Ukuran video melebihi 95 MB. Kompres dulu agar diterima Instagram.")
+                return@rememberLauncherForActivityResult
+            }
+            berkas = meta
+        }
+    }
+
+    fun salinKeClipboard(label: String, teks: String) {
+        val cm = konteks.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText(label, teks))
+        kabar("$label tersalin!")
+    }
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            KartuStudio("Google Flow Bridge (Video Full AI)") {
+                Text(
+                    "Agen membuat paket prompt siap-copy untuk Google Flow (Veo 3) dengan dialog Indonesia/Jawa natural, lalu unggah balik hasilnya di bawah.",
+                    color = Redup,
+                    fontSize = 12.sp,
+                )
+                if (merek.size > 1) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        merek.forEach { m ->
+                            FilterChip(
+                                selected = pilihMerek == m.slug,
+                                onClick = { pilihMerek = m.slug },
+                                label = { Text(m.nama, fontSize = 12.sp) },
+                            )
+                        }
+                    }
+                }
+                Text("Bahasa & Logat", color = Redup, fontSize = 12.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "indonesia" to "Indonesia Santai",
+                        "jawa_timur" to "Jawa Timur",
+                        "jawa_campur" to "Indo–Jawa",
+                    ).forEach { (k, l) ->
+                        FilterChip(selected = bahasa == k, onClick = { bahasa = k }, label = { Text(l, fontSize = 12.sp) })
+                    }
+                }
+                Text("Gaya Cerita", color = Redup, fontSize = 12.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "storytelling_hangat" to "Storytelling",
+                        "komedi_santai" to "Komedi Santai",
+                        "sinematik_produk" to "Sinematik AI",
+                        "pov_relatable" to "POV",
+                    ).forEach { (k, l) ->
+                        FilterChip(selected = gaya == k, onClick = { gaya = k }, label = { Text(l, fontSize = 12.sp) })
+                    }
+                }
+                Text("Jumlah Klip (@ 8 dtk)", color = Redup, fontSize = 12.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(3, 4, 5).forEach { n ->
+                        FilterChip(selected = jumlahAdegan == n, onClick = { jumlahAdegan = n }, label = { Text("$n Klip", fontSize = 12.sp) })
+                    }
+                }
+                OutlinedTextField(
+                    value = topik,
+                    onValueChange = { topik = it },
+                    label = { Text("Topik / ide (kosong = agen riset viral otomatis)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = {
+                            sedangBuat = true
+                            cakupan.launch {
+                                try {
+                                    val p = api.buatPaketGoogleFlow(pilihMerek, topik.trim(), bahasa, gaya, jumlahAdegan)
+                                    paket = p
+                                    caption = p.caption
+                                    kabar("Paket prompt Google Flow siap!")
+                                } catch (e: Exception) {
+                                    galat(e)
+                                } finally {
+                                    sedangBuat = false
+                                }
+                            }
+                        },
+                        enabled = !sedangBuat,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        if (sedangBuat) {
+                            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.size(8.dp))
+                            Text("Menyusun…")
+                        } else {
+                            Text("Buat Paket Prompt")
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val i = Intent(Intent.ACTION_VIEW, "https://labs.google/fx/tools/flow".toUri())
+                            konteks.startActivity(i)
+                        },
+                    ) {
+                        Text("Buka Flow")
+                    }
+                }
+            }
+        }
+
+        paket?.let { p ->
+            item {
+                KartuStudio(p.judul) {
+                    if (p.ringkasanKonsep.isNotBlank()) Text(p.ringkasanKonsep, color = Redup, fontSize = 12.sp)
+                    if (p.karakterBible.isNotBlank()) {
+                        Text("Panduan Karakter Konsisten:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Emas)
+                        Text(p.karakterBible, fontSize = 12.sp, color = Redup)
+                        OutlinedButton(onClick = { salinKeClipboard("Panduan Karakter", p.karakterBible) }) {
+                            Text("Salin Panduan Karakter", fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+            items(p.adegan, key = { it.nomor }) { a ->
+                KartuStudio("Klip ${a.nomor} (${a.durasiDetik} dtk) · ${a.ringkasAksi}") {
+                    Text("Dialog: \"${a.dialog}\"", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    if (a.arahanLogat.isNotBlank()) Text("Logat: ${a.arahanLogat}", fontSize = 12.sp, color = Redup)
+                    Text(a.promptGoogleFlow, fontSize = 11.sp, color = Color(0xFFD4D4D8))
+                    Button(
+                        onClick = { salinKeClipboard("Prompt Klip ${a.nomor}", a.promptGoogleFlow) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Copy Prompt Klip ${a.nomor}")
+                    }
+                }
+            }
+        }
+
+        item {
+            KartuStudio("Langkah 2: Upload Hasil Video Google Flow") {
+                OutlinedButton(
+                    onClick = { pemilihVideo.launch(arrayOf("video/*")) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(berkas?.let { "Terpilih: ${it.nama}" } ?: "Pilih Video Hasil Google Flow (.mp4)")
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SASARAN_VIDEO.forEach { (kode, label) ->
+                        FilterChip(selected = sasaran == kode, onClick = { sasaran = kode }, label = { Text(label, fontSize = 12.sp) })
+                    }
+                }
+                OutlinedTextField(
+                    value = caption,
+                    onValueChange = { caption = it },
+                    label = { Text("Caption & hashtag konsisten") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = modeTayang == "jadwal", onClick = { modeTayang = "jadwal" }, label = { Text("Jadwalkan") })
+                    FilterChip(selected = modeTayang == "sekarang", onClick = { modeTayang = "sekarang" }, label = { Text("Tayang Sekarang") })
+                    FilterChip(selected = modeTayang == "draf", onClick = { modeTayang = "draf" }, label = { Text("Simpan Draf") })
+                }
+                if (modeTayang == "jadwal") {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = tglJadwal,
+                            onValueChange = { tglJadwal = it },
+                            label = { Text("Tanggal") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = jamJadwal,
+                            onValueChange = { jamJadwal = it },
+                            label = { Text("Jam WIB") },
+                            modifier = Modifier.weight(0.65f),
+                            singleLine = true,
+                        )
+                    }
+                }
+                Button(
+                    onClick = {
+                        val b = berkas
+                        if (b == null) {
+                            kabar("Pilih video hasil Google Flow terlebih dahulu.")
+                            return@Button
+                        }
+                        val jadwalWib = if (modeTayang == "jadwal") {
+                            val valid = hitungJadwalIso("custom", tglJadwal, jamJadwal)
+                            if (valid == null) {
+                                kabar("Tanggal/jam jadwal salah atau sudah lewat.")
+                                return@Button
+                            }
+                            "${tglJadwal.trim()}T${jamJadwal.trim()}"
+                        } else null
+                        sibukUpload = true
+                        cakupan.launch {
+                            try {
+                                val bytes = bacaBytesBerkas(konteks, b.uri)
+                                val msg = api.unggahKontenManual(
+                                    merek = pilihMerek,
+                                    namaBerkas = b.nama,
+                                    bytes = bytes,
+                                    adalahGambar = false,
+                                    judul = paket?.judul ?: b.nama.substringBeforeLast('.'),
+                                    caption = caption.trim(),
+                                    sasaran = sasaran,
+                                    modeTayang = modeTayang,
+                                    jadwalWib = jadwalWib,
+                                )
+                                berkas = null
+                                kabar(msg)
+                                selesaiUnggah()
+                            } catch (e: Exception) {
+                                galat(e)
+                            } finally {
+                                sibukUpload = false
+                            }
+                        }
+                    },
+                    enabled = !sibukUpload && berkas != null,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (sibukUpload) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.size(8.dp))
+                        Text("Mengunggah…")
+                    } else {
+                        Text("Upload Video Google Flow ke Studio")
+                    }
                 }
             }
         }

@@ -132,11 +132,48 @@ const gemini = {
   },
 }
 
+// ------------------------------------------------------------- NVIDIA NIM (FLUX.1)
+const NVIDIA_GAMBAR_BAWAAN = 'black-forest-labs/flux.1-schnell'
+const nvidia = {
+  nama: 'nvidia',
+  ada: () => !!process.env.NVIDIA_API_KEY,
+  async buat(deskripsi, rasio, keluar, ambil) {
+    const model = process.env.STUDIO_NVIDIA_GAMBAR || NVIDIA_GAMBAR_BAWAAN
+    const ukuran = UKURAN_RASIO[rasio] ?? UKURAN_RASIO['1:1']
+    const url = `https://ai.api.nvidia.com/v1/genai/${model}`
+    const r = await ambil(url, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: promptGambar(deskripsi),
+        width: ukuran[0],
+        height: ukuran[1],
+        steps: model.includes('schnell') ? 4 : 25,
+        seed: 0,
+      }),
+    })
+    const teks = await r.text()
+    let j = null
+    try { j = JSON.parse(teks) } catch { /* bukan JSON */ }
+    if (!r.ok) {
+      const pesan = j?.detail || j?.message || teks.slice(0, 160)
+      throw galat(`NVIDIA ${model.split('/').pop()} gagal (${r.status}): ${pesan}`, r.status === 429 || r.status === 402 || /quota|credit|limit/i.test(String(pesan)))
+    }
+    const b64 = j?.artifacts?.[0]?.base64 || j?.image || j?.data?.[0]?.b64_json
+    if (!b64) throw galat(`NVIDIA ${model} tidak mengembalikan gambar`)
+    return { berkas: await simpanBase64(b64, keluar, 'image/jpeg'), biayaUsd: 0, model }
+  },
+}
+
 // ------------------------------------------------------------- daftar & urutan
-export const PENYEDIA = { cloudflare, gemini }
+export const PENYEDIA = { cloudflare, nvidia, gemini }
 
 /** Penyedia aktif sesuai urutan (yang tak dikenal / tanpa kunci dilewati). */
-export function urutanPenyedia(teks = process.env.STUDIO_GAMBAR_URUTAN || 'cloudflare,gemini', daftar = PENYEDIA) {
+export function urutanPenyedia(teks = process.env.STUDIO_GAMBAR_URUTAN || 'cloudflare,nvidia,gemini', daftar = PENYEDIA) {
   return [...new Set(teks.split(',').map((x) => x.trim().toLowerCase()))].map((n) => daftar[n]).filter((p) => p?.ada())
 }
 

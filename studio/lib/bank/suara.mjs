@@ -21,7 +21,75 @@ const GEMINI_MODEL = () => process.env.STUDIO_GEMINI_MODEL || 'gemini-3.8-flash-
 const GEMINI_MODEL_CADANGAN = 'gemini-3.8-flash-lite-tts'
 const GEMINI_SUARA = () => process.env.STUDIO_GEMINI_SUARA || 'Sulafat'
 const GEMINI_GAYA = () => process.env.STUDIO_GEMINI_GAYA
-  || 'natural everyday Indonesian with a standard, neutral Indonesian accent (no regional accent); casual, warm and friendly, like chatting with a friend about a favorite coffee spot; relaxed natural rhythm and intonation, not like reading a script'
+  || 'natural everyday Indonesian with a standard, neutral Indonesian accent; casual, warm and friendly, like chatting with a friend; relaxed natural rhythm and intonation, not like reading a script'
+
+/** Katalog profil suara & gaya bicara agar video tidak monoton (dipilih otomatis bergilir atau manual). */
+export const PROFIL_SUARA = {
+  santai_indo: {
+    geminiSuara: 'Sulafat',
+    geminiGaya: 'natural everyday Indonesian, warm, friendly, conversational like talking to a close friend, relaxed pacing with natural breath pauses',
+    edgeSuara: 'id-ID-GadisNeural',
+    laju: '+4%',
+  },
+  jawa_timur: {
+    geminiSuara: 'Puck',
+    geminiGaya: 'casual friendly East Javanese / Sidoarjo Indonesian speaker, warm down-to-earth neighborhood vibe, natural subtle East Java intonation, expressive and authentic like chatting at a local coffee shop',
+    edgeSuara: 'id-ID-ArdiNeural',
+    laju: '+5%',
+  },
+  storytelling_hangat: {
+    geminiSuara: 'Aoede',
+    geminiGaya: 'warm expressive Indonesian storyteller, gentle emotional delivery, clear pauses for dramatic effect, engaging and heartfelt like a viral Instagram Reels narrator',
+    edgeSuara: 'id-ID-GadisNeural',
+    laju: '+0%',
+  },
+  iklan_energik: {
+    geminiSuara: 'Fenrir',
+    geminiGaya: 'upbeat energetic Indonesian content creator, crisp and confident hook delivery, lively modern rhythm for short-form Reels and TikTok ads',
+    edgeSuara: 'id-ID-ArdiNeural',
+    laju: '+8%',
+  },
+  narator_sinematik: {
+    geminiSuara: 'Charon',
+    geminiGaya: 'deep calm authoritative Indonesian documentary narrator, steady thoughtful cadence, rich cinematic tone',
+    edgeSuara: 'id-ID-ArdiNeural',
+    laju: '-2%',
+  },
+  jawa_krama_ngoko: {
+    geminiSuara: 'Kore',
+    geminiGaya: 'authentic natural Javanese speaker (Ngoko/Krama East Java dialect), relaxed conversational storytelling tone, warm and expressive',
+    edgeSuara: 'jv-ID-DimasNeural',
+    laju: '+0%',
+  },
+}
+
+const DAFTAR_KODE_PROFIL = Object.keys(PROFIL_SUARA)
+
+/** Pilih profil suara: bila "otomatis"/kosong, rotasi berdasarkan isi teks agar tiap video bervariasi. */
+export function pilihProfilSuara(kode, benih = '') {
+  const k = String(kode || process.env.STUDIO_PROFIL_SUARA || '').trim().toLowerCase()
+  if (k && PROFIL_SUARA[k]) return { kode: k, ...PROFIL_SUARA[k] }
+  if (k === 'otomatis' || (!process.env.STUDIO_GEMINI_SUARA && !process.env.STUDIO_GEMINI_GAYA && benih)) {
+    const teksBenih = Array.isArray(benih) ? benih.join(' ') : String(benih || '')
+    // Deteksi kasar kata Jawa agar otomatis pakai profil Jawa Timur
+    if (/\b(rek|cak|ning|ngopi rek|ojo|ora|piye|iso|ndang|wes|wis|lho|toh|sampeyan|panjenengan)\b/i.test(teksBenih)) {
+      return { kode: 'jawa_timur', ...PROFIL_SUARA.jawa_timur }
+    }
+    let hash = 0
+    for (let i = 0; i < teksBenih.length; i++) hash = (hash * 31 + teksBenih.charCodeAt(i)) >>> 0
+    const rotasi = ['santai_indo', 'jawa_timur', 'storytelling_hangat', 'iklan_energik', 'narator_sinematik']
+    const terpilih = rotasi[hash % rotasi.length]
+    return { kode: terpilih, ...PROFIL_SUARA[terpilih] }
+  }
+  return {
+    kode: 'bawaan',
+    geminiSuara: GEMINI_SUARA(),
+    geminiGaya: GEMINI_GAYA(),
+    edgeSuara: SUARA(),
+    laju: LAJU(),
+  }
+}
+
 // Penanda batas adegan saat narasi dibacakan sekaligus (tag jeda resmi Gemini TTS).
 const JEDA_ADEGAN = ' <long pause> '
 
@@ -34,7 +102,8 @@ export function jalurSuara() {
 
 const aman = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-async function azure(teks, keluar) {
+async function azure(teks, keluar, profil) {
+  const p = profil ?? pilihProfilSuara(null, teks)
   const r = await fetch(`https://${process.env.AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`, {
     method: 'POST',
     headers: {
@@ -43,22 +112,23 @@ async function azure(teks, keluar) {
       'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
       'User-Agent': 'lek-kopi-studio',
     },
-    body: ssml(teks, SUARA(), LAJU()),
+    body: ssml(teks, p.edgeSuara, p.laju),
   })
   if (!r.ok) throw new Error(`Azure TTS ${r.status}: ${(await r.text()).slice(0, 200)}`)
   await writeFile(keluar, Buffer.from(await r.arrayBuffer()))
 }
 
 // edge-tts sering memutus sesaat — dicoba sampai 4 kali (ulangi) sebelum menyerah.
-const edge = (teks, keluar) => ulangi(() => edgeSekali(teks, keluar))
+const edge = (teks, keluar, profil) => ulangi(() => edgeSekali(teks, keluar, profil))
 
-async function edgeSekali(teks, keluar) {
+async function edgeSekali(teks, keluar, profil) {
+  const p = profil ?? pilihProfilSuara(null, teks)
   const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts')
   const tts = new MsEdgeTTS()
   const dir = await mkdtemp(path.join(os.tmpdir(), 'lekkopi-suara-'))
   try {
-    await tts.setMetadata(SUARA(), OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3)
-    const { audioFilePath } = await tts.toFile(dir, aman(teks), { rate: LAJU() })
+    await tts.setMetadata(p.edgeSuara, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3)
+    const { audioFilePath } = await tts.toFile(dir, aman(teks), { rate: p.laju })
     await copyFile(audioFilePath, keluar)
   } catch (e) {
     throw new Error(`Suara edge-tts (tidak resmi) gagal: ${e?.message ?? e}. Kalau terus gagal, isi GEMINI_API_KEY di .env Studio.`)
@@ -127,10 +197,11 @@ export function audioGemini(jawaban) {
 }
 
 /** Satu permintaan TTS → { wav, model }. 5xx dicoba ulang sekali; 429 (kuota) pindah ke model cadangan. */
-async function mintaGemini(teks) {
+async function mintaGemini(teks, profil) {
+  const p = profil ?? pilihProfilSuara(null, teks)
   let galat
   for (const model of [GEMINI_MODEL(), GEMINI_MODEL_CADANGAN]) {
-    const body = JSON.stringify(permintaanGemini(teks, { model, suara: GEMINI_SUARA(), gaya: GEMINI_GAYA() }))
+    const body = JSON.stringify(permintaanGemini(teks, { model, suara: p.geminiSuara, gaya: p.geminiGaya }))
     for (const jeda of [0, 4000]) {
       if (jeda) await tidur(jeda)
       const r = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
@@ -148,8 +219,8 @@ async function mintaGemini(teks) {
   throw galat
 }
 
-async function gemini(teks, keluar) {
-  await writeFile(keluar, (await mintaGemini(teks)).wav)
+async function gemini(teks, keluar, profil) {
+  await writeFile(keluar, (await mintaGemini(teks, profil)).wav)
 }
 
 /**
@@ -224,19 +295,17 @@ async function narasiSekaligus(teks, berkas, minta) {
 const PEMBUAT = { gemini, azure, edge }
 const EKSTENSI = { gemini: 'wav', azure: 'mp3', edge: 'mp3' }
 
-export async function buatSuara(teks, keluar, jalur = jalurSuara()) {
-  return PEMBUAT[jalur](teks, keluar)
+export async function buatSuara(teks, keluar, jalur = jalurSuara(), profil = null) {
+  return PEMBUAT[jalur](teks, keluar, profil)
 }
 
 /**
- * Suara semua adegan satu video dengan SATU jalur (suara yang berganti di tengah video terdengar
- * janggal). Gemini: narasi diminta sekaligus; kalau jedanya tidak terbaca, per adegan; kalau
- * Gemini/Azure gagal, semua adegan diulang dengan edge-tts.
- * Uji: `opsi.buat(teks, berkas, jalur)` menggantikan pembuat per adegan, `opsi.minta(teks[])`
- * (→ { wav, model }) menggantikan permintaan Gemini sekaligus.
+ * Suara semua adegan satu video dengan SATU jalur & SATU profil suara (suara yang berganti di
+ * tengah video terdengar janggal). Profil suara otomatis bervariasi per video bila tidak ditentukan.
  */
 export async function suaraAdegan(teks, folder, opsi = {}) {
-  const buat = opsi.buat ?? buatSuara
+  const profil = pilihProfilSuara(opsi.profilSuara, teks)
+  const buat = opsi.buat ?? ((t, k, j) => buatSuara(t, k, j, profil))
   const jalur = opsi.jalur ?? jalurSuara()
   const nama = (j) => teks.map((_, i) => path.join(folder, `suara_${i}.${EKSTENSI[j] ?? 'mp3'}`))
   const perAdegan = async (j) => {
@@ -248,19 +317,21 @@ export async function suaraAdegan(teks, folder, opsi = {}) {
     if (jalur === 'gemini' && (opsi.minta || !opsi.buat)) {
       const berkas = nama('gemini')
       try {
-        const model = await narasiSekaligus(teks, berkas, opsi.minta ?? mintaGemini)
+        const minta = opsi.minta ?? ((arr) => mintaGemini(arr, profil))
+        const model = await narasiSekaligus(teks, berkas, minta)
         const cadangan = model && model !== GEMINI_MODEL()
-        return { berkas, jalur, catatan: cadangan ? `suara Gemini model cadangan ${model} (kuota model utama habis)` : null }
+        return { berkas, jalur, profil: profil.kode, catatan: cadangan ? `suara Gemini model cadangan ${model} (kuota model utama habis)` : null }
       } catch (e) {
         if (!e.jeda) throw e // kuota/jaringan: per adegan pun akan gagal
       }
     }
-    return { berkas: await perAdegan(jalur), jalur, catatan: null }
+    return { berkas: await perAdegan(jalur), jalur, profil: profil.kode, catatan: null }
   } catch (e) {
     if (jalur === 'edge') throw e
     return {
       berkas: await perAdegan('edge'),
       jalur: 'edge',
+      profil: profil.kode,
       catatan: `suara cadangan edge-tts (${jalur} gagal: ${String(e?.message ?? e).slice(0, 120)})`,
     }
   }

@@ -1,4 +1,5 @@
 import { permintaanDariAdmin } from "@/lib/admin-server";
+import { rest } from "@/lib/db-server";
 import { ambilKonten } from "@/lib/konten";
 import { usulkanArahan } from "@/lib/usul-arahan";
 import { panggilLlmJson } from "@/lib/llm-router";
@@ -49,10 +50,21 @@ export async function POST(req: Request) {
 
     if (adalahLekKopi) {
       try {
+        const riwayatBaris = (await rest(
+          "studio_tugas?merek=eq.lekkopi&select=arahan,naskah&order=dibuat.desc&limit=12",
+        ).catch(() => null)) as { arahan?: string | null; naskah?: { judul?: string } | null }[] | null;
+        const riwayat = (riwayatBaris ?? [])
+          .map((r) => String(r.naskah?.judul || r.arahan || "").replace(/\s+/g, " ").trim().slice(0, 80))
+          .filter((t) => t.length > 6);
+        const hindari = riwayat.length
+          ? `\n\nDILARANG mengulang tema/judul yang mirip dengan riwayat terbaru ini:\n${riwayat.map((x, i) => `${i + 1}. ${x}`).join("\n")}`
+          : "";
+
         const { data } = await panggilLlmJson<{ usulan?: { judul: string; arahan: string }[] }>({
           system: SISTEM_KONTEN,
-          prompt: "Usulkan 3 ide video Reels/TikTok kreatif untuk Lek Kopi (kedai kopi di Waru, Sidoarjo). Konsep sinematik tanpa suara narasi, santai: suasana kedai malam/sore, nongkrong, racik kopi, menu andalan es kopi susu. Tiap ide: judul pendek + arahan 1-2 kalimat (tema, suasana, bidikan utama).",
+          prompt: `Usulkan 4 ide konten Full AI (video Reels/TikTok atau poster) yang SEGAR & BERAGAM untuk Lek Kopi (kedai kopi di Panjunan, Waru, Sidoarjo). Variasikan 4 gaya berbeda: (1) Storytelling / sketsa santai logat Jawa Timur/Indonesia, (2) POV pelanggan/barista yang relatable, (3) Visual sinematik produk kopi/matcha/es kopi susu bergaya AI editorial, (4) Humor ringan nongkrong malam. Tiap ide: judul pendek + arahan 1-2 kalimat.${hindari}`,
           skema: SKEMA_IDE_SINGKAT,
+          suhu: 0.9,
           maksToken: 1500,
           valid: (d) => Array.isArray((d as { usulan?: unknown[] })?.usulan) && (d as { usulan: unknown[] }).usulan.length > 0,
         }, "usulan ide");

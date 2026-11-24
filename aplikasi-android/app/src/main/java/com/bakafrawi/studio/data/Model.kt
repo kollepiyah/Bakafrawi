@@ -239,3 +239,22 @@ data class DataSambungan(
     val telegramTerdaftar: Boolean,
     val telegramWebhook: String?,
 )
+
+data class AdeganFlow(
+    val nomor: Int,
+    val durasiDetik: Int,
+    val ringkasAksi: String,
+    val dialog: String,
+    val arahanLogat: String,
+    val teksLayar: String,
+    val promptGoogleFlow: String,
+)
+
+data class PaketFlow(
+    val judul: String,
+    val ringkasanKonsep: String,
+    val karakterBible: String,
+    val adegan: List<AdeganFlow>,
+    val caption: String,
+    val penyedia: String = "",
+)

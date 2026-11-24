@@ -27,10 +27,12 @@ import {
   TrendingUp,
   Upload,
   Video,
+  Wand2,
   X,
 } from "lucide-react";
 import { Sambungan } from "./studio-sambungan";
 import { PanelUnggahManual } from "./studio-unggah";
+import { PanelGoogleFlow } from "./studio-google-flow";
 import type { Situs } from "@/content/skema";
 import { jalurGudang, muatKonten, supabase } from "@/lib/gudang-admin";
 import {
@@ -201,8 +203,9 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const kolomArahan = useRef<HTMLTextAreaElement>(null);
 
   // Navigasi sub-menu Studio (seragam antara Web/PWA dan APK Android)
-  type TabStudio = "unggah" | "rutin" | "buat" | "riwayat" | "riset" | "sambungan";
+  type TabStudio = "unggah" | "rutin" | "buat" | "flow" | "riwayat" | "riset" | "sambungan";
   const [tabStudio, setTabStudio] = useState<TabStudio>("unggah");
+  const [topikFlowAwal, setTopikFlowAwal] = useState("");
   const [filterRiwayat, setFilterRiwayat] = useState<"semua" | "terjadwal" | "cek" | "tayang">("semua");
 
   // Riset Reels Viral & Jam Tayang
@@ -793,6 +796,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       lencana: jadwalRutin.aktif ? jadwalRutin.jam : null,
     },
     { id: "buat", label: "Buat AI", ikon: <Sparkles className="size-3.5 shrink-0" /> },
+    { id: "flow", label: "Google Flow", ikon: <Wand2 className="size-3.5 shrink-0" /> },
     {
       id: "riwayat",
       label: "Riwayat",
@@ -804,9 +808,9 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   ];
 
   return (
-    <div className="pb-20">
+    <div className="min-w-0 overflow-x-clip pb-20">
       {kepala}
-      <main className="mx-auto max-w-4xl space-y-5 px-4 pt-5">
+      <main className="mx-auto w-full max-w-4xl min-w-0 space-y-5 px-4 pt-5">
         {jalurGudang !== "supabase" ? (
           <p className="text-muted-foreground">Studio hanya tersedia bila panel admin tersambung ke Supabase.</p>
         ) : (
@@ -1542,12 +1546,25 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   </select>
                 </label>
 
-                <label hidden={merekBank} className="flex items-start gap-2 text-sm">
-                  <input type="checkbox" name="latar" className="mt-0.5 size-4 accent-[#c9a24b]" />
+                <label className="flex items-start gap-2 text-sm">
+                  <input type="checkbox" name="latar" defaultChecked className="mt-0.5 size-4 accent-[#c9a24b]" />
                   <span>
-                    Latar gambar AI <span className="text-xs text-redup">(khusus poster: foto suasana — gratis ±60 gambar/hari lewat Cloudflare; video memakai karakter dari Drive)</span>
+                    Mode Visual Full AI <span className="text-xs text-redup">(100% visual AI via Cloudflare / NVIDIA FLUX / Gemini tanpa perlu foto asli; untuk foto/video asli gunakan tab Unggah &amp; Jadwal)</span>
                   </span>
                 </label>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emas/25 bg-emas/[0.05] px-3.5 py-2.5 text-xs">
+                  <span className="text-muted-foreground">
+                    Ingin video storytelling Full AI dengan suara &amp; logat Indonesia/Jawa natural lewat <b>Google Flow (Veo 3)</b>?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setTabStudio("flow")}
+                    className="inline-flex shrink-0 items-center gap-1 font-semibold text-emas hover:underline"
+                  >
+                    <Wand2 className="size-3.5" /> Buka Google Flow Bridge →
+                  </button>
+                </div>
 
                 <div className="grid gap-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1667,6 +1684,21 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   </button>
                 </div>
               </form>
+            )}
+
+            {/* ══════════ TAB 3b: GOOGLE FLOW BRIDGE (VIDEO FULL AI) ══════════ */}
+            {tabStudio === "flow" && (
+              <PanelGoogleFlow
+                merekDaftar={merekAktif}
+                merekAwal={pilihMerek}
+                topikAwal={topikFlowAwal}
+                tokenSegar={tokenSegar}
+                selesaiUpload={(msg) => {
+                  setPesan(msg);
+                  setTabStudio("riwayat");
+                  void muat();
+                }}
+              />
             )}
 
             {/* ══════════ TAB 4: RIWAYAT & ANTREAN TAYANG ══════════ */}
@@ -1873,13 +1905,25 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                             </div>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => pakaiKonsepViral(k.arahanStudio)}
-                            className="mt-3.5 w-full rounded-lg border border-emas/40 bg-emas/10 py-1.5 text-center text-xs font-medium text-emas transition hover:bg-emas hover:text-background"
-                          >
-                            Gunakan di Buat AI →
-                          </button>
+                          <div className="mt-3.5 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => pakaiKonsepViral(k.arahanStudio)}
+                              className="rounded-lg border border-emas/40 bg-emas/10 py-1.5 text-center text-xs font-medium text-emas transition hover:bg-emas hover:text-background"
+                            >
+                              Buat AI →
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTopikFlowAwal(`${k.judul}: ${k.hook} — ${k.arahanStudio}`);
+                                setTabStudio("flow");
+                              }}
+                              className="rounded-lg border border-sky-400/40 bg-sky-500/10 py-1.5 text-center text-xs font-medium text-sky-300 transition hover:bg-sky-500 hover:text-black"
+                            >
+                              Google Flow →
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>

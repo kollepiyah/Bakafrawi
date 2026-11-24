@@ -1,5 +1,25 @@
 # CHANGELOG — bakafrawi.com
 
+## Upgrade Studio Full AI: NVIDIA NIM, Google Flow Bridge, Caption Konsisten, Variasi Suara, & Perbaikan HP/Insight IG (24 Nov)
+
+- **Perbaikan Layout Overlap Layar HP (`deck.tsx`, `beranda.tsx`, `aplikasi-admin.tsx`, `studio.tsx`):**
+  - Menambahkan pengunci lebar (`min-w-0`, `overflow-hidden`, `overflow-x-clip`) pada kartu tugas grid Deck, wrapper Beranda, Studio, dan navigasi atas sehingga judul file video panjang tanpa spasi tidak lagi meluber dan memotong sisi kiri layar HP.
+- **Perbaikan Kelengkapan Insight Instagram (`src/lib/instagram-insight.ts`, `Api.kt`):**
+  - Menaikkan query lokal Supabase (`studio_tugas` 10 → 40, `studio_referensi` 15 → 50) dan selalu menggabungkannya tanpa menambah request ke Meta.
+  - Tarikan manual **Tarik dari IG** kini mengambil `limit=15` dalam 1 request (metrik `views,reach` tetap dibatasi aman maks 6 post terbaru + 2 Story aktif) dan **menggabungkan (`merge`, maks 40 post/merek)** ke cache lama agar postingan sebelumnya tidak terhapus saat penyegaran. Di APK Android (`Api.kt`), tampilan post Insight dinaikkan dari 6 → 30.
+- **Integrasi NVIDIA NIM Hemat Budget API (`llm-router.ts`, `studio/lib/naskah.mjs`, `studio/lib/bank/gambar-ai.mjs`, `.github/workflows/studio.yml`):**
+  - Menambahkan penyedia **NVIDIA NIM** (Qwen 2.5 72B → DeepSeek V3.2 → Llama 3.3 70B untuk teks/agent, serta **FLUX.1** untuk gambar AI) di urutan prioritas hemat: `NVIDIA NIM → Gemini → Cloudflare → Claude (cadangan terakhir)`.
+  - Worker `studio/lib/naskah.mjs` tidak lagi terkunci ke Claude dan kini ikut memakai router hemat multi-provider.
+- **Standar Caption & Hashtag Konsisten + Auto-Caption Unggah Manual (`caption-konsisten.ts`, `/api/studio/caption`, `studio-unggah.tsx`, `LayarStudio.kt`):**
+  - Standar CTA & blok hashtag inti konsisten per merek (`@lekkopi.id` & `@bakafrawi.project`, anti-duplikat, maks 10 hashtag).
+  - Tombol **Buat Caption & Hashtag Otomatis (AI)** di tab Unggah Manual Web/PWA (termasuk analisis bingkai foto/video) maupun APK Android.
+- **Agen Riset Viral Anti-Monoton & 6 Profil Suara (`riset-reels.ts`, `/api/studio/arahan`, `studio/lib/bank/suara.mjs`):**
+  - Riset tren & usulan arahan kini membaca 12–18 riwayat konten terakhir per merek agar tidak mengulang ide/hook yang sama.
+  - `suara.mjs` kini memiliki 6 profil suara & gaya bicara (`santai_indo`, `jawa_timur`, `storytelling_hangat`, `iklan_energik`, `narator_sinematik`, `jawa_krama_ngoko`) yang berotasi otomatis per video.
+- **Mode Full AI & Google Flow Bridge (`google-flow-murni.ts`, `/api/studio/google-flow`, `studio-google-flow.tsx`, `studio.tsx`, APK Android v2.3.0):**
+  - Tab baru **Google Flow** di Web/PWA dan APK Android (`versionCode 7`, `versionName 2.3.0`): menyusun storyboard + panduan karakter konsisten + prompt Veo 3 siap-copy per klip (dialog Indonesia/Jawa Timur/campuran natural) + caption konsisten, dilengkapi slot **Upload Balik Video Hasil Google Flow** untuk langsung tayang/dijadwalkan ke Instagram.
+- Diuji: 37/37 unit test (`npm run uji`), `tsc --noEmit`, `node --check studio/lib/naskah.mjs studio/lib/bank/gambar-ai.mjs studio/lib/bank/suara.mjs`, `npm run build` (Web/PWA), dan `gradlew compileDebugKotlin` (Android v2.3.0). **Belum:** uji langsung di layar HP produksi, uji dengan token Instagram & kunci `NVIDIA_API_KEY` sungguhan, serta rilis berkas APK v2.3.0 di GitHub Releases.
+
 ## Rem Keras & Pengamanan Meta/Instagram API (23 Nov)
 
 - **Mode Cache-First (0 Request Meta Otomatis):** `ambilInsightInstagram()` (`src/lib/instagram-insight.ts`) kini hanya membaca cache persisten dari Supabase (`studio_merek.profil.insight_cache`, `studio_tugas`, `studio_referensi`) saat Beranda dibuka. Meta Graph API hanya dihubungi saat tombol **Tarik dari IG** ditekan manual (`?segar=1`).

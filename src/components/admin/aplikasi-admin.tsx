@@ -85,8 +85,8 @@ export function AplikasiAdmin() {
   }
   const kepala = (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-3 px-4">
-        <nav className="flex items-center gap-0.5 overflow-x-auto sm:gap-1">
+      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-2 px-4">
+        <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto sm:gap-1">
           {MENU.map((m) => (
             <button
               key={m.id}
@@ -101,11 +101,11 @@ export function AplikasiAdmin() {
           </a>
         </nav>
         {jalurGudang === "supabase" ? (
-          <button onClick={() => supabase().auth.signOut()} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+          <button onClick={() => supabase().auth.signOut()} className="inline-flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
             <LogOut className="size-4" /> <span className="hidden sm:inline">Keluar</span>
           </button>
         ) : (
-          <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs text-amber-300">Mode uji lokal</span>
+          <span className="shrink-0 rounded-full bg-amber-500/15 px-3 py-1 text-xs text-amber-300">Mode uji lokal</span>
         )}
       </div>
     </header>

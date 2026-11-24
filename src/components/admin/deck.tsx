@@ -158,22 +158,22 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
   const tugasDitampilkan = tugas.slice(0, 4);
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       {/* ── Ringkasan cepat: tayangan & biaya AI bulan ini ── */}
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <div className="rounded-xl border border-border/80 bg-white/[0.02] p-3">
-          <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Eye className="size-3 text-sky-400" /> Total tayangan</p>
+        <div className="min-w-0 rounded-xl border border-border/80 bg-white/[0.02] p-3">
+          <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Eye className="size-3 shrink-0 text-sky-400" /> Total tayangan</p>
           <p className="mt-1 font-heading text-xl font-bold text-foreground">{angka(insight?.totalViews ?? 0)}</p>
           <p className="text-[10px] text-zinc-500">{insight?.totalTayang ?? 0} postingan terakhir</p>
         </div>
-        <div className="rounded-xl border border-border/80 bg-white/[0.02] p-3">
-          <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Heart className="size-3 text-red-400" /> Suka · Komentar</p>
+        <div className="min-w-0 rounded-xl border border-border/80 bg-white/[0.02] p-3">
+          <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Heart className="size-3 shrink-0 text-red-400" /> Suka · Komentar</p>
           <p className="mt-1 font-heading text-xl font-bold text-foreground">{angka(insight?.totalLikes ?? 0)} <span className="text-sm text-muted-foreground">· {angka(insight?.totalComments ?? 0)}</span></p>
           <p className="text-[10px] text-zinc-500">dari Instagram</p>
         </div>
-        <div className="col-span-2 rounded-xl border border-emas/25 bg-emas/[0.04] p-3">
-          <div className="flex items-start justify-between gap-2">
-            <div>
+        <div className="col-span-2 min-w-0 rounded-xl border border-emas/25 bg-emas/[0.04] p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
               <p className="flex items-center gap-1 text-[11px] text-muted-foreground"><Wallet className="size-3 text-emas" /> Pengeluaran Token & Biaya AI</p>
               <p className="mt-1 font-heading text-xl font-bold text-foreground">
                 {biaya ? rupiah(biaya.usd) : "-"} <span className="text-xs font-normal text-muted-foreground">{biaya ? `≈ $${biaya.usd.toFixed(3)}` : ""}</span>
@@ -285,7 +285,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
                 Belum ada tugas konten. Buat konten di tab Studio.
               </p>
             ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid min-w-0 gap-2 sm:grid-cols-2">
                 {tugasDitampilkan.map((t) => {
                   const adalahVideo = t.jenis === "video";
                   const mini = miniaturTugas(t.hasil);
@@ -293,11 +293,11 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
                     <div
                       key={t.id}
                       onClick={bukaStudio}
-                      className="group flex cursor-pointer items-center justify-between rounded-xl border border-border/70 bg-white/[0.02] p-3 transition hover:border-emas/50 hover:bg-white/[0.04]"
+                      className="group flex min-w-0 cursor-pointer items-center justify-between gap-2 overflow-hidden rounded-xl border border-border/70 bg-white/[0.02] p-3 transition hover:border-emas/50 hover:bg-white/[0.04]"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex min-w-0 flex-1 items-center gap-2.5">
                         <Miniatur gambar={mini.gambar} video={mini.video} adalahVideo={adalahVideo} />
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="truncate text-xs font-semibold text-foreground group-hover:text-emas">
                             {t.judul || t.produk_slug}
                           </p>
@@ -489,11 +489,11 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
                   return (
                     <div
                       key={p.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border/70 bg-white/[0.02] p-3 transition hover:border-border hover:bg-white/[0.03]"
+                      className="flex min-w-0 flex-col justify-between gap-3 overflow-hidden rounded-xl border border-border/70 bg-white/[0.02] p-3 transition hover:border-border hover:bg-white/[0.03] sm:flex-row sm:items-center"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
                         <Miniatur gambar={p.thumbnail} video={p.videoUrl} adalahVideo={adalahVideo} besar />
-                        <div className="min-w-0 space-y-1">
+                        <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span
                               className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
@@ -516,7 +516,7 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-muted-foreground truncate max-w-sm">
+                          <p className="max-w-full truncate text-[11px] text-muted-foreground">
                             {p.caption ? p.caption.slice(0, 60) + (p.caption.length > 60 ? "…" : "") : adalahStory ? "Story Instagram" : "Tanpa caption"}
                           </p>
                           <div className="flex flex-wrap items-center gap-1.5">
