@@ -574,8 +574,11 @@ export async function ambilInsightInstagram(paksaSegar = false): Promise<Ringkas
       }
     }
 
-    // 4. Selalu ikut gabungkan data historis dari studio_referensi (0 request Meta, dedup otomatis via mediaId)
+    // 4. Ikut gabungkan data historis postingan akun sendiri dari studio_referensi (0 request Meta).
+    // Saring ketat: wajib ID media IG numerik (`ig:<angka>`) & punya `diposting_at` asli agar video
+    // referensi gaya dari akun orang lain tidak nyasar masuk ke Insight.
     for (const r of refList ?? []) {
+      if (!/^ig:\d+$/.test(r.id) || !r.diposting_at) continue;
       const mId = r.id.replace(/^ig:/, "");
       if (postsGabung.has(mId)) continue;
       masukkanPost({
@@ -585,7 +588,7 @@ export async function ambilInsightInstagram(paksaSegar = false): Promise<Ringkas
         jenis: "video",
         format: "reels",
         caption: r.caption,
-        dibuat: r.diposting_at ?? new Date().toISOString(),
+        dibuat: r.diposting_at,
         tayangWaktu: r.diposting_at,
         permalink: r.permalink,
         mediaId: mId,
