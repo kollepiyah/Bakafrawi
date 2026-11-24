@@ -117,7 +117,7 @@ export function Agenda({ sesi, kepala, pesanAwal }: { sesi: Session | null; kepa
   return (
     <div className="pb-16">
       {kepala}
-      <main className="mx-auto max-w-4xl space-y-6 px-4 pt-6">
+      <main className="mx-auto w-full max-w-[1600px] space-y-6 px-4 pt-6 sm:px-6 lg:px-8">
         <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center gap-3 text-sm">
             <CalendarDays className="size-5 text-emas" />

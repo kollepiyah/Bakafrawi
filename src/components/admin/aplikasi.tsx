@@ -46,7 +46,7 @@ export function HalamanAplikasi({ sesi, kepala }: { sesi: Session | null; kepala
   return (
     <div className="pb-16">
       {kepala}
-      <main className="mx-auto max-w-4xl space-y-5 px-4 pt-6">
+      <main className="mx-auto w-full max-w-[1600px] space-y-5 px-4 pt-6 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="font-heading text-2xl">Aplikasi</h1>

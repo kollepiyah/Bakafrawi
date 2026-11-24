@@ -86,7 +86,7 @@ export function Editor({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     <div className="pb-28">
       {kepala}
 
-      <main className="mx-auto max-w-4xl px-4 pt-6">
+      <main className="mx-auto w-full max-w-[1600px] px-4 pt-6 sm:px-6 lg:px-8">
         {dariBawaan && (
           <p className="mb-5 rounded-xl border border-emas/30 bg-emas/10 p-4 text-sm text-emas-muda">
             Database masih kosong — yang tampil adalah isi bawaan situs. Tekan <b>Simpan</b> sekali untuk memindahkannya ke database.
@@ -109,7 +109,7 @@ export function Editor({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       </main>
 
       <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <p role="status" className={`min-w-0 flex-1 truncate text-sm ${pesan?.jenis === "galat" ? "text-red-400" : "text-emas-muda"}`}>
             {pesan?.teks ?? (berubah ? "Ada perubahan yang belum disimpan." : "Semua perubahan sudah tersimpan.")}
           </p>

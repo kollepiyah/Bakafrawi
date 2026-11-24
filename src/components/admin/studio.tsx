@@ -810,7 +810,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   return (
     <div className="min-w-0 overflow-x-clip pb-20">
       {kepala}
-      <main className="mx-auto w-full max-w-4xl min-w-0 space-y-5 px-4 pt-5">
+      <main className="mx-auto w-full max-w-[1600px] min-w-0 space-y-5 px-4 pt-5 sm:px-6 lg:px-8">
         {jalurGudang !== "supabase" ? (
           <p className="text-muted-foreground">Studio hanya tersedia bila panel admin tersambung ke Supabase.</p>
         ) : (

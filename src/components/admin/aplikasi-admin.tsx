@@ -85,7 +85,7 @@ export function AplikasiAdmin() {
   }
   const kepala = (
     <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between gap-2 px-4">
+      <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
         <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto sm:gap-1">
           {MENU.map((m) => (
             <button
