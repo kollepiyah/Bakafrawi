@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { formatCaptionKonsisten, normalisasiMerek, promptCaptionOtomatis } from "./caption-konsisten.ts";
+import { apakahNamaFileAcak, formatCaptionKonsisten, normalisasiMerek, promptCaptionOtomatis } from "./caption-konsisten.ts";
 import { buatPromptGoogleFlow } from "./google-flow-murni.ts";
 
 test("normalisasiMerek mengenali lekkopi dan bakafrawi", () => {
@@ -88,4 +88,39 @@ test("buatPromptGoogleFlow mendukung preset FOOH 3D, Iklan Fast-Cut, Sketsa Visu
   assert.match(sketsa.prompt, /SKETSA KOMEDI VISUAL/);
   assert.match(sketsa.prompt, /TEPAT 2 adegan/);
   assert.match(sketsa.prompt, /STRICTLY NO shop signs/);
+});
+
+test("buatPromptGoogleFlow wajib memakai format 6 blok arahan jelas & identitas pembicara", () => {
+  const p = buatPromptGoogleFlow({
+    merek: "lekkopi",
+    bahasa: "jawa_campur",
+    gaya: "komedi_santai",
+    formatDialog: "obrolan_2_orang",
+    jumlahAdegan: 3,
+  });
+  assert.match(p.prompt, /SHOT & CAMERA:/);
+  assert.match(p.prompt, /SUBJECT & CONTINUITY:/);
+  assert.match(p.prompt, /SETTING & LIGHTING:/);
+  assert.match(p.prompt, /ACTION TIMELINE \(0-8s\):/);
+  assert.match(p.prompt, /AUDIO & DIALOGUE:/);
+  assert.match(p.prompt, /identitas fisik/i);
+  assert.match(p.prompt, /CONSTRAINTS:/);
+});
+
+test("apakahNamaFileAcak & promptCaptionOtomatis multi-bingkai membaca isi visual video", () => {
+  assert.equal(apakahNamaFileAcak("VID_20261124_193011.mp4"), true);
+  assert.equal(apakahNamaFileAcak("lv_0_202611241230.mp4"), true);
+  assert.equal(apakahNamaFileAcak("ScreenRecording_1124.mp4"), true);
+  assert.equal(apakahNamaFileAcak("Promo Sakura-ne Lek.mp4"), false);
+
+  const pAcak = promptCaptionOtomatis({
+    merek: "lekkopi",
+    judul: "VID_20261124_193011.mp4",
+    jenis: "video",
+    sasaran: "reels",
+    jumlahBingkai: 5,
+  });
+  assert.match(pAcak.prompt, /TERLAMPIR 5 BINGKAI/);
+  assert.match(pAcak.prompt, /teks apa pun yang muncul/i);
+  assert.match(pAcak.prompt, /abaikan nama file generik/i);
 });

@@ -539,14 +539,15 @@ class Api(private val sesi: Sesi) {
         buat.teks("pesan") ?: "Konten berhasil diunggah!"
     }
 
-    /** Buat caption & hashtag konsisten merek otomatis untuk unggahan manual. */
+    /** Buat caption & hashtag konsisten merek otomatis (dengan multi-bingkai visual bila tersedia). */
     suspend fun buatCaptionOtomatis(
         merek: String,
         judul: String,
         konteks: String,
         jenis: String,
         sasaran: String,
-    ): String = withContext(Dispatchers.IO) {
+        gambar: List<Pair<String, String>> = emptyList(),
+    ): HasilCaption = withContext(Dispatchers.IO) {
         val res = situs(
             "/api/studio/caption",
             buildJsonObject {
@@ -555,9 +556,35 @@ class Api(private val sesi: Sesi) {
                 if (konteks.isNotBlank()) put("konteks", konteks)
                 put("jenis", jenis)
                 put("sasaran", sasaran)
+                if (gambar.isNotEmpty()) {
+                    put(
+                        "gambar",
+                        buildJsonArray {
+                            gambar.take(5).forEach { (mime, data) ->
+                                if (data.isNotBlank()) {
+                                    add(
+                                        buildJsonObject {
+                                            put("mimeType", mime)
+                                            put("data", data)
+                                        },
+                                    )
+                                }
+                            }
+                        },
+                    )
+                }
             },
         )
-        res.teks("caption") ?: throw GalatApi("Server tidak mengembalikan caption.")
+        val caption = res.teks("caption") ?: throw GalatApi("Server tidak mengembalikan caption.")
+        HasilCaption(
+            caption = caption,
+            judulSaran = res.teks("judulSaran") ?: "",
+            ringkasVisual = res.teks("ringkasVisual") ?: "",
+            pakaiVision = res["pakaiVision"]?.jsonPrimitive?.booleanOrNull == true,
+            jumlahBingkai = res.bulat("jumlahBingkai"),
+            penyedia = res.teks("penyedia") ?: "",
+            catatan = res.teks("catatan"),
+        )
     }
 
     /** Buat paket storyboard + prompt siap-copy Google Flow (Veo 3) per adegan + caption konsisten. */

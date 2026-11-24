@@ -266,3 +266,13 @@ data class PaketFlow(
     val caption: String,
     val penyedia: String = "",
 )
+
+data class HasilCaption(
+    val caption: String,
+    val judulSaran: String = "",
+    val ringkasVisual: String = "",
+    val pakaiVision: Boolean = false,
+    val jumlahBingkai: Int = 0,
+    val penyedia: String = "",
+    val catatan: String? = null,
+)

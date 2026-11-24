@@ -4,8 +4,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -71,6 +75,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -160,6 +165,70 @@ private fun bacaMetaBerkas(konteks: Context, uri: Uri): BerkasTerpilih {
 private suspend fun bacaBytesBerkas(konteks: Context, uri: Uri): ByteArray = withContext(Dispatchers.IO) {
     konteks.contentResolver.openInputStream(uri)?.use { it.readBytes() }
         ?: throw IllegalStateException("Gagal membaca berkas dari penyimpanan HP.")
+}
+
+private fun apakahNamaFileAcak(nama: String): Boolean {
+    val dasar = nama.substringBeforeLast('.').trim()
+    if (dasar.length <= 2) return true
+    if (Regex("^(vid|img|pxl|dcim|wa|lv|vn|mov|mp4|capcut|inshot|screen[-_]?recording|record|untitled|video|foto|image|whatsapp[-_\\s]?(video|image))[-_\\s0-9a-f]*$", RegexOption.IGNORE_CASE).matches(dasar)) {
+        return true
+    }
+    return dasar.replace(Regex("[0-9_\\-\\s.]+"), "").length < 3
+}
+
+private fun bitmapKeBase64(bmp: Bitmap): Pair<String, String>? {
+    val w = bmp.width.coerceAtLeast(1)
+    val h = bmp.height.coerceAtLeast(1)
+    val targetW = if (w > 480) 480 else w
+    val targetH = ((h.toFloat() / w.toFloat()) * targetW).toInt().coerceAtLeast(1)
+    val skal = if (targetW < w) Bitmap.createScaledBitmap(bmp, targetW, targetH, true) else bmp
+    return try {
+        val out = ByteArrayOutputStream()
+        skal.compress(Bitmap.CompressFormat.JPEG, 72, out)
+        val b64 = Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        if (b64.isNotBlank()) "image/jpeg" to b64 else null
+    } finally {
+        if (skal !== bmp) skal.recycle()
+    }
+}
+
+private suspend fun ekstrakBingkaiMedia(
+    konteks: Context,
+    uri: Uri,
+    adalahGambar: Boolean,
+): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+    if (adalahGambar) {
+        val bmp = konteks.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return@withContext emptyList()
+        return@withContext try {
+            listOfNotNull(bitmapKeBase64(bmp))
+        } finally {
+            bmp.recycle()
+        }
+    }
+    val retriever = MediaMetadataRetriever()
+    return@withContext try {
+        retriever.setDataSource(konteks, uri)
+        val durasiMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 8_000L
+        val amanMs = durasiMs.coerceAtLeast(1_000L)
+        listOf(0.10, 0.35, 0.65, 0.88).mapNotNull { p ->
+            val waktuUs = (amanMs * p * 1000.0).toLong().coerceAtLeast(0L)
+            val frame = retriever.getFrameAtTime(waktuUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: retriever.getFrameAtTime(waktuUs)
+            if (frame != null) {
+                try {
+                    bitmapKeBase64(frame)
+                } finally {
+                    frame.recycle()
+                }
+            } else {
+                null
+            }
+        }
+    } catch (_: Exception) {
+        emptyList()
+    } finally {
+        runCatching { retriever.release() }
+    }
 }
 
 @Composable
@@ -335,12 +404,64 @@ private fun TabUnggahManual(
     var berkas by remember { mutableStateOf<BerkasTerpilih?>(null) }
     var judul by remember { mutableStateOf("") }
     var caption by remember { mutableStateOf("") }
+    var infoCaption by remember { mutableStateOf<String?>(null) }
     var sasaran by remember { mutableStateOf("reels") }
     var modeTayang by remember { mutableStateOf("jadwal") } // jadwal | sekarang | draf
     var tglJadwal by remember { mutableStateOf(LocalDate.now(WIB).toString()) }
     var jamJadwal by remember { mutableStateOf("19:00") }
     var sibuk by remember { mutableStateOf(false) }
     var sedangBuatCaption by remember { mutableStateOf(false) }
+    var idAnalisis by remember { mutableStateOf(0) }
+
+    fun jalankanAutoCaption(
+        targetBerkas: BerkasTerpilih?,
+        targetSasaran: String,
+        targetJudul: String,
+        modeOtomatis: Boolean,
+    ) {
+        val tokenSekarang = ++idAnalisis
+        sedangBuatCaption = true
+        cakupan.launch {
+            try {
+                val gambar = if (targetBerkas != null) {
+                    ekstrakBingkaiMedia(konteks, targetBerkas.uri, targetBerkas.adalahGambar)
+                } else {
+                    emptyList()
+                }
+                if (idAnalisis != tokenSekarang) return@launch
+                val judulKirim = targetJudul.ifBlank {
+                    val nama = targetBerkas?.nama.orEmpty()
+                    if (nama.isNotBlank() && !apakahNamaFileAcak(nama)) nama else ""
+                }
+                val hasil = api.buatCaptionOtomatis(
+                    merek = pilihMerek,
+                    judul = judulKirim,
+                    konteks = if (modeOtomatis) "" else caption,
+                    jenis = if (targetBerkas?.adalahGambar == true) "gambar" else "video",
+                    sasaran = targetSasaran,
+                    gambar = gambar,
+                )
+                if (idAnalisis != tokenSekarang) return@launch
+                caption = hasil.caption
+                if (hasil.judulSaran.isNotBlank() && (judul.isBlank() || apakahNamaFileAcak(judul))) {
+                    judul = hasil.judulSaran
+                }
+                infoCaption = when {
+                    hasil.pakaiVision && hasil.ringkasVisual.isNotBlank() ->
+                        "Terbaca dari media (${hasil.jumlahBingkai} bingkai): ${hasil.ringkasVisual}"
+                    !hasil.catatan.isNullOrBlank() -> hasil.catatan
+                    else -> null
+                }
+                if (!modeOtomatis) kabar("Caption & hashtag konsisten siap dipakai!")
+            } catch (e: Exception) {
+                if (idAnalisis == tokenSekarang) {
+                    if (modeOtomatis) infoCaption = e.message else galat(e)
+                }
+            } finally {
+                if (idAnalisis == tokenSekarang) sedangBuatCaption = false
+            }
+        }
+    }
 
     val pemilih = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -350,9 +471,16 @@ private fun TabUnggahManual(
                 return@rememberLauncherForActivityResult
             }
             berkas = meta
-            sasaran = if (meta.adalahGambar) "story" else "reels"
-            if (judul.isBlank()) {
-                judul = meta.nama.substringBeforeLast('.').replace(Regex("[-_]+"), " ").trim()
+            infoCaption = null
+            val sasaranBaru = if (meta.adalahGambar) "story" else "reels"
+            sasaran = sasaranBaru
+            val judulAwal = if (judul.isBlank() && !apakahNamaFileAcak(meta.nama)) {
+                meta.nama.substringBeforeLast('.').replace(Regex("[-_]+"), " ").trim().also { judul = it }
+            } else {
+                judul
+            }
+            if (sasaranBaru != "story") {
+                jalankanAutoCaption(meta, sasaranBaru, judulAwal, modeOtomatis = true)
             }
         }
     }
@@ -428,43 +556,32 @@ private fun TabUnggahManual(
                     daftarSasaran.forEach { (kode, label) ->
                         FilterChip(
                             selected = sasaran == kode,
-                            onClick = { sasaran = kode },
+                            onClick = {
+                                sasaran = kode
+                                if (kode != "story" && berkas != null && caption.isBlank() && !sedangBuatCaption) {
+                                    jalankanAutoCaption(berkas, kode, judul, modeOtomatis = true)
+                                }
+                            },
                             label = { Text(label, fontSize = 12.sp) },
                         )
                     }
                 }
                 if (sasaran != "story") {
                     OutlinedButton(
-                        onClick = {
-                            sedangBuatCaption = true
-                            cakupan.launch {
-                                try {
-                                    val hasil = api.buatCaptionOtomatis(
-                                        merek = pilihMerek,
-                                        judul = judul.ifBlank { berkas?.nama ?: "Konten terbaru" },
-                                        konteks = caption,
-                                        jenis = if (berkas?.adalahGambar == true) "gambar" else "video",
-                                        sasaran = sasaran,
-                                    )
-                                    caption = hasil
-                                    kabar("Caption & hashtag konsisten siap dipakai!")
-                                } catch (e: Exception) {
-                                    galat(e)
-                                } finally {
-                                    sedangBuatCaption = false
-                                }
-                            }
-                        },
+                        onClick = { jalankanAutoCaption(berkas, sasaran, judul, modeOtomatis = false) },
                         enabled = !sedangBuatCaption && !sibuk,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         if (sedangBuatCaption) {
                             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.size(8.dp))
-                            Text("Menyusun caption…")
+                            Text("Menonton isi video & menyusun caption…")
                         } else {
-                            Text("Buat Caption & Hashtag Otomatis (AI)")
+                            Text(if (caption.isBlank()) "Buat Caption & Hashtag Otomatis (AI)" else "Buat Ulang Caption dari Isi Video")
                         }
+                    }
+                    infoCaption?.let { info ->
+                        Text(info, color = EmasMuda, fontSize = 11.sp)
                     }
                     OutlinedTextField(
                         value = caption,
@@ -1797,6 +1914,30 @@ private fun TabGoogleFlow(
     var tglJadwal by remember { mutableStateOf(LocalDate.now(WIB).toString()) }
     var jamJadwal by remember { mutableStateOf("19:00") }
     var sibukUpload by remember { mutableStateOf(false) }
+    var sedangBuatCaptionFlow by remember { mutableStateOf(false) }
+
+    fun jalankanCaptionFlow(target: BerkasTerpilih?, modeOtomatis: Boolean) {
+        sedangBuatCaptionFlow = true
+        cakupan.launch {
+            try {
+                val gambar = if (target != null) ekstrakBingkaiMedia(konteks, target.uri, false) else emptyList()
+                val res = api.buatCaptionOtomatis(
+                    merek = pilihMerek,
+                    judul = paket?.judul ?: (target?.nama?.takeUnless(::apakahNamaFileAcak) ?: ""),
+                    konteks = paket?.ringkasanKonsep ?: if (modeOtomatis) "" else caption,
+                    jenis = "video",
+                    sasaran = sasaran,
+                    gambar = gambar,
+                )
+                caption = res.caption
+                if (!modeOtomatis) kabar("Caption dari isi video siap dipakai!")
+            } catch (e: Exception) {
+                if (!modeOtomatis) galat(e)
+            } finally {
+                sedangBuatCaptionFlow = false
+            }
+        }
+    }
 
     val pemilihVideo = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -1806,6 +1947,9 @@ private fun TabGoogleFlow(
                 return@rememberLauncherForActivityResult
             }
             berkas = meta
+            if (caption.isBlank()) {
+                jalankanCaptionFlow(meta, modeOtomatis = true)
+            }
         }
     }
 
@@ -1971,6 +2115,18 @@ private fun TabGoogleFlow(
             item {
                 KartuStudio(p.judul) {
                     if (p.ringkasanKonsep.isNotBlank()) Text(p.ringkasanKonsep, color = Redup, fontSize = 12.sp)
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(Color(0x14F5B800), RoundedCornerShape(10.dp))
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text("Panduan 3 Langkah di Google Flow:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = EmasMuda)
+                        Text("1) Buka Image (9:16) → tempel Prompt Karakter Langkah 0.", fontSize = 11.sp, color = Redup)
+                        Text("2) Pindah ke Ingredients to Video (9:16) → pasang gambar Langkah 0 sebagai Ingredient → tempel prompt Klip 1..N.", fontSize = 11.sp, color = Redup)
+                        Text("3) Gabungkan klip → upload balik video hasilnya di bawah.", fontSize = 11.sp, color = Redup)
+                    }
                     if (p.promptGambarKarakter.isNotBlank()) {
                         Text("Langkah 0 — Gambar Karakter Referensi (Ingredient):", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color(0xFF38BDF8))
                         Text(p.promptGambarKarakter, fontSize = 11.sp, color = Color(0xFFD4D4D8))
@@ -2017,6 +2173,19 @@ private fun TabGoogleFlow(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SASARAN_VIDEO.forEach { (kode, label) ->
                         FilterChip(selected = sasaran == kode, onClick = { sasaran = kode }, label = { Text(label, fontSize = 12.sp) })
+                    }
+                }
+                OutlinedButton(
+                    onClick = { jalankanCaptionFlow(berkas, modeOtomatis = false) },
+                    enabled = !sedangBuatCaptionFlow && !sibukUpload && (berkas != null || paket != null),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (sedangBuatCaptionFlow) {
+                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.size(8.dp))
+                        Text("Menganalisis isi video…")
+                    } else {
+                        Text("Buat Caption dari Isi Video")
                     }
                 }
                 OutlinedTextField(

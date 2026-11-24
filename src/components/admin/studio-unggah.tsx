@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   CalendarClock,
   Check,
@@ -12,6 +12,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { apakahNamaFileAcak } from "@/lib/caption-konsisten";
 import {
   DAFTAR_SASARAN_GAMBAR,
   DAFTAR_SASARAN_VIDEO,
@@ -63,6 +64,63 @@ async function buatSampulVideo(berkas: File): Promise<{ blob: Blob | null; duras
   }
 }
 
+/** Ekstrak hingga 5 bingkai merata (awal, tengah, akhir) agar Vision AI membaca keseluruhan isi video. */
+async function ekstrakBingkaiVideoManual(berkas: File, jumlah = 5): Promise<{ mimeType: string; data: string }[]> {
+  const url = URL.createObjectURL(berkas);
+  try {
+    const v = document.createElement("video");
+    v.src = url;
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = "auto";
+    await new Promise<void>((ok) => {
+      v.onloadedmetadata = () => ok();
+      v.onerror = () => ok();
+      setTimeout(ok, 2500);
+    });
+    if (!v.videoWidth || !v.videoHeight) return [];
+
+    const durasi = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 8;
+    const lebar = Math.min(480, v.videoWidth);
+    const tinggi = Math.max(1, Math.round(lebar * (v.videoHeight / v.videoWidth)));
+    const canvas = document.createElement("canvas");
+    canvas.width = lebar;
+    canvas.height = tinggi;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return [];
+
+    const titik = [0.08, 0.28, 0.5, 0.72, 0.9]
+      .slice(0, jumlah)
+      .map((p) => Math.max(0.05, Math.min(durasi - 0.1, durasi * p)));
+    const hasil: { mimeType: string; data: string }[] = [];
+    for (const t of titik) {
+      await new Promise<void>((ok) => {
+        const selesai = () => {
+          v.onseeked = null;
+          ok();
+        };
+        v.onseeked = selesai;
+        v.currentTime = t;
+        setTimeout(selesai, 1400);
+      });
+      ctx.drawImage(v, 0, 0, lebar, tinggi);
+      const data = canvas.toDataURL("image/jpeg", 0.72).split(",")[1] ?? "";
+      if (data) hasil.push({ mimeType: "image/jpeg", data });
+    }
+    return hasil;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+type InfoVisualCaption = {
+  ringkas: string;
+  penyedia?: string;
+  jumlahBingkai: number;
+  pakaiVision: boolean;
+  catatan?: string;
+};
+
 export function PanelUnggahManual({
   merekDaftar,
   tokenSegar,
@@ -86,10 +144,14 @@ export function PanelUnggahManual({
   const [galat, setGalat] = useState("");
   const [sibuk, setSibuk] = useState(false);
   const [sedangBuatCaption, setSedangBuatCaption] = useState(false);
+  const [infoVisual, setInfoVisual] = useState<InfoVisualCaption | null>(null);
+  const idAnalisisRef = useRef(0);
 
   useEffect(() => {
     if (merekDaftar.length > 0 && !merekDaftar.some((m) => m.slug === merek)) {
-      setMerek(merekDaftar[0].slug);
+      const target = merekDaftar[0].slug;
+      const t = setTimeout(() => setMerek(target), 0);
+      return () => clearTimeout(t);
     }
   }, [merekDaftar, merek]);
 
@@ -101,7 +163,9 @@ export function PanelUnggahManual({
 
   function pilihBerkas(f: File | null) {
     if (pratinjauUrl) URL.revokeObjectURL(pratinjauUrl);
+    idAnalisisRef.current += 1;
     setGalat("");
+    setInfoVisual(null);
     if (!f) {
       setBerkas(null);
       setPratinjauUrl(null);
@@ -114,11 +178,16 @@ export function PanelUnggahManual({
       return;
     }
     const adalahGambar = f.type.startsWith("image/") || /\.(jpg|jpeg|png)$/i.test(f.name);
+    const jenisBaru = adalahGambar ? "gambar" : "video";
+    const sasaranBaru: SasaranTayang = adalahGambar ? "story" : "reels";
     setBerkas(f);
-    setJenis(adalahGambar ? "gambar" : "video");
-    setSasaran(adalahGambar ? "story" : "reels");
-    if (!judul.trim()) {
-      setJudul(f.name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").trim());
+    setJenis(jenisBaru);
+    setSasaran(sasaranBaru);
+
+    const namaDasar = f.name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").trim();
+    const judulAwal = !judul.trim() && !apakahNamaFileAcak(f.name) ? namaDasar : judul;
+    if (!judul.trim() && !apakahNamaFileAcak(f.name)) {
+      setJudul(namaDasar);
     }
     const u = URL.createObjectURL(f);
     setPratinjauUrl(u);
@@ -133,31 +202,47 @@ export function PanelUnggahManual({
     } else {
       setDurasi(0);
     }
+
+    // Begitu video dipilih (sasaran awal Reels), otomatis tonton 5 bingkai & buatkan caption sesuai isi konten
+    if (sasaranBaru !== "story") {
+      void buatCaptionOtomatis({
+        file: f,
+        jenisFile: jenisBaru,
+        sasaranTarget: sasaranBaru,
+        judulSaatIni: judulAwal,
+        modeOtomatis: true,
+      });
+    }
   }
 
-  async function buatCaptionOtomatis() {
+  async function buatCaptionOtomatis(opsi?: {
+    file?: File | null;
+    jenisFile?: "video" | "gambar";
+    sasaranTarget?: SasaranTayang;
+    judulSaatIni?: string;
+    modeOtomatis?: boolean;
+  }) {
+    const tokenAnalisis = ++idAnalisisRef.current;
+    const targetFile = opsi?.file ?? berkas;
+    const targetJenis = opsi?.jenisFile ?? jenis;
+    const targetSasaran = opsi?.sasaranTarget ?? sasaran;
+    const targetJudul = opsi?.judulSaatIni ?? judul;
+
     setSedangBuatCaption(true);
     setGalat("");
     try {
       const tok = await tokenSegar();
       if (!tok) throw new Error("Sesi login tidak ditemukan — coba muat ulang halaman.");
 
-      // Ambil 1 bingkai ringan (maks 540px) agar AI bisa melihat isi foto/video bila Vision tersedia
+      // Ambil hingga 5 bingkai ringan (maks 480px) agar AI bisa membaca awal–tengah–akhir konten
       let gambarBase64: { mimeType: string; data: string }[] | undefined;
-      if (berkas) {
+      if (targetFile) {
         try {
-          if (jenis === "video") {
-            const { blob } = await buatSampulVideo(berkas);
-            if (blob) {
-              const b64 = await new Promise<string>((ok) => {
-                const fr = new FileReader();
-                fr.onload = () => ok(String(fr.result ?? "").split(",")[1] ?? "");
-                fr.readAsDataURL(blob);
-              });
-              if (b64) gambarBase64 = [{ mimeType: "image/jpeg", data: b64 }];
-            }
+          if (targetJenis === "video") {
+            const hasilBingkai = await ekstrakBingkaiVideoManual(targetFile, 5);
+            if (hasilBingkai.length > 0) gambarBase64 = hasilBingkai;
           } else {
-            const url = URL.createObjectURL(berkas);
+            const url = URL.createObjectURL(targetFile);
             try {
               const img = new Image();
               img.src = url;
@@ -166,14 +251,14 @@ export function PanelUnggahManual({
                 img.onerror = () => ok();
               });
               if (img.naturalWidth > 0) {
-                const rasio = Math.min(1, 540 / img.naturalWidth);
+                const rasio = Math.min(1, 480 / img.naturalWidth);
                 const canvas = document.createElement("canvas");
                 canvas.width = Math.max(1, Math.round(img.naturalWidth * rasio));
                 canvas.height = Math.max(1, Math.round(img.naturalHeight * rasio));
                 const ctx = canvas.getContext("2d");
                 if (ctx) {
                   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                  const b64 = canvas.toDataURL("image/jpeg", 0.78).split(",")[1] ?? "";
+                  const b64 = canvas.toDataURL("image/jpeg", 0.72).split(",")[1] ?? "";
                   if (b64) gambarBase64 = [{ mimeType: "image/jpeg", data: b64 }];
                 }
               }
@@ -186,27 +271,49 @@ export function PanelUnggahManual({
         }
       }
 
+      if (idAnalisisRef.current !== tokenAnalisis) return;
+
       const res = await fetch("/api/studio/caption", {
         method: "POST",
         headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           merek,
-          judul: judul.trim() || berkas?.name || "",
-          konteks: caption.trim() || undefined,
-          jenis,
-          sasaran,
+          judul: targetJudul.trim() || (!apakahNamaFileAcak(targetFile?.name ?? "") ? targetFile?.name ?? "" : ""),
+          konteks: opsi?.modeOtomatis ? undefined : caption.trim() || undefined,
+          jenis: targetJenis,
+          sasaran: targetSasaran,
           gambar: gambarBase64,
         }),
       });
       const j = await res.json().catch(() => ({}));
+      if (idAnalisisRef.current !== tokenAnalisis) return;
       if (!res.ok || !j.ok || !j.caption) {
         throw new Error(j.pesan ?? "Gagal membuat caption otomatis.");
       }
       setCaption(String(j.caption));
+      const judulSaran = String(j.judulSaran ?? "").trim();
+      if (judulSaran && (!targetJudul.trim() || apakahNamaFileAcak(targetJudul))) {
+        setJudul(judulSaran);
+      }
+      setInfoVisual({
+        ringkas: String(j.ringkasVisual ?? "").trim(),
+        penyedia: typeof j.penyedia === "string" ? j.penyedia : undefined,
+        jumlahBingkai: Number(j.jumlahBingkai) || 0,
+        pakaiVision: Boolean(j.pakaiVision),
+        catatan: typeof j.catatan === "string" ? j.catatan : undefined,
+      });
     } catch (e) {
-      setGalat(e instanceof Error ? e.message : "Gagal membuat caption otomatis.");
+      if (idAnalisisRef.current !== tokenAnalisis) return;
+      const pesan = e instanceof Error ? e.message : "Gagal membuat caption otomatis.";
+      if (opsi?.modeOtomatis) {
+        setInfoVisual({ ringkas: "", jumlahBingkai: 0, pakaiVision: false, catatan: pesan });
+      } else {
+        setGalat(pesan);
+      }
     } finally {
-      setSedangBuatCaption(false);
+      if (idAnalisisRef.current === tokenAnalisis) {
+        setSedangBuatCaption(false);
+      }
     }
   }
 
@@ -305,6 +412,7 @@ export function PanelUnggahManual({
       pilihBerkas(null);
       setJudul("");
       setCaption("");
+      setInfoVisual(null);
       selesai(hasil.pesan ?? "Konten manual berhasil diunggah!");
     } catch (err) {
       setGalat(err instanceof Error ? err.message : "Gagal mengunggah konten.");
@@ -446,7 +554,12 @@ export function PanelUnggahManual({
                     <button
                       key={o.kode}
                       type="button"
-                      onClick={() => setSasaran(o.kode)}
+                      onClick={() => {
+                        setSasaran(o.kode);
+                        if (o.kode !== "story" && berkas && !caption.trim() && !sedangBuatCaption) {
+                          void buatCaptionOtomatis({ file: berkas, jenisFile: jenis, sasaranTarget: o.kode, modeOtomatis: true });
+                        }
+                      }}
                       className={`rounded-xl border px-3 py-2 text-left transition ${
                         aktif
                           ? "border-emas bg-emas/15 text-foreground"
@@ -468,7 +581,7 @@ export function PanelUnggahManual({
 
       {/* Caption (untuk Reels / Feed) */}
       {perluCaption && (
-        <div className="grid gap-1.5">
+        <div className="grid gap-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-medium text-muted-foreground">Caption & Hashtag Instagram (standar konsisten merek)</span>
             <button
@@ -478,14 +591,48 @@ export function PanelUnggahManual({
               className="inline-flex items-center gap-1.5 rounded-full border border-emas/40 bg-emas/10 px-3 py-1 text-[11px] font-medium text-emas-muda transition hover:bg-emas/20 disabled:opacity-50"
             >
               {sedangBuatCaption ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
-              {sedangBuatCaption ? "Menyusun caption…" : "Buat Caption & Hashtag Otomatis"}
+              {sedangBuatCaption
+                ? jenis === "video"
+                  ? "Menonton isi video…"
+                  : "Menganalisis foto…"
+                : caption.trim()
+                ? "Buat Ulang Caption dari Isi Video"
+                : "Buat Caption & Hashtag Otomatis"}
             </button>
           </div>
+          {sedangBuatCaption && (
+            <p className="rounded-xl border border-sky-400/25 bg-sky-500/[0.06] px-3 py-2 text-[11px] text-sky-200">
+              {jenis === "video"
+                ? "AI sedang menonton isi video (5 bingkai awal–tengah–akhir) & menyusun caption otomatis…"
+                : "AI sedang melihat isi foto & menyusun caption otomatis…"}
+            </p>
+          )}
+          {!sedangBuatCaption && infoVisual && (infoVisual.ringkas || infoVisual.catatan) && (
+            <p
+              className={`rounded-xl border px-3 py-2 text-[11px] ${
+                infoVisual.pakaiVision
+                  ? "border-emerald-400/25 bg-emerald-500/[0.06] text-emerald-200"
+                  : "border-amber-400/25 bg-amber-500/[0.06] text-amber-200"
+              }`}
+            >
+              {infoVisual.pakaiVision && infoVisual.ringkas ? (
+                <>
+                  <b>
+                    Terbaca dari {jenis === "video" ? `video (${infoVisual.jumlahBingkai} bingkai` : "foto ("}
+                    {infoVisual.penyedia ? ` · ${infoVisual.penyedia}` : ""}):
+                  </b>{" "}
+                  {infoVisual.ringkas}
+                </>
+              ) : (
+                infoVisual.catatan
+              )}
+            </p>
+          )}
           <textarea
             rows={5}
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
-            placeholder="Tulis catatan singkat atau klik tombol 'Buat Caption & Hashtag Otomatis' agar AI menyusun caption + CTA + hashtag konsisten…"
+            placeholder="Pilih video agar caption langsung dibuat otomatis sesuai isinya, atau klik tombol 'Buat Caption & Hashtag Otomatis'…"
             className="rounded-xl border border-input bg-transparent px-3 py-2 text-sm"
           />
         </div>

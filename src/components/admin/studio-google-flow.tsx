@@ -71,6 +71,52 @@ async function buatSampulVideoFlow(berkas: File): Promise<{ blob: Blob | null; d
   }
 }
 
+/** Ekstrak hingga 5 bingkai merata untuk dianalisis AI saat membuat caption dari video Google Flow. */
+async function ekstrakBingkaiVideoFlow(berkas: File, jumlah = 5): Promise<{ mimeType: string; data: string }[]> {
+  const url = URL.createObjectURL(berkas);
+  try {
+    const v = document.createElement("video");
+    v.src = url;
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = "auto";
+    await new Promise<void>((ok) => {
+      v.onloadedmetadata = () => ok();
+      v.onerror = () => ok();
+      setTimeout(ok, 2500);
+    });
+    if (!v.videoWidth || !v.videoHeight) return [];
+    const durasi = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 8;
+    const lebar = Math.min(480, v.videoWidth);
+    const tinggi = Math.max(1, Math.round(lebar * (v.videoHeight / v.videoWidth)));
+    const canvas = document.createElement("canvas");
+    canvas.width = lebar;
+    canvas.height = tinggi;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return [];
+
+    const titik = [0.08, 0.28, 0.5, 0.72, 0.9].slice(0, jumlah).map((p) => Math.max(0.05, Math.min(durasi - 0.1, durasi * p)));
+    const hasil: { mimeType: string; data: string }[] = [];
+    for (const t of titik) {
+      await new Promise<void>((ok) => {
+        const selesai = () => {
+          v.onseeked = null;
+          ok();
+        };
+        v.onseeked = selesai;
+        v.currentTime = t;
+        setTimeout(selesai, 1400);
+      });
+      ctx.drawImage(v, 0, 0, lebar, tinggi);
+      const data = canvas.toDataURL("image/jpeg", 0.72).split(",")[1] ?? "";
+      if (data) hasil.push({ mimeType: "image/jpeg", data });
+    }
+    return hasil;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export function PanelGoogleFlow({
   merekDaftar,
   merekAwal,
@@ -106,6 +152,7 @@ export function PanelGoogleFlow({
   const [waktuJadwal, setWaktuJadwal] = useState(() => daftarSlotCepatWIB()[3]?.inputWib ?? "");
   const [sibukUpload, setSibukUpload] = useState(false);
   const [progresUpload, setProgresUpload] = useState("");
+  const [sedangBuatCaptionFlow, setSedangBuatCaptionFlow] = useState(false);
 
   useEffect(() => {
     if (!merekAwal) return;
@@ -169,6 +216,38 @@ export function PanelGoogleFlow({
     }
   }
 
+  async function buatCaptionVideoFlow(fileOverride?: File | null) {
+    const target = fileOverride ?? berkas;
+    setSedangBuatCaptionFlow(true);
+    setGalat("");
+    try {
+      const tok = await tokenSegar();
+      if (!tok) throw new Error("Sesi login tidak ditemukan — coba muat ulang halaman.");
+      const gambar = target ? await ekstrakBingkaiVideoFlow(target, 5).catch(() => []) : [];
+      const res = await fetch("/api/studio/caption", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          merek,
+          judul: paket?.judul || target?.name || "",
+          konteks: paket?.ringkasanKonsep || caption.trim() || undefined,
+          jenis: "video",
+          sasaran,
+          gambar: gambar.length > 0 ? gambar : undefined,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok || !j.caption) {
+        throw new Error(j.pesan ?? "Gagal membuat caption dari isi video.");
+      }
+      setCaption(String(j.caption));
+    } catch (err) {
+      setGalat(err instanceof Error ? err.message : "Gagal membuat caption otomatis.");
+    } finally {
+      setSedangBuatCaptionFlow(false);
+    }
+  }
+
   function pilihBerkasVideo(f: File | null) {
     if (pratinjauUrl) URL.revokeObjectURL(pratinjauUrl);
     setGalat("");
@@ -183,6 +262,9 @@ export function PanelGoogleFlow({
     }
     setBerkas(f);
     setPratinjauUrl(URL.createObjectURL(f));
+    if (!caption.trim()) {
+      void buatCaptionVideoFlow(f);
+    }
   }
 
   async function unggahHasilFlow() {
@@ -244,17 +326,17 @@ export function PanelGoogleFlow({
         method: "POST",
         headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          aksi: "simpan-tugas",
+          aksi: "buat",
           merek,
           jenis: "video",
           url: izin.publicUrl,
           sampulUrl,
           durasi,
           judul: paket?.judul || berkas.name.replace(/\.[a-z0-9]+$/i, ""),
-          caption: caption.trim(),
+          caption: sasaran === "story" ? "" : caption.trim(),
           sasaran,
           modeTayang,
-          jadwalWib: modeTayang === "jadwal" ? waktuJadwal : undefined,
+          jadwal: modeTayang === "jadwal" ? waktuJadwal.trim() : null,
         }),
       });
       const simpan = await simpanRes.json().catch(() => ({}));
@@ -458,11 +540,26 @@ export function PanelGoogleFlow({
               <h3 className="font-heading text-base font-semibold text-emas-muda">{paket.judul}</h3>
               <p className="mt-0.5 text-xs text-muted-foreground">{paket.ringkasanKonsep}</p>
             </div>
-            {penyedia && (
+              {penyedia && (
               <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] text-zinc-400">
                 AI: {penyedia}
               </span>
             )}
+          </div>
+
+          <div className="rounded-xl border border-emas/25 bg-emas/[0.05] p-3 text-xs">
+            <p className="font-semibold text-emas-muda">Panduan Pakai Cepat di Google Flow (3 Langkah)</p>
+            <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-[11px] text-muted-foreground">
+              <li>
+                <b>Langkah 0 (Sekali saja):</b> Di Google Flow pilih <b>Image (9:16)</b> → tempel <b>Prompt Karakter</b> di bawah agar dapat 1 gambar referensi tokoh/produk.
+              </li>
+              <li>
+                <b>Langkah 1 (Per Klip):</b> Pindah ke <b>Ingredients to Video (Veo 3 · 9:16)</b> → masukkan gambar Langkah 0 (atau foto produk asli) sebagai <i>Ingredient</i>, lalu tempel prompt <b>Klip 1 sampai Klip terakhir</b> secara berurutan.
+              </li>
+              <li>
+                <b>Langkah 2 (Upload Balik):</b> Gabungkan klip di editor/Flow → upload hasilnya pada form di bawah untuk otomatis dibuatkan/disimpan caption &amp; jadwal tayangnya.
+              </li>
+            </ol>
           </div>
 
           {/* Langkah 0: Prompt Gambar Referensi Karakter (Ingredients to Video) */}
@@ -642,20 +739,31 @@ export function PanelGoogleFlow({
 
         {/* Caption & Hashtag Konsisten */}
         <div className="grid gap-1.5">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-medium text-muted-foreground">
               Caption &amp; Hashtag Konsisten ({merek === "lekkopi" ? "@lekkopi.id" : "@bakafrawi.project"})
             </span>
-            {caption.trim() && (
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => void salinTeks("caption-flow", caption)}
-                className="inline-flex items-center gap-1 text-[11px] text-emas hover:underline"
+                onClick={() => void buatCaptionVideoFlow()}
+                disabled={sedangBuatCaptionFlow || sibukUpload || (!berkas && !paket)}
+                className="inline-flex items-center gap-1 rounded-full border border-emas/40 bg-emas/10 px-2.5 py-0.5 text-[11px] font-medium text-emas-muda hover:bg-emas/20 disabled:opacity-50"
               >
-                {salinKunci === "caption-flow" ? <Check className="size-3" /> : <Copy className="size-3" />}
-                {salinKunci === "caption-flow" ? "Tersalin" : "Salin Caption"}
+                {sedangBuatCaptionFlow ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+                {sedangBuatCaptionFlow ? "Menganalisis video…" : "Buat Caption dari Isi Video"}
               </button>
-            )}
+              {caption.trim() && (
+                <button
+                  type="button"
+                  onClick={() => void salinTeks("caption-flow", caption)}
+                  className="inline-flex items-center gap-1 text-[11px] text-emas hover:underline"
+                >
+                  {salinKunci === "caption-flow" ? <Check className="size-3" /> : <Copy className="size-3" />}
+                  {salinKunci === "caption-flow" ? "Tersalin" : "Salin Caption"}
+                </button>
+              )}
+            </div>
           </div>
           <textarea
             rows={5}

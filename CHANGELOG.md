@@ -1,5 +1,16 @@
 # CHANGELOG — bakafrawi.com
 
+## Perjelas Prompt 6-Blok Google Flow & Auto-Caption Visual Multi-Bingkai Video (25 Nov)
+
+- **Struktur Prompt Google Flow 6-Blok & Panduan 3 Langkah (`src/lib/google-flow-murni.ts`, `/api/studio/google-flow`, `studio-google-flow.tsx`, `LayarStudio.kt`):**
+  - Merombak `SKEMA_GOOGLE_FLOW` & `buatPromptGoogleFlow()` agar tiap klip wajib mengikuti format 6 baris terstruktur siap-paste (`SHOT & CAMERA`, `SUBJECT & CONTINUITY`, `SETTING & LIGHTING`, `ACTION TIMELINE (0-8s)` per ketukan detik, `AUDIO & DIALOGUE`/`AUDIO & SFX` dengan identitas fisik pembicara agar suara 2 tokoh tidak tertukar, dan `CONSTRAINTS`).
+  - Menambahkan kotak **Panduan Pakai Cepat 3 Langkah di Google Flow**, menaikkan batas token respons LLM (`6500`), menambah tombol **Buat Caption dari Isi Video** di Langkah 2, dan memperbaiki bug pengiriman upload jadwal dari tab Google Flow (`aksi: "buat"`, `jadwal`).
+- **Auto-Caption Otomatis Berbasis Isi Video Multi-Bingkai (`src/lib/caption-konsisten.ts`, `/api/studio/caption`, `studio-unggah.tsx`, `Api.kt`, `LayarStudio.kt`):**
+  - Begitu video dipilih di **Unggah Manual** (saat sasaran Reels/Feed), browser (`ekstrakBingkaiVideoManual`, 5 bingkai merata 8%–90%) maupun APK Android (`MediaMetadataRetriever`, 4 bingkai merata 10%–88%) langsung menonton isi video dan mengisi caption + hashtag + judul saran secara otomatis.
+  - Menambahkan `apakahNamaFileAcak()` agar nama file kamera generik (`VID_...`, `lv_0_...`, `ScreenRecording_...`) tidak dianggap topik dan otomatis diganti dengan `judulSaran` dari AI bila judul masih kosong.
+  - Memperbarui `/api/studio/caption` (mendukung hingga 5 bingkai Vision + fallback teks jujur bila penyedia Vision limit) serta menampilkan lencana ringkasan visual yang terbaca AI dari video.
+- Diuji: 42/42 unit test (`npm run uji`), `tsc --noEmit`, `eslint` pada 7 berkas terkait (0 error/0 warning), `npm run build` (Next.js 16.4.6), dan `gradlew.bat compileDebugKotlin` (Android). **Belum:** uji langsung unggah video nyata/Google Flow di browser & HP produksi, serta build & install berkas APK Android baru ke HP.
+
 ## Multi-Voice ID ElevenLabs & Pemilih Suara Favorit di Studio (24 Nov)
 
 - **Daftar Suara Favorit di Sambungan Studio (`src/lib/studio-server.ts`, `/api/studio/sambungan`, `studio-sambungan.tsx`, `Api.kt`, `LayarStudio.kt`):**
