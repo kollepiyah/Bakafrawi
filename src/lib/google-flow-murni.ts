@@ -2,8 +2,15 @@
 // Sengaja mandiri tanpa impor runtime relatif agar langsung lolos node --test maupun Next.js.
 
 export type BahasaFlow = "indonesia" | "jawa_timur" | "jawa_campur";
-export type GayaFlow = "storytelling_hangat" | "komedi_santai" | "sinematik_produk" | "pov_relatable";
-export type FormatDialogFlow = "obrolan_2_orang" | "monolog_kamera" | "storytelling_narasi";
+export type GayaFlow =
+  | "storytelling_hangat"
+  | "komedi_santai"
+  | "sinematik_produk"
+  | "pov_relatable"
+  | "fooh_3d"
+  | "iklan_komersial"
+  | "sketsa_visual";
+export type FormatDialogFlow = "obrolan_2_orang" | "monolog_kamera" | "storytelling_narasi" | "tanpa_dialog_sfx";
 
 export type AdeganGoogleFlow = {
   nomor: number;
@@ -29,6 +36,7 @@ export const OPSI_FORMAT_DIALOG_FLOW: { kode: FormatDialogFlow; label: string; k
   { kode: "obrolan_2_orang", label: "Obrolan 2 Orang (Banyak Ngobrol)", ket: "Tektokan natural 2 tokoh, paling hidup di Reels" },
   { kode: "monolog_kamera", label: "Ngobrol ke Kamera (POV/Curhat)", ket: "1 tokoh cerita santai langsung ke penonton" },
   { kode: "storytelling_narasi", label: "Storytelling Sinematik", ket: "Cerita visual + narasi hangat" },
+  { kode: "tanpa_dialog_sfx", label: "Tanpa Dialog (Visual + SFX)", ket: "Cocok untuk FOOH 3D, iklan fast-cut, & sketsa visual" },
 ];
 
 export const OPSI_PRODUK_BAKAFRAWI: { slug: string; label: string; info: string }[] = [
@@ -49,6 +57,9 @@ export const OPSI_GAYA_FLOW: { kode: GayaFlow; label: string; ket: string }[] = 
   { kode: "komedi_santai", label: "Sketsa Komedi Santai", ket: "Dialog kocak & ringan ala Reels viral" },
   { kode: "sinematik_produk", label: "Sinematik Produk Full AI", ket: "Visual estetik + narasi memikat" },
   { kode: "pov_relatable", label: "POV Relatable", ket: "Sudut pandang pelanggan / pemilik usaha" },
+  { kode: "fooh_3d", label: "FOOH 3D Billboard / Objek Raksasa", ket: "Efek 3D spektakuler di gedung/lokasi nyata (ala Starbucks 3D)" },
+  { kode: "iklan_komersial", label: "Iklan Komersial Fast-Cut", ket: "Potongan cepat produk + model seragam ikut beat musik (ala FROTH)" },
+  { kode: "sketsa_visual", label: "Sketsa Komedi Visual", ket: "Aksi lucu 2 klip tanpa dialog panjang + SFX nyata (ala Balina)" },
 ];
 
 export const SKEMA_GOOGLE_FLOW = {
@@ -125,7 +136,7 @@ export function buatPromptGoogleFlow({
     ? OPSI_PRODUK_BAKAFRAWI.find((p) => p.slug === produk) ?? OPSI_PRODUK_BAKAFRAWI[0]
     : null;
   const namaBrand = m === "lekkopi" ? "Lek Kopi" : (infoProduk ? `${infoProduk.label} — Bakafrawi Project` : "Bakafrawi Project");
-  const jml = Math.min(6, Math.max(2, Math.round(jumlahAdegan)));
+  const jml = Math.min(6, Math.max(1, Math.round(jumlahAdegan)));
 
   const deskripsiMerek =
     m === "lekkopi"
@@ -133,14 +144,28 @@ export function buatPromptGoogleFlow({
       : `Bakafrawi Project (@bakafrawi.project): studio software & desain di Sidoarjo. Produk yang dipromosikan: ${infoProduk?.label} — ${infoProduk?.info}.`;
 
   const arahanFormat =
-    formatDialog === "obrolan_2_orang"
+    formatDialog === "tanpa_dialog_sfx"
+      ? "FORMAT WAJIB: TANPA DIALOG UCAPAN (VISUAL + SFX + MUSIK). Jangan menulis kalimat dialog manusia yang diucapkan! Isi kolom `dialog` dengan deskripsi efek suara & mood audio singkat (format `[SFX: ...]`), dan buat setiap `promptGoogleFlow` berfokus pada aksi visual, gerakan kamera, serta ambient sound / foley yang realistis."
+      : formatDialog === "obrolan_2_orang"
       ? "FORMAT WAJIB: OBROLAN 2 ORANG (BANYAK NGOBROL TEKTOKAN). Setiap klip 8 detik harus berisi percakapan 2 arah yang hidup (Tokoh A bicara 1 kalimat singkat, Tokoh B langsung menimpali 1 kalimat singkat dengan ekspresi wajah & gerak tangan alami). Total 16-22 kata per klip."
       : formatDialog === "monolog_kamera"
       ? "FORMAT WAJIB: NGOBROL LANGSUNG KE KAMERA (POV/CURHAT). 1 tokoh berbicara akrab langsung menatap kamera seperti kreator Reels viral (15-20 kata per klip, ekspresif)."
       : "FORMAT: STORYTELLING SINEMATIK dengan dialog/narasi hangat dan visual ekspresif (14-18 kata per klip).";
 
+  const arahanGayaKhusus =
+    gaya === "fooh_3d"
+      ? "GAYA KHUSUS FOOH 3D (Fake Out Of Home): Kamera street-level realistis merekam bangunan/lokasi nyata atau suasana jalan sore dengan lalu lintas/orang berjalan. Panel/billboard 3D raksasa terbuka secara mekanis lalu objek produk raksasa (mis. gelas kopi raksasa dengan cairan berpercik & biji kopi melayang) menyembul keluar secara anamorfik fotorealistik dengan bayangan dan pantulan cahaya nyata. Cukup 1–2 klip spektakuler."
+      : gaya === "iklan_komersial"
+      ? "GAYA KHUSUS IKLAN KOMERSIAL FAST-CUT (ala FROTH): Potongan cepat energik yang menjaga 1 foto produk/gelas sebagai pusat perhatian konsisten di setiap klip, dipadukan variasi shot model memakai warna seragam rapi (close-up macro es kopi berembun, model tersenyum menyodorkan minuman ke kamera, match-cut perputaran gelas, hingga shot top-down cheers bersama). Cocok untuk diedit cepat mengikuti beat musik."
+      : gaya === "sketsa_visual"
+      ? "GAYA KHUSUS SKETSA KOMEDI VISUAL (ala Balina Cafe): Cerita mini tanpa dialog panjang dalam 2–3 klip yang sangat mudah diikuti secara visual: Klip 1 setup + twist lucu tak terduga (mis. minuman diletakkan lalu disambar cepat oleh teman/pengendara lewat dengan ekspresi kaget), Klip 2 payoff close-up tokoh yang menikmati minuman dengan puas + senyum santai. Gunakan ekspresi wajah jelas dan SFX foley kuat."
+      : "";
+
+  const adalahVisualProduk = gaya === "fooh_3d" || gaya === "iklan_komersial";
   const arahanBahasa =
-    bahasa === "jawa_timur"
+    formatDialog === "tanpa_dialog_sfx"
+      ? "Tidak perlu dialog ucapan — tuliskan aksi visual & efek suara (SFX) dengan sangat jelas dan hidup."
+      : bahasa === "jawa_timur"
       ? "Gunakan dialog Bahasa Jawa Timur / Suroboyoan-Sidoarjoan yang natural, sopan, akrab, dan tidak dibuat-buat (seperti obrolan warga Sidoarjo/Surabaya sehari-hari)."
       : bahasa === "jawa_campur"
       ? "Gunakan dialog Bahasa Indonesia santai bercampur kosakata & logat Jawa Timur tipis yang natural dan enak didengar audiens luas Indonesia."
@@ -154,20 +179,27 @@ export function buatPromptGoogleFlow({
     system:
       `Kamu sutradara kreatif & prompt engineer ahli untuk Google Flow (Veo 3 / Veo 3.1) khusus konten Reels Instagram vertikal 9:16. ` +
       `Brand: ${deskripsiMerek} ` +
-      `Semua visual adalah 100% Full AI. Pastikan setiap prompt Google Flow sangat detail secara sinematografi (kamera, pencahayaan, ekspresi, pakaian konsisten, ambient sound) dan mencantumkan dialog persis yang diucapkan agar Veo 3 menghasilkan suara & logat yang sangat natural.`,
+      `Semua visual adalah 100% Full AI. Pastikan setiap prompt Google Flow sangat detail secara sinematografi (kamera, pencahayaan, ekspresi, pakaian/objek konsisten, ambient sound/SFX) ${formatDialog === "tanpa_dialog_sfx" ? "dengan foley dan ritme visual yang memikat." : "dan mencantumkan dialog persis yang diucapkan agar Veo 3 menghasilkan suara & logat yang sangat natural."}`,
     prompt: [
       `Buatkan 1 paket storyboard & prompt siap-copy Google Flow (Veo 3) terdiri dari TEPAT ${jml} adegan (@ 8 detik per klip, total ${jml * 8} detik).`,
       arahanFormat,
       `Gaya konten: ${gaya.replace(/_/g, " ")}.`,
+      arahanGayaKhusus,
       arahanBahasa,
       topik?.trim()
         ? `Topik/arahan dari pemilik: ${topik.trim()}`
-        : `Topik bebas — pilihkan 1 ide cerita/obrolan paling segar & relatable untuk ${namaBrand}.`,
+        : `Topik bebas — pilihkan 1 ide paling segar & relatable untuk ${namaBrand}.`,
       "Aturan wajib tiap adegan:",
       "- Adegan 1 harus langsung HOOK kuat di 2 detik pertama (tanpa salam pembuka klise).",
-      "- Buat promptGambarKarakter (Langkah 0) agar pemilik bisa men-generate 1 gambar referensi karakter utama untuk fitur 'Ingredients to Video' Google Flow supaya wajah & baju karakter 100% KONSISTEN tidak berubah-ubah antar klip.",
-      "- Di setiap promptGoogleFlow, wajib sertakan instruksi: `Keep the exact same character face, hair, and outfit from the reference ingredient. Vertical 9:16 cinematic video, ...` lalu tulis dialog PERSIS dalam tanda kutip beserta arahan logat.",
-      "- LARANGAN KERAS di semua prompt visual: `STRICTLY NO shop signs, NO wooden logo boards, NO brand logos on walls/cups, NO readable phone/laptop screens, NO on-screen text, NO watermarks.` (agar tidak pernah muncul logo palsu atau tampilan aplikasi palsu).",
+      adalahVisualProduk
+        ? "- Buat promptGambarKarakter (Langkah 0) untuk foto produk / adegan pembuka bersih yang bisa dipakai bersama foto produk asli sebagai 'Ingredients to Video' di Google Flow agar produk & visual tetap konsisten antar klip."
+        : "- Buat promptGambarKarakter (Langkah 0) agar pemilik bisa men-generate 1 gambar referensi karakter utama untuk fitur 'Ingredients to Video' Google Flow supaya wajah & baju karakter 100% KONSISTEN tidak berubah-ubah antar klip.",
+      formatDialog === "tanpa_dialog_sfx"
+        ? "- Di setiap promptGoogleFlow, wajib sertakan instruksi: `Keep the exact same subject/product consistency from the reference ingredient. Vertical 9:16 photorealistic video, ...` dengan keterangan kamera, fisika gerak, pencahayaan, dan SFX nyata (`Sound effects: ...`) tanpa dialog manusia."
+        : "- Di setiap promptGoogleFlow, wajib sertakan instruksi: `Keep the exact same character face, hair, and outfit from the reference ingredient. Vertical 9:16 cinematic video, ...` lalu tulis dialog PERSIS dalam tanda kutip beserta arahan logat.",
+      adalahVisualProduk
+        ? "- Pasang foto produk/logo asli pemilik sebagai Reference Ingredient di Google Flow. LARANGAN KERAS pada AI generator: `STRICTLY NO garbled AI text, NO fake UI screens, NO watermarks.`"
+        : "- LARANGAN KERAS di semua prompt visual: `STRICTLY NO shop signs, NO wooden logo boards, NO brand logos on walls/cups, NO readable phone/laptop screens, NO on-screen text, NO watermarks.` (agar tidak pernah muncul logo palsu atau tampilan aplikasi palsu).",
       blokRiwayat,
     ]
       .filter(Boolean)

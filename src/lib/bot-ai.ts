@@ -5,16 +5,14 @@ import { awalHariWIB, barisAcara, tanggalWIB } from "./agenda-murni";
 import { daftarAcara, hapusAcara, tambahAcara, ubahAcara } from "./agenda-server";
 import { rapikanRiwayat, type GiliranBot } from "./bot-murni";
 import { ringkasanAplikasi } from "./aplikasi-server";
-import { usulkanIde } from "./naskah-bank";
-import { usulkanArahan } from "./usul-arahan";
+import { jalankanAuditInstagram } from "./audit-ig-server";
+import { usulkanArahan, usulkanArahanLekKopi } from "./usul-arahan";
 import { bedahDanSimpanReferensi, daftarReferensiMerek } from "./referensi-video";
 import { JADWAL_OPTIMAL, statusWaktuSekarang } from "./riset-reels-murni";
-import { isiNaskah, naskahMenungguTerakhir, pesanNaskah } from "./studio-naskah";
 import {
   aturTayang,
   bacaJadwalRutin,
   buatTugas,
-  daftarMerek,
   daftarTugasBot,
   simpanJadwalRutin,
   tayangkanRutinSekarang,
@@ -37,31 +35,32 @@ const ALAT: Anthropic.Tool[] = [
   },
   {
     name: "usul_arahan_konten",
-    description: "Usulkan 3 pilihan arahan/sudut promosi AI untuk produk Bakafrawi (Maktaba POS, Ammu Online, Waseela). Kyai bisa memilih salah satu untuk langsung dibuatkan konten (poster atau video).",
+    description: "Usulkan pilihan arahan/sudut promosi AI untuk produk Bakafrawi (maktaba-pos, ammu-online, waseela) maupun kedai Lek Kopi (lekkopi-promo, lekkopi-menu, lekkopi-suasana, lekkopi-story). Kyai bisa memilih salah satu untuk langsung dibuatkan poster atau video.",
     strict: true,
     input_schema: {
       type: "object",
       additionalProperties: false,
       required: ["produk_slug", "jenis"],
       properties: {
-        produk_slug: { type: "string", description: "slug produk Bakafrawi (mis. maktaba-pos, ammu-online, waseela)" },
+        produk_slug: { type: "string", description: "slug produk Bakafrawi (mis. maktaba-pos, ammu-online, waseela) atau 'lekkopi' / 'lekkopi-promo' untuk Lek Kopi" },
         jenis: { type: "string", enum: ["gambar", "video"] },
       },
     },
   },
   {
     name: "buat_konten",
-    description: "Pesan konten promosi baru ke Studio (poster 3 ukuran atau video Reels). Hasilnya dikirim ke chat ini dengan tombol persetujuan.",
+    description: "Pesan konten promosi Full AI baru ke Studio (poster 3 ukuran 1:1/4:5/9:16 atau video Reels) untuk Bakafrawi maupun Lek Kopi. Hasilnya dikirim ke chat ini dengan tombol persetujuan.",
     strict: true,
     input_schema: {
       type: "object",
       additionalProperties: false,
-      required: ["produk_slug", "jenis", "latar_ai", "arahan"],
+      required: ["merek", "produk_slug", "jenis", "latar_ai", "arahan"],
       properties: {
-        produk_slug: { type: "string", description: "slug produk dari daftar produk" },
+        merek: { type: "string", enum: ["bakafrawi", "lekkopi"], description: "merek konten: 'bakafrawi' atau 'lekkopi'" },
+        produk_slug: { type: "string", description: "untuk bakafrawi: slug produk dari daftar produk; untuk lekkopi: lekkopi-promo, lekkopi-menu, lekkopi-suasana, atau lekkopi-story" },
         jenis: { type: "string", enum: ["gambar", "video"] },
-        latar_ai: { type: "boolean", description: "pakai latar foto suasana buatan AI (gratis lewat Cloudflare, ±60 gambar/hari)" },
-        arahan: { type: "string", description: "arahan gaya/sasaran untuk penulis naskah; kosong bila tidak ada" },
+        latar_ai: { type: "boolean", description: "pakai visual/latar buatan AI (default true)" },
+        arahan: { type: "string", description: "arahan tema/promo/gaya/sasaran untuk AI (mis. 'Poster promo Hari Guru untuk Lek Kopi'); kosong bila otomatis" },
       },
     },
   },
@@ -88,46 +87,10 @@ const ALAT: Anthropic.Tool[] = [
     },
   },
   {
-    name: "pesan_video_merek",
-    description: "Pesan video dari bank foto/video sebuah merek (mis. Lek Kopi, slug 'lekkopi'). Naskah ditulis dulu dan dikirim ke chat ini untuk disetujui; video baru dibuat setelah naskah disetujui.",
-    strict: true,
-    input_schema: {
-      type: "object",
-      additionalProperties: false,
-      required: ["merek", "permintaan"],
-      properties: {
-        merek: { type: "string", description: "slug merek, mis. lekkopi" },
-        permintaan: { type: "string", description: "ide/permintaan video dari Kyai, selengkap mungkin" },
-      },
-    },
-  },
-  {
     name: "ringkasan_aplikasi",
     description: "Ringkasan terbaru semua aplikasi Kyai: Maktaba POS (toko, langganan, pendapatan, pembayaran menunggu), Lek Kopi (omzet & transaksi hari ini vs kemarin, terlaris, kas, bon/hutang, stok menipis), Ammu Online & Waseela (angka teknis saja), plus hal yang perlu perhatian.",
     strict: true,
     input_schema: { type: "object", additionalProperties: false, required: [], properties: {} },
-  },
-  {
-    name: "usul_ide_merek",
-    description: "Usulkan ide video dari data kedai minggu lalu (menu laris/turun, jam sepi, promo) untuk merek berbahan bank media, mis. lekkopi. Tampilkan sebagai daftar bernomor; bila Kyai memilih, pakai pesan_video_merek dengan judul+sudut ide itu sebagai permintaan.",
-    strict: true,
-    input_schema: {
-      type: "object",
-      additionalProperties: false,
-      required: ["merek", "jumlah"],
-      properties: { merek: { type: "string" }, jumlah: { type: "integer", description: "2-5" } },
-    },
-  },
-  {
-    name: "revisi_naskah",
-    description: "Revisi naskah video merek yang masih menunggu persetujuan. id kosong = naskah menunggu yang terbaru.",
-    strict: true,
-    input_schema: {
-      type: "object",
-      additionalProperties: false,
-      required: ["id", "catatan"],
-      properties: { id: { type: "string" }, catatan: { type: "string", description: "catatan revisi dari Kyai" } },
-    },
   },
   {
     name: "pelajari_link_video",
@@ -235,6 +198,20 @@ const ALAT: Anthropic.Tool[] = [
     },
   },
   {
+    name: "audit_performa_ig",
+    description: "Audit performa postingan Instagram (kenapa reel/post terakhir sepi atau ramai, pola berhasil, perbaikan prioritas, & ide konten berikutnya) dari data cache Supabase memakai AI hemat (NVIDIA/Gemini, 0 request Meta tambahan).",
+    strict: true,
+    input_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["merek", "pertanyaan"],
+      properties: {
+        merek: { type: "string", enum: ["semua", "lekkopi", "bakafrawi"], description: "akun yang diaudit: semua, lekkopi, atau bakafrawi" },
+        pertanyaan: { type: "string", description: "pertanyaan spesifik Kyai (mis. 'kenapa reel terakhir sepi?'); kosong bila audit umum" },
+      },
+    },
+  },
+  {
     name: "atur_jadwal_rutin",
     description: "Lihat atau atur jadwal otomatis jam buka (Story Opening Lek Kopi): aktifkan/nonaktifkan, ubah jam buka (HH:MM WIB, mis. 09:00 atau 14:00), atau langsung tayangkan Story Jam Buka sekarang.",
     strict: true,
@@ -261,28 +238,64 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
       return JSON.stringify({ ok: true, statusSaatIni: st.label, saran: st.saran, jadwalOptimal: JADWAL_OPTIMAL });
     }
     case "usul_arahan_konten": {
-      const slug = String(isi.produk_slug);
-      if (slug === "lek-kopi") return "Saran arahan AI saat ini hanya tersedia untuk produk Bakafrawi (konten Lek Kopi belum didukung karena masih dalam penyempurnaan).";
+      const slug = String(isi.produk_slug ?? "").trim();
+      const jenis = isi.jenis === "video" ? "video" : "gambar";
+      if (slug === "lekkopi" || slug.startsWith("lekkopi-")) {
+        const usulan = await usulkanArahanLekKopi(jenis, slug);
+        return JSON.stringify({ ok: true, merek: "Lek Kopi", jenis, usulan });
+      }
       const produk = situs.produk.find((p) => p.slug === slug);
-      if (!produk) return `Produk "${slug}" tidak ada. Pilihan: ${situs.produk.filter((p) => p.slug !== "lek-kopi").map((p) => p.slug).join(", ")}`;
-      const usulan = await usulkanArahan(produk, isi.jenis === "video" ? "video" : "gambar");
-      return JSON.stringify({ ok: true, produk: produk.nama, jenis: isi.jenis, usulan });
+      if (!produk) return `Produk "${slug}" tidak ada. Pilihan: ${situs.produk.map((p) => p.slug).join(", ")}, atau lekkopi-promo`;
+      const usulan = await usulkanArahan(produk, jenis);
+      return JSON.stringify({ ok: true, produk: produk.nama, jenis, usulan });
     }
     case "buat_konten": {
+      const merek =
+        String(isi.merek ?? "").toLowerCase() === "lekkopi" || String(isi.produk_slug ?? "").startsWith("lekkopi")
+          ? "lekkopi"
+          : "bakafrawi";
+      const jenis = isi.jenis === "video" ? "video" : "gambar";
+      const latar = isi.latar_ai === false ? "polos" : "ai";
+      if (merek === "lekkopi") {
+        const fokusSah = ["lekkopi-promo", "lekkopi-menu", "lekkopi-suasana", "lekkopi-story"];
+        const slugMentah = String(isi.produk_slug ?? "").trim();
+        const produkSlug = fokusSah.includes(slugMentah) ? slugMentah : "lekkopi-promo";
+        const { tugas, dipicu } = await buatTugas({
+          merek: "lekkopi",
+          produk_slug: produkSlug,
+          jenis,
+          latar,
+          arahan: String(isi.arahan ?? ""),
+        });
+        return JSON.stringify({
+          ok: true,
+          id: tugas.id,
+          merek: "Lek Kopi",
+          jenis,
+          perkiraan: dipicu ? (jenis === "video" ? "3-6 menit" : "1-2 menit") : "putaran jadwal berikutnya (≤30 menit)",
+        });
+      }
       const slug = String(isi.produk_slug);
       const produk = situs.produk.find((p) => p.slug === slug);
       if (!produk) return `Produk "${slug}" tidak ada. Pilihan: ${situs.produk.map((p) => p.slug).join(", ")}`;
-      // Video produk = rekaman aplikasi: tanpa skenario demo maupun tautan, mesin pasti gagal (studio.mjs skenario()).
-      if (isi.jenis === "video" && !produk.demo?.url && !produk.tautan.length) {
-        return `Produk ${produk.nama} belum punya tautan/skenario demo untuk direkam — tawarkan poster saja, atau bila yang dimaksud video kafe Lek Kopi, pakai pesan_video_merek (merek lekkopi).`;
+      // Video produk software = rekaman aplikasi: tanpa skenario demo maupun tautan, tawarkan poster.
+      if (jenis === "video" && !produk.demo?.url && !produk.tautan.length) {
+        return `Produk ${produk.nama} belum punya tautan/skenario demo untuk direkam — tawarkan poster saja.`;
       }
       const { tugas, dipicu } = await buatTugas({
+        merek: "bakafrawi",
         produk_slug: slug,
-        jenis: isi.jenis === "video" ? "video" : "gambar",
-        latar: isi.latar_ai ? "ai" : "polos",
+        jenis,
+        latar,
         arahan: String(isi.arahan ?? ""),
       });
-      return JSON.stringify({ ok: true, id: tugas.id, perkiraan: dipicu ? (isi.jenis === "video" ? "3-6 menit" : "1-2 menit") : "putaran jadwal berikutnya (≤30 menit)" });
+      return JSON.stringify({
+        ok: true,
+        id: tugas.id,
+        merek: "Bakafrawi",
+        jenis,
+        perkiraan: dipicu ? (jenis === "video" ? "3-6 menit" : "1-2 menit") : "putaran jadwal berikutnya (≤30 menit)",
+      });
     }
     case "daftar_konten":
       return JSON.stringify(
@@ -291,28 +304,8 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
     case "ubah_caption":
       await ubahCaption(String(isi.id), String(isi.caption));
       return JSON.stringify({ ok: true });
-    case "pesan_video_merek": {
-      const { id, merek } = await pesanNaskah({ merek: String(isi.merek), permintaan: String(isi.permintaan) });
-      await isiNaskah(id); // naskah + tombol persetujuan langsung dikirim ke chat ini
-      return JSON.stringify({ ok: true, id, merek: merek.nama, catatan: "naskah sudah dikirim ke chat dengan tombol Setujui/Tolak" });
-    }
     case "ringkasan_aplikasi":
       return JSON.stringify((await ringkasanAplikasi()).map((a) => (a.ok ? { nama: a.nama, data: a.data, perhatian: a.penilaian?.catatan } : { nama: a.nama, tidak_tersedia: a.galat })));
-    case "usul_ide_merek": {
-      if (isi.merek === "lekkopi") {
-        return "Saran ide AI untuk konten Lek Kopi saat ini dinonaktifkan karena hasil konten Lek Kopi masih belum siap. Gunakan usul_arahan_konten untuk produk Bakafrawi (mis. maktaba-pos).";
-      }
-      const merek = (await daftarMerek()).find((m) => m.slug === String(isi.merek) && m.aktif);
-      if (!merek) return `Merek "${isi.merek}" tidak ada atau belum aktif.`;
-      const { ide, bankKosong } = await usulkanIde(merek, Math.min(5, Math.max(2, Number(isi.jumlah) || 4)));
-      return JSON.stringify({ merek: merek.nama, ide, ...(bankKosong ? { peringatan: "bank media masih kosong/belum diindeks" } : {}) });
-    }
-    case "revisi_naskah": {
-      const id = String(isi.id ?? "").trim() || (await naskahMenungguTerakhir());
-      if (!id) return "Tidak ada naskah yang menunggu persetujuan.";
-      await isiNaskah(id, String(isi.catatan));
-      return JSON.stringify({ ok: true, id, catatan: "naskah revisi sudah dikirim ke chat" });
-    }
     case "pelajari_link_video": {
       const ref = await bedahDanSimpanReferensi({
         merek: String(isi.merek || "bakafrawi"),
@@ -364,6 +357,26 @@ async function jalankanAlat(nama: string, isi: Record<string, unknown>, situs: S
       });
       return JSON.stringify({ ok: true, status_tayang: t.status_tayang, jadwal_tayang: t.jadwal_tayang });
     }
+    case "audit_performa_ig": {
+      const merek =
+        isi.merek === "lekkopi" || isi.merek === "bakafrawi" ? isi.merek : "semua";
+      const hasil = await jalankanAuditInstagram({
+        merek,
+        pertanyaan: String(isi.pertanyaan ?? ""),
+      });
+      return JSON.stringify({
+        ok: true,
+        penyedia: `${hasil.penyedia}/${hasil.model}`,
+        biayaUsd: hasil.biayaUsd,
+        statistik: {
+          totalPost: hasil.statistik.totalPost,
+          rataViews: hasil.statistik.rataViews,
+          rataLikes: hasil.statistik.rataLikes,
+          rasioTerbaruVsRata: hasil.statistik.rasioTerbaruVsRata,
+        },
+        audit: hasil.audit,
+      });
+    }
     case "atur_jadwal_rutin": {
       const merek = String(isi.merek || "lekkopi");
       const aksi = String(isi.aksi);
@@ -399,12 +412,13 @@ Aturan:
 - Untuk memesan, melihat, mengubah caption, atau menayangkan konten, PAKAI ALAT — jangan pernah mengaku sudah melakukan sesuatu tanpa hasil alat.
 - Menayangkan ke Instagram hanya bila Kyai memintanya jelas. Kalau ragu konten mana yang dimaksud, lihat daftar_konten dulu lalu tanyakan.
 - Agenda: hitung sendiri tanggal dari kata seperti "besok", "Jumat depan", "ba'da Isya" (≈19.30) dari tanggal sekarang; semua jam WIB. Bila jam tidak disebut dan acara bukan seharian, tanyakan dulu. Sebelum ubah/hapus, cari id lewat lihat_agenda. Setelah menyimpan, sebutkan hari, tanggal, dan jamnya supaya Kyai bisa mengecek.
-- Merek lain selain Bakafrawi (mis. Lek Kopi, slug lekkopi): videonya dari bank foto/video kafe — pakai pesan_video_merek, bukan buat_konten.
-- Saran & ide konten AI: HANYA berikan saran/arahan untuk produk Bakafrawi (Maktaba POS, Ammu Online, Waseela) lewat alat usul_arahan_konten. Jangan tawarkan atau usulkan ide konten untuk Lek Kopi karena hasil kontennya masih belum siap / masih jelek. Bila Kyai minta ide konten tanpa menyebut nama produk, berikan saran untuk produk utama Bakafrawi (Maktaba POS).
+- Merek di Studio ada dua: "bakafrawi" (produk software/aplikasi di atas) dan "lekkopi" (kedai kopi Lek Kopi di Panjunan, Waru, Sidoarjo). Keduanya memakai fitur yang SAMA lewat alat buat_konten (Poster 3 ukuran maupun Video Full AI) — Lek Kopi TIDAK lagi memakai bank video Google Drive.
+- Untuk Lek Kopi: pilih merek="lekkopi", produk_slug salah satu dari lekkopi-promo (promo/hari spesial spt Hari Guru), lekkopi-menu, lekkopi-suasana, atau lekkopi-story, dan latar_ai=true.
+- Saran & ide konten AI: pakai alat usul_arahan_konten baik untuk produk Bakafrawi maupun Lek Kopi (lekkopi-promo/menu/suasana/story), berikan daftar bernomor yang singkat; Kyai bisa membalas "nomor 2 jadikan poster".
 - Pertanyaan keadaan aplikasi/bisnis (toko & langganan Maktaba, omzet/stok/kas Lek Kopi hari ini, pengguna Ammu/Waseela) → ringkasan_aplikasi; sebut angkanya persis dari alat. Untuk Ammu & Waseela hanya ada angka teknis (data lembaga klien) — jangan menebak hal lain.
-- AWAS nama ganda: "Lek Kopi" = kedai/kafe (merek lekkopi: minuman, suasana, promo kafe → pesan_video_merek), sedangkan produk "lek-kopi" = aplikasi kasir Lek Kopi POS buatan Bakafrawi (buat_konten, rekaman aplikasi). Kalau Kyai bilang "video Lek Kopi" tanpa menyebut aplikasi/kasir, maksudnya kafe. Ragu → tanyakan. Naskahnya dikirim dulu untuk disetujui lewat tombol; revisi lewat revisi_naskah.
-- Ide konten: bila Kyai minta saran ide, gunakan usul_arahan_konten untuk produk Bakafrawi (default: maktaba-pos), beri daftar bernomor yang singkat; Kyai bisa membalas "nomor 2 jadikan poster".
+- AWAS nama ganda: "Lek Kopi" tanpa menyebut aplikasi/kasir maksudnya kedai kopi (merek "lekkopi" di buat_konten), sedangkan produk "lek-kopi" di daftar produk adalah aplikasi kasir Lek Kopi POS (merek "bakafrawi"). Ragu → tanyakan.
 - Jam tayang & formula Reels viral: bila Kyai menanyakan jam tayang yang bagus, pakai alat info_jam_tayang (terutama Golden Prime Time 17.30-19.30 WIB dan Istirahat Siang 11.45-13.00 WIB). Bila bertanya rahasia Reels viral, jelaskan 4 pilar: Hook 3 detik pertama, pacing visual 2-4 detik, teks layar kontras, dan CTA konkret.
+- Audit performa Instagram (mis. "kenapa reel terakhir sepi?", "evaluasi konten IG", "audit performa IG"): WAJIB pakai alat audit_performa_ig lalu sampaikan hasil bedahnya secara ringkas dan praktis.
 - Jangan menyebut harga paket atau angka yang tidak kamu ketahui. Jangan membagikan token/kunci apa pun.`;
 }
 

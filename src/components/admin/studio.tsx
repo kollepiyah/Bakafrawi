@@ -53,6 +53,13 @@ import type { UsulanArahan } from "@/lib/usul-arahan-murni";
 import type { KonsepReelsViral, SlotWaktu } from "@/lib/riset-reels-murni";
 import type { ReferensiTersimpan } from "@/lib/referensi-video";
 
+const FOKUS_LEKKOPI = [
+  { slug: "lekkopi-promo", nama: "Promo & Hari Spesial (Hari Guru, Diskon, dll.)" },
+  { slug: "lekkopi-menu", nama: "Menu Minuman & Produk Unggulan" },
+  { slug: "lekkopi-suasana", nama: "Suasana Kedai & Nongkrong" },
+  { slug: "lekkopi-story", nama: "Cerita & Edukasi Kopi" },
+];
+
 const PRESET_VIDEO = [
   { kode: "otomatis", label: "Otomatis (sesuai AI / referensi)" },
   { kode: "story-drop", label: "Story Drop: Menu Lompat dari IG Story ke Meja (ala Aurelia Cafe)" },
@@ -588,7 +595,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       const res = await fetch("/api/studio/riset", {
         method: "POST",
         headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ merek: pilihMerek, produk: merekBank ? pilihMerek : pilihProduk, topik: topikRiset }),
+        body: JSON.stringify({ merek: pilihMerek, produk: adalahBakafrawi ? pilihProduk : pilihMerek, topik: topikRiset }),
       });
       const j = await res.json().catch(() => ({}));
       if (j.ok && Array.isArray(j.konsep)) {
@@ -615,7 +622,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     setPesan("Konsep arahan viral berhasil disalin ke tab Buat AI!");
   }
 
-  // Usulan arahan dari Claude untuk produk & jenis yang sedang dipilih (Bakafrawi & Lek Kopi).
+  // Usulan arahan dari AI untuk merek & jenis yang sedang dipilih (Bakafrawi & Lek Kopi).
   async function mintaUsulan(e: MouseEvent<HTMLButtonElement>) {
     const form = e.currentTarget.form;
     if (!form) return;
@@ -628,8 +635,8 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       headers: { Authorization: `Bearer ${sesi?.access_token ?? ""}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         merek: pilihMerek,
-        produk: merekBank ? pilihMerek : d.get("produk"),
-        jenis: merekBank ? "video" : d.get("jenis"),
+        produk: String(d.get("produk") ?? pilihProduk),
+        jenis: String(d.get("jenis") ?? pilihJenis),
       }),
     }).catch(() => null);
     const j = res ? await res.json().catch(() => ({})) : {};
@@ -670,26 +677,10 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       }
     }
 
-    // Merek bank media (Lek Kopi): naskah ditulis server dulu, video dibuat setelah naskah disetujui.
-    if (merekBank) {
-      const j = await kirimNaskah({
-        aksi: "buat",
-        merek: pilihMerek,
-        permintaan: arahanAkhir,
-        jadwal_tayang: jadwalOtomatisIso,
-        sasaran: sasaranBuat,
-      });
-      setSibuk(false);
-      if (j.ok) {
-        form.reset();
-        setTabStudio("riwayat");
-      }
-      return void muat();
-    }
     const barisInsert: Record<string, unknown> = {
-      merek: d.get("merek") ?? "bakafrawi",
-      jenis: d.get("jenis"),
-      produk_slug: d.get("produk"),
+      merek: d.get("merek") ?? pilihMerek ?? "bakafrawi",
+      jenis: d.get("jenis") ?? pilihJenis,
+      produk_slug: d.get("produk") ?? pilihProduk,
       arahan: arahanAkhir,
       latar: d.get("latar") ? "ai" : "polos",
     };
@@ -769,9 +760,12 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     muat();
   }
 
-  const namaProduk = (slug: string) => situs.produk.find((p) => p.slug === slug)?.nama ?? slug;
+  const namaProduk = (slug: string) =>
+    situs.produk.find((p) => p.slug === slug)?.nama ??
+    FOKUS_LEKKOPI.find((f) => f.slug === slug)?.nama ??
+    slug;
   const merekAktif = merek.filter((m) => m.aktif);
-  const merekBank = Boolean(merek.find((m) => m.slug === pilihMerek)?.profil?.bahan?.includes("bank"));
+  const adalahBakafrawi = pilihMerek === "bakafrawi";
   const namaMerek = (slug: string) => (merekAktif.length > 1 || slug !== "bakafrawi" ? `${merek.find((m) => m.slug === slug)?.nama ?? slug} · ` : "");
 
   const jumlahTerjadwal = daftar.filter((t) => t.status_tayang === "dijadwalkan" || t.status_tayang === "antre").length;
@@ -1456,7 +1450,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     <Sparkles className="size-5 text-emas" /> Buat Konten Promosi AI
                   </h2>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Mesin otomatis membuat poster atau video iklan Remotion / bank media lengkap dengan naskah dan caption.
+                    Mesin otomatis membuat poster 3 ukuran atau video Full AI / Remotion lengkap dengan naskah dan caption.
                   </p>
                 </div>
 
@@ -1470,6 +1464,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                           type="button"
                           onClick={() => {
                             setPilihMerek(m.slug);
+                            setPilihProduk(m.slug === "bakafrawi" ? (situs.produk[0]?.slug ?? "maktaba-pos") : FOKUS_LEKKOPI[0].slug);
                             setUsulan([]);
                             setGalatUsulan("");
                           }}
@@ -1489,15 +1484,11 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   <input type="hidden" name="merek" value={merekAktif[0]?.slug ?? "bakafrawi"} />
                 )}
 
-                {merekBank && (
-                  <p className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-xs text-muted-foreground">
-                    Video dari bank foto/video <b>{merek.find((m) => m.slug === pilihMerek)?.nama}</b> di Google Drive. Naskah ditulis dulu dari data kedai untuk Kyai setujui sebelum dirender.
-                  </p>
-                )}
-
-                <div hidden={merekBank} className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <label className="grid gap-1.5">
-                    <span className="text-xs font-medium text-muted-foreground">Produk</span>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {adalahBakafrawi ? "Produk" : "Fokus Konten"}
+                    </span>
                     <select
                       name="produk"
                       value={pilihProduk}
@@ -1508,7 +1499,10 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                       }}
                       className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
                     >
-                      {situs.produk.map((p) => (
+                      {(adalahBakafrawi
+                        ? situs.produk.map((p) => ({ slug: p.slug, nama: p.nama }))
+                        : FOKUS_LEKKOPI
+                      ).map((p) => (
                         <option key={p.slug} value={p.slug} className="bg-card">{p.nama}</option>
                       ))}
                     </select>
@@ -1525,14 +1519,14 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                       className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
                     >
                       <option value="gambar" className="bg-card">Poster (1:1, 4:5, 9:16)</option>
-                      <option value="video" className="bg-card">Video Reels/TikTok (Remotion + animasi)</option>
+                      <option value="video" className="bg-card">Video Reels/TikTok (Full AI / Remotion)</option>
                     </select>
                   </label>
                 </div>
 
                 <label className="grid gap-1.5 sm:w-1/2">
                   <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                    <Palette className="size-3.5 text-emas" /> Gaya Desain {merekBank || pilihJenis === "video" ? "Video" : "Poster"}
+                    <Palette className="size-3.5 text-emas" /> Gaya Desain {pilihJenis === "video" ? "Video" : "Poster"}
                   </span>
                   <select
                     name="gaya"
@@ -1540,7 +1534,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     onChange={(e) => setPilihGaya(e.target.value)}
                     className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
                   >
-                    {(merekBank || pilihJenis === "video" ? PRESET_VIDEO : PRESET_POSTER).map((g) => (
+                    {(pilihJenis === "video" ? PRESET_VIDEO : PRESET_POSTER).map((g) => (
                       <option key={g.kode} value={g.kode} className="bg-card">{g.label}</option>
                     ))}
                   </select>
@@ -1569,7 +1563,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                 <div className="grid gap-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label htmlFor="studio-arahan" className="text-xs font-medium text-muted-foreground">
-                      {merekBank ? "Ide video (opsional — kosongkan agar AI memilih otomatis)" : "Arahan untuk AI (opsional)"}
+                      Arahan untuk AI (opsional)
                     </label>
                     <button
                       type="button"
@@ -1578,19 +1572,19 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                       className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-xs hover:border-emas hover:text-emas disabled:opacity-60"
                     >
                       {mengusulkan ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-                      {merekBank ? "Usulkan ide AI" : "Usulkan arahan"}
+                      Usulkan arahan
                     </button>
                   </div>
                   <textarea
                     id="studio-arahan"
                     ref={kolomArahan}
-                    key={merekBank ? "ide" : "arahan"}
+                    key={pilihMerek}
                     name="arahan"
                     rows={3}
                     placeholder={
-                      merekBank
-                        ? "Opsional: mis. suasana malam minggu, es kopi susu (kosongkan agar AI pilih menu terbaik otomatis)"
-                        : "Mis. sasar pemilik warung kopi, tonjolkan fitur struk WhatsApp, nada santai"
+                      adalahBakafrawi
+                        ? "Mis. sasar pemilik warung kopi, tonjolkan fitur struk WhatsApp, nada santai"
+                        : "Mis. Poster promo Hari Guru: diskon spesial untuk guru & dosen, suasana hangat kedai kopi (kosongkan agar AI pilih otomatis)"
                     }
                     className="rounded-xl border border-input bg-transparent px-3 py-2 text-sm"
                   />
@@ -1637,7 +1631,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                         onChange={(e) => setSasaranBuat(e.target.value as SasaranTayang)}
                         className="h-9 rounded-lg border border-input bg-transparent px-3 text-xs"
                       >
-                        {(merekBank || pilihJenis === "video" ? DAFTAR_SASARAN_VIDEO : DAFTAR_SASARAN_GAMBAR).map((s) => (
+                        {(pilihJenis === "video" ? DAFTAR_SASARAN_VIDEO : DAFTAR_SASARAN_GAMBAR).map((s) => (
                           <option key={s.kode} value={s.kode} className="bg-card">
                             {s.label}
                           </option>
@@ -1680,7 +1674,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-60 sm:w-auto"
                   >
                     {sibuk ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                    {merekBank ? "Buat Naskah Konten" : "Buat Konten AI"}
+                    Buat Konten AI
                   </button>
                 </div>
               </form>
@@ -1752,7 +1746,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                             : t.produk_slug === "unggah-manual"
                             ? "Unggah Manual"
                             : t.produk_slug === t.merek
-                            ? "Video Bank Media"
+                            ? (t.status === "naskah" || String(t.naskah?.sumber ?? "").includes("bank") ? "Video Bank Media" : "Konten Full AI")
                             : namaProduk(t.produk_slug))
                         }
                         hapus={() => hapus(t)}
@@ -1829,6 +1823,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                             type="button"
                             onClick={() => {
                               setPilihMerek(m.slug);
+                              setPilihProduk(m.slug === "bakafrawi" ? (situs.produk[0]?.slug ?? "maktaba-pos") : FOKUS_LEKKOPI[0].slug);
                               setUsulan([]);
                               setGalatUsulan("");
                             }}
@@ -1862,7 +1857,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                       type="text"
                       value={topikRiset}
                       onChange={(e) => setTopikRiset(e.target.value)}
-                      placeholder={`Topik khusus untuk ${merekBank ? (merek.find((m) => m.slug === pilihMerek)?.nama ?? pilihMerek) : namaProduk(pilihProduk)} (opsional)`}
+                      placeholder={`Topik khusus untuk ${!adalahBakafrawi ? (merek.find((m) => m.slug === pilihMerek)?.nama ?? pilihMerek) : namaProduk(pilihProduk)} (opsional)`}
                       className="h-10 flex-1 rounded-lg border border-input bg-transparent px-3 text-xs"
                     />
                     <button

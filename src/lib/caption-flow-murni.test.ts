@@ -56,3 +56,36 @@ test("buatPromptGoogleFlow menyertakan aturan logat, obrolan 2 orang, produk pes
   assert.match(p.prompt, /Jawa Timur/);
   assert.match(p.prompt, /Promo Es Kopi Susu Gula Aren/);
 });
+
+test("buatPromptGoogleFlow mendukung preset FOOH 3D, Iklan Fast-Cut, Sketsa Visual, dan mode Tanpa Dialog SFX", () => {
+  const fooh = buatPromptGoogleFlow({
+    merek: "lekkopi",
+    gaya: "fooh_3d",
+    formatDialog: "tanpa_dialog_sfx",
+    jumlahAdegan: 1,
+    topik: "Billboard 3D cup kopi raksasa di Sidoarjo",
+  });
+  assert.match(fooh.prompt, /TEPAT 1 adegan/);
+  assert.match(fooh.prompt, /TANPA DIALOG UCAPAN/);
+  assert.match(fooh.prompt, /FOOH 3D/);
+  assert.match(fooh.prompt, /STRICTLY NO garbled AI text/);
+
+  const iklan = buatPromptGoogleFlow({
+    merek: "lekkopi",
+    gaya: "iklan_komersial",
+    formatDialog: "tanpa_dialog_sfx",
+    jumlahAdegan: 4,
+  });
+  assert.match(iklan.prompt, /IKLAN KOMERSIAL FAST-CUT/);
+  assert.match(iklan.prompt, /TEPAT 4 adegan/);
+
+  const sketsa = buatPromptGoogleFlow({
+    merek: "lekkopi",
+    gaya: "sketsa_visual",
+    formatDialog: "tanpa_dialog_sfx",
+    jumlahAdegan: 2,
+  });
+  assert.match(sketsa.prompt, /SKETSA KOMEDI VISUAL/);
+  assert.match(sketsa.prompt, /TEPAT 2 adegan/);
+  assert.match(sketsa.prompt, /STRICTLY NO shop signs/);
+});

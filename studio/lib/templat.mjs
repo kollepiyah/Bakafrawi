@@ -12,8 +12,14 @@ const esc = (s = '') => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<'
 /** Identitas tampilan satu merek dari baris studio_merek. */
 export function temaMerek(m) {
   const p = m?.profil ?? {};
-  const aksen = /^#[0-9a-f]{6}$/i.test(p.aksen ?? '') ? p.aksen : '#c9a24b';
-  return { nama: m?.nama ?? 'Bakafrawi', aksen, aksenMuda: p.aksen_muda ?? '#e3c989', situs: p.situs ?? '' };
+  const adalahLek = m?.slug === 'lekkopi';
+  const aksen = /^#[0-9a-f]{6}$/i.test(p.aksen ?? '') ? p.aksen : (adalahLek ? '#D9A441' : '#c9a24b');
+  return {
+    nama: m?.nama ?? 'Bakafrawi',
+    aksen,
+    aksenMuda: p.aksen_muda ?? (adalahLek ? '#F3D58D' : '#e3c989'),
+    situs: p.situs ?? (adalahLek ? 'Panjunan, Waru, Sidoarjo' : ''),
+  };
 }
 
 const rgba = (hex, a) => `rgba(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(',')},${a})`;
@@ -41,9 +47,13 @@ body{font-family:'Plus Jakarta Sans',sans-serif;color:#e9eaee;-webkit-font-smoot
 .cta{background:${t.aksen};color:#1a1408;border-radius:999px;font-weight:800;padding:20px 40px;display:inline-block}
 </style>`;
 
-/** Lapisan latar: foto AI (digelapkan agar teks terbaca) atau gradasi polos. */
-function latar(foto) {
+/** Lapisan latar: foto AI (penuh = latar hero lebih cerah saat tanpa mockup HP; standar = lebih gelap) atau gradasi polos. */
+function latar(foto, penuh = false) {
   if (!foto) return '<div class="latar"></div><div class="kisi"></div>';
+  if (penuh) {
+    return `<div style="position:absolute;inset:0;background:url('${esc(foto)}') center/cover;filter:brightness(.88) saturate(1.12)"></div>
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(12,14,18,.78) 0%,rgba(12,14,18,.32) 45%,rgba(12,14,18,.88) 100%)"></div>`;
+  }
   return `<div style="position:absolute;inset:0;background:url('${esc(foto)}') center/cover;filter:brightness(.7) saturate(1.05)"></div>
     <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(12,14,18,.9) 0%,rgba(12,14,18,.68) 42%,rgba(12,14,18,.72) 62%,rgba(12,14,18,.95) 100%)"></div>`;
 }
@@ -62,6 +72,8 @@ export function htmlPoster({ rasio, naskah, produk, gambar, gambarIkon = false, 
   const t = tema;
   const { w, h } = UKURAN[rasio];
   const tegak = h > w;
+  const adalahKedai = produk?.kategori === 'kedai';
+  const lencanaTeks = adalahKedai ? (produk?.label || produk?.nama || t.nama) : (produk?.nama || t.nama);
   const hpLebar = rasio === 'feed' ? 380 : rasio === 'potret' ? 430 : 560;
   const poin = naskah.poin.slice(0, rasio === 'feed' ? 3 : 4).map((p) => `<div class="poin"><b>✓</b><span>${esc(p)}</span></div>`).join('');
   const hp = !gambar ? '' : gambarIkon
@@ -88,7 +100,7 @@ export function htmlPoster({ rasio, naskah, produk, gambar, gambarIkon = false, 
     <div style="position:absolute;inset:${rasio === 'story' ? '92px 72px 110px' : '64px 68px 56px'};display:flex;flex-direction:column;justify-content:space-between;gap:28px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div class="merek" style="color:#0F172A">${logo ? `<img src="${esc(logo)}">` : ''}<span>${esc(t.nama)}<span class="emas">.</span></span></div>
-        <span style="background:#0F172A;color:#fff;border-radius:999px;padding:12px 26px;font-weight:800;font-size:${tegak ? 24 : 20}px">${esc(produk.nama)}</span>
+        <span style="background:#0F172A;color:#fff;border-radius:999px;padding:12px 26px;font-weight:800;font-size:${tegak ? 24 : 20}px">${esc(lencanaTeks)}</span>
       </div>
       <div>
         <h1 style="font-weight:800;font-size:${rasio === 'story' ? 104 : rasio === 'potret' ? 84 : 68}px;line-height:1.03;letter-spacing:-.03em;color:#0F172A;margin-bottom:24px">
@@ -103,16 +115,18 @@ export function htmlPoster({ rasio, naskah, produk, gambar, gambarIkon = false, 
 
   // ── GAYA 3: BEFORE VS AFTER (MASALAH VS SOLUSI) ──
   if (gaya === 'before-after') {
-    const sebelum = ['Rekap manual rawan selisih', 'Antre lama & catatan tercecer', 'Susah pantau laporan dari HP'];
+    const sebelum = adalahKedai
+      ? ['Lagi capek & butuh penyegar', 'Bingung cari tempat santai di Waru', 'Kopi biasa yang gitu-gitu aja']
+      : ['Rekap manual rawan selisih', 'Antre lama & catatan tercecer', 'Susah pantau laporan dari HP'];
     const sesudah = naskah.poin.slice(0, 3);
     const daftarX = sebelum.map((x) => `<div style="display:flex;gap:12px;align-items:flex-start;font-size:${tegak ? 27 : 22}px;color:#FCA5A5"><b>✕</b><span>${esc(x)}</span></div>`).join('');
     const daftarV = sesudah.map((x) => `<div style="display:flex;gap:12px;align-items:flex-start;font-size:${tegak ? 27 : 22}px;color:#E2E8F0"><b style="color:#34D399">✓</b><span>${esc(x)}</span></div>`).join('');
     return `<!doctype html><html><head><meta charset="utf-8">${dasar(t)}<style>body{width:${w}px;height:${h}px;position:relative;overflow:hidden}</style></head>
-    <body>${latar(foto)}
+    <body>${latar(foto, !gambar)}
     <div style="position:absolute;inset:${rasio === 'story' ? '92px 68px 110px' : '58px 64px 52px'};display:flex;flex-direction:column;justify-content:space-between;gap:26px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         ${merek(t, logo)}
-        <div class="lencana" style="font-size:${tegak ? 24 : 20}px">${esc(produk.nama)}</div>
+        <div class="lencana" style="font-size:${tegak ? 24 : 20}px">${esc(lencanaTeks)}</div>
       </div>
       <div>
         <h1 class="serif klip" style="-webkit-line-clamp:3;font-size:${rasio === 'story' ? 88 : rasio === 'potret' ? 72 : 58}px;line-height:1.06;margin-bottom:14px">${esc(naskah.judul)}</h1>
@@ -120,11 +134,11 @@ export function htmlPoster({ rasio, naskah, produk, gambar, gambarIkon = false, 
       </div>
       <div style="display:grid;grid-template-columns:${rasio === 'story' ? '1fr' : '1fr 1fr'};gap:22px;flex:1;align-content:center">
         <div style="background:rgba(239,68,68,.10);border:2px solid rgba(239,68,68,.35);border-radius:30px;padding:30px;display:grid;gap:16px">
-          <div style="font-size:22px;font-weight:800;letter-spacing:.08em;color:#F87171;text-transform:uppercase">✕ Cara Lama</div>
+          <div style="font-size:22px;font-weight:800;letter-spacing:.08em;color:#F87171;text-transform:uppercase">${adalahKedai ? '✕ Sebelum Mampir' : '✕ Cara Lama'}</div>
           ${daftarX}
         </div>
         <div style="background:${rgba(t.aksen, 0.14)};border:2px solid ${rgba(t.aksen, 0.55)};border-radius:30px;padding:30px;display:grid;gap:16px;box-shadow:0 24px 60px -24px ${rgba(t.aksen, 0.35)}">
-          <div style="font-size:22px;font-weight:800;letter-spacing:.08em;color:${t.aksenMuda};text-transform:uppercase">✓ Pakai ${esc(produk.nama)}</div>
+          <div style="font-size:22px;font-weight:800;letter-spacing:.08em;color:${t.aksenMuda};text-transform:uppercase">${adalahKedai ? `✓ Di ${esc(produk.nama)}` : `✓ Pakai ${esc(produk.nama)}`}</div>
           ${daftarV}
         </div>
       </div>
@@ -143,7 +157,7 @@ export function htmlPoster({ rasio, naskah, produk, gambar, gambarIkon = false, 
     <div style="position:absolute;inset:${rasio === 'story' ? '88px 64px 104px' : '56px 60px 52px'};display:flex;flex-direction:column;justify-content:space-between;gap:24px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         ${merek(t, logo)}
-        <div class="lencana" style="font-size:${tegak ? 24 : 20}px;backdrop-filter:blur(10px)">${esc(produk.nama)}</div>
+        <div class="lencana" style="font-size:${tegak ? 24 : 20}px;backdrop-filter:blur(10px)">${esc(lencanaTeks)}</div>
       </div>
       <div style="flex:1;min-height:0;display:flex;justify-content:center;align-items:center">
         ${gambar ? `<div style="transform:rotate(-2.5deg);height:${tegak ? '88%' : '340px'};display:flex;justify-content:center">${tegak ? hpTegak : hp}</div>` : ''}
@@ -159,11 +173,18 @@ export function htmlPoster({ rasio, naskah, produk, gambar, gambarIkon = false, 
 
   // ── GAYA 1 (BAWAAN): MODERN CLEAN EDITORIAL ──
   const teks = `
-    <div class="lencana" style="font-size:${tegak ? 26 : 22}px">${esc(produk.nama)}</div>
+    <div class="lencana" style="font-size:${tegak ? 26 : 22}px">${esc(lencanaTeks)}</div>
     <h1 class="serif klip" style="-webkit-line-clamp:3;font-size:${rasio === 'story' ? 96 : rasio === 'potret' ? 78 : 62}px;line-height:1.05;margin:28px 0 20px">${esc(naskah.judul)}</h1>
     <p class="klip" style="-webkit-line-clamp:${rasio === 'feed' ? 2 : 3};font-size:${tegak ? 34 : 26}px;color:#9aa1ad;line-height:1.4;margin-bottom:30px">${esc(naskah.sub)}</p>
     <div style="display:grid;gap:14px;font-size:${tegak ? 32 : 27}px">${poin}</div>`;
-  const isi = rasio === 'feed'
+  const isi = !gambar
+    ? `<div style="position:absolute;inset:${rasio === 'story' ? '90px 72px 110px' : '64px 68px 56px'};display:flex;flex-direction:column;justify-content:space-between;gap:28px">
+         <div>${merek(t, logo)}</div>
+         ${tegak ? '<div style="flex:1;min-height:0"></div>' : ''}
+         <div>${teks}</div>
+         ${kaki(false)}
+       </div>`
+    : rasio === 'feed'
     ? `<div style="position:absolute;inset:64px 64px 170px;display:grid;grid-template-columns:1fr ${hpLebar}px;gap:48px;align-items:center">
          <div style="display:flex;flex-direction:column">${merek(t, logo)}<div style="height:28px"></div>${teks}</div><div style="display:flex;justify-content:center">${hp}</div></div>
        <div style="position:absolute;left:64px;right:64px;bottom:56px">${kaki(false)}</div>`
@@ -172,5 +193,5 @@ export function htmlPoster({ rasio, naskah, produk, gambar, gambarIkon = false, 
          <div style="flex:1;min-height:0;display:flex;justify-content:center;align-items:center">${hpTegak}</div>
          ${kaki(false)}</div>`;
   return `<!doctype html><html><head><meta charset="utf-8">${dasar(t)}<style>body{width:${w}px;height:${h}px;position:relative;overflow:hidden}</style></head>
-  <body>${latar(foto)}${isi}${tunggu}</body></html>`;
+  <body>${latar(foto, !gambar)}${isi}${tunggu}</body></html>`;
 }

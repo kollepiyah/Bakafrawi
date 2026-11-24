@@ -4,28 +4,44 @@ import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   BarChart3,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
+  Copy,
   ExternalLink,
   Eye,
   Heart,
   ImageIcon,
+  Lightbulb,
   Loader2,
   MessageCircle,
   Play,
   RefreshCw,
   Sparkles,
+  TrendingUp,
   Video,
   Wallet,
   Workflow,
   XCircle,
 } from "lucide-react";
+import type { HasilAuditIg, MerekAuditIg, StatistikAuditIg } from "@/lib/audit-ig-murni";
 import type { KesimpulanWorkflow, RunWorkflow } from "@/lib/deck-server";
 import type { HasilTugas, RingkasBiaya, RingkasTugas } from "@/lib/studio-server";
 import type { RingkasInsight } from "@/lib/instagram-insight";
 import { apiAdmin } from "./agenda";
+
+type AuditIgResponse = {
+  ok: boolean;
+  pesan?: string;
+  penyedia?: string;
+  model?: string;
+  biayaUsd?: number;
+  diambilPada?: string | null;
+  statistik?: StatistikAuditIg;
+  audit?: HasilAuditIg;
+};
 
 type DeckResponse = {
   ok: boolean;
@@ -97,6 +113,50 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
   const [sedangMuat, setSedangMuat] = useState(false);
   const [tampilSemuaRun, setTampilSemuaRun] = useState(false);
   const [tabAktif, setTabAktif] = useState<"mesin" | "insight">("mesin");
+  const [merekAudit, setMerekAudit] = useState<MerekAuditIg>("semua");
+  const [tanyaAudit, setTanyaAudit] = useState("");
+  const [sedangAudit, setSedangAudit] = useState(false);
+  const [galatAudit, setGalatAudit] = useState("");
+  const [hasilAudit, setHasilAudit] = useState<{
+    penyedia: string;
+    model: string;
+    biayaUsd: number;
+    statistik: StatistikAuditIg;
+    audit: HasilAuditIg;
+  } | null>(null);
+  const [salinIdeIdx, setSalinIdeIdx] = useState<number | null>(null);
+
+  async function jalankanAudit() {
+    setSedangAudit(true);
+    setGalatAudit("");
+    try {
+      const j = (await apiAdmin(sesi)("/api/studio/audit-ig", {
+        merek: merekAudit,
+        pertanyaan: tanyaAudit.trim(),
+      })) as unknown as AuditIgResponse;
+      if (!j.ok || !j.audit || !j.statistik) {
+        setGalatAudit(j.pesan ?? "Gagal menganalisis performa Instagram.");
+      } else {
+        setHasilAudit({
+          penyedia: j.penyedia ?? "ai",
+          model: j.model ?? "",
+          biayaUsd: Number(j.biayaUsd) || 0,
+          statistik: j.statistik,
+          audit: j.audit,
+        });
+      }
+    } catch (e) {
+      setGalatAudit(e instanceof Error ? e.message : "Gagal menganalisis performa Instagram.");
+    }
+    setSedangAudit(false);
+  }
+
+  function salinArahanAudit(idx: number, teks: string) {
+    void navigator.clipboard.writeText(teks).then(() => {
+      setSalinIdeIdx(idx);
+      setTimeout(() => setSalinIdeIdx((k) => (k === idx ? null : k)), 1800);
+    });
+  }
 
   const muat = useCallback(async (segar = false) => {
     setSedangMuat(true);
@@ -426,6 +486,167 @@ export function Deck({ sesi, bukaStudio }: { sesi: Session | null; bukaStudio?: 
       {/* ── TAB 2: INSIGHT KONTEN INSTAGRAM ── */}
       {tabAktif === "insight" && (
         <div className="space-y-4">
+          {/* Audit Performa AI Hemat (baca cache Supabase, 0 request Meta, NVIDIA NIM / Gemini) */}
+          <section className="space-y-3 rounded-xl border border-sky-500/25 bg-sky-500/[0.04] p-3.5 text-xs">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="flex items-center gap-1.5 font-semibold text-foreground">
+                  <TrendingUp className="size-3.5 text-sky-400" /> Audit Performa AI (Hemat — NVIDIA / Gemini)
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Bedah otomatis kenapa Reel/postingan sepi atau ramai dari cache data Instagram tanpa menyentuh kuota Meta API dan tanpa Claude Pro.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {(
+                  [
+                    { kode: "semua", label: "Semua" },
+                    { kode: "lekkopi", label: "Lek Kopi" },
+                    { kode: "bakafrawi", label: "Bakafrawi" },
+                  ] as const
+                ).map((m) => (
+                  <button
+                    key={m.kode}
+                    type="button"
+                    onClick={() => setMerekAudit(m.kode)}
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition ${
+                      merekAudit === m.kode
+                        ? "border-sky-400 bg-sky-500/20 text-sky-200"
+                        : "border-white/10 text-muted-foreground hover:border-white/25 hover:text-foreground"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={tanyaAudit}
+                onChange={(e) => setTanyaAudit(e.target.value)}
+                placeholder="Mis. Kenapa reel terakhir sepi? (kosongkan untuk audit lengkap)"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-input bg-card/80 px-3 text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => void jalankanAudit()}
+                disabled={sedangAudit || !insight?.posts?.length}
+                className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-sky-500 px-3.5 text-xs font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+              >
+                {sedangAudit ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                {sedangAudit ? "Menganalisis…" : "Audit Performa AI"}
+              </button>
+            </div>
+
+            {galatAudit && (
+              <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+                {galatAudit}
+              </p>
+            )}
+
+            {hasilAudit && (
+              <div className="space-y-3 rounded-xl border border-white/10 bg-card/80 p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 pb-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-300">
+                      {hasilAudit.penyedia}
+                      {hasilAudit.model ? ` · ${hasilAudit.model}` : ""}
+                    </span>
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                      {hasilAudit.biayaUsd <= 0 ? "Gratis (Rp0)" : rupiah(hasilAudit.biayaUsd)}
+                    </span>
+                    {hasilAudit.statistik.rasioTerbaruVsRata != null && (
+                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                        Post terakhir: {hasilAudit.statistik.rasioTerbaruVsRata}× rata-rata views
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-zinc-400">
+                    {hasilAudit.statistik.totalPost} post · rata-rata {angka(hasilAudit.statistik.rataViews)} views
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <p className="text-xs leading-relaxed text-foreground">{hasilAudit.audit.ringkasanEksekutif}</p>
+                  <p className="rounded-lg bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-zinc-300">
+                    <b className="text-amber-300">Bedah Post Terakhir:</b> {hasilAudit.audit.analisisTerbaru}
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.04] p-2.5">
+                    <p className="text-[11px] font-semibold text-emerald-300">Pola yang Berhasil</p>
+                    <ul className="space-y-1 text-[11px] text-zinc-300">
+                      {hasilAudit.audit.polaMenang.map((x, i) => (
+                        <li key={i}>• {x}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="space-y-1 rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-2.5">
+                    <p className="text-[11px] font-semibold text-amber-300">Perbaikan Prioritas</p>
+                    <ul className="space-y-1 text-[11px] text-zinc-300">
+                      {hasilAudit.audit.perbaikanPrioritas.map((x, i) => (
+                        <li key={i}>• {x}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {hasilAudit.audit.ideBerikutnya.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="flex items-center gap-1 text-[11px] font-semibold text-emas-muda">
+                      <Lightbulb className="size-3.5 text-emas" /> Ide Konten Berikutnya (Siap Eksekusi)
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {hasilAudit.audit.ideBerikutnya.map((ide, idx) => (
+                        <div
+                          key={ide.judul + idx}
+                          className="flex flex-col justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-2.5"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-semibold text-foreground">{ide.judul}</span>
+                              <span className="shrink-0 rounded bg-emas/15 px-1.5 py-0.5 text-[10px] text-emas-muda">
+                                {ide.format === "google_flow"
+                                  ? "Google Flow"
+                                  : ide.format === "poster"
+                                  ? "Poster AI"
+                                  : "Video Studio"}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-400">{ide.alasan}</p>
+                            <p className="rounded bg-black/30 p-1.5 text-[11px] text-zinc-200">{ide.arahanSiapPakai}</p>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => salinArahanAudit(idx, ide.arahanSiapPakai)}
+                              className="inline-flex items-center gap-1 rounded border border-white/15 px-2 py-1 text-[10px] font-medium text-zinc-200 hover:border-emas hover:text-emas"
+                            >
+                              {salinIdeIdx === idx ? <Check className="size-3 text-emerald-400" /> : <Copy className="size-3" />}
+                              {salinIdeIdx === idx ? "Tersalin" : "Salin Arahan"}
+                            </button>
+                            {bukaStudio && (
+                              <button
+                                type="button"
+                                onClick={bukaStudio}
+                                className="text-[10px] font-semibold text-emas hover:underline"
+                              >
+                                Buka Studio →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
           {/* Ringkasan metrik ada di kartu atas; tab ini fokus per postingan. */}
           {/* Daftar Postingan Tayang */}
           <div>

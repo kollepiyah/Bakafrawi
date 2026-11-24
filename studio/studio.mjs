@@ -151,43 +151,101 @@ async function kerjakanBank(tugas, merek, simpan, kabar) {
   };
 }
 
+const LABEL_FOKUS_LEKKOPI = {
+  'lekkopi-promo': 'Promo & Hari Spesial',
+  'lekkopi-menu': 'Menu Andalan',
+  'lekkopi-suasana': 'Suasana Kedai',
+  'lekkopi-story': 'Cerita Kopi',
+};
+
+function bangunProdukMerek(tugas, situs, merek) {
+  const temu = situs.produk.find((p) => p.slug === tugas.produk_slug);
+  if (temu && merek?.slug !== 'lekkopi') {
+    return { produk: temu, adalahSoftware: true };
+  }
+  const namaMerek = merek?.nama || 'Lek Kopi';
+  const labelFokus = LABEL_FOKUS_LEKKOPI[tugas.produk_slug] || 'Kedai Kopi Waru';
+  return {
+    adalahSoftware: false,
+    produk: {
+      slug: tugas.produk_slug || (merek?.slug ?? 'lekkopi'),
+      nama: namaMerek,
+      kategori: 'kedai',
+      label: labelFokus,
+      judul: `${namaMerek} — ${labelFokus}`,
+      deskripsi:
+        'Kedai kopi santai di Panjunan, Waru, Sidoarjo dengan seduhan espresso, es kopi susu gula aren, matcha, dan aneka minuman segar yang juga tersedia di GoFood, GrabFood, ShopeeFood, dan TikTok GO.',
+      platform: ['Kedai Outdoor', 'GoFood', 'GrabFood', 'ShopeeFood', 'TikTok GO'],
+      fitur: [
+        { judul: 'Racikan Kopi Segar', isi: 'Espresso, es kopi susu, & matcha dibuat segar per gelas.' },
+        { judul: 'Area Nongkrong Nyaman', isi: 'Suasana outdoor santai di Jl. Kolonel Sugiono No. 112, Panjunan, Waru.' },
+        { judul: 'Buka Sore–Malam', isi: 'Melayani Senin–Sabtu pukul 14.00–23.00 WIB.' },
+        { judul: 'Order Online Mudah', isi: 'Tersedia di GoFood, GrabFood, ShopeeFood, dan TikTok GO.' },
+      ],
+      tautan: [],
+      layarHp: [],
+      layarDesktop: [],
+    },
+  };
+}
+
 /** merek: baris studio_merek tugas ini (identitas tampilan, gaya naskah, WA bila beda dari situs). */
 async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
-  const produk = situs.produk.find((p) => p.slug === tugas.produk_slug);
-  if (!produk) throw new Error(`Produk "${tugas.produk_slug}" tidak ada di konten.`);
+  const { produk, adalahSoftware } = bangunProdukMerek(tugas, situs, merek);
+  const adalahLekKopi = !adalahSoftware && merek?.slug === 'lekkopi';
   const tema = temaMerek(merek);
-  const kontak = { ...situs.kontak, ...(merek?.profil?.whatsapp ? { whatsappTampil: merek.profil.whatsapp } : {}) };
+  const kontak = {
+    ...situs.kontak,
+    ...(merek?.profil?.whatsapp
+      ? { whatsappTampil: merek.profil.whatsapp }
+      : adalahLekKopi
+      ? { whatsappTampil: '085710477372' }
+      : {}),
+  };
   const catatan = [];
   const cocokGaya = String(tugas.arahan ?? '').match(/\[Gaya:\s*([a-z0-9-]+)\]/i);
   const gayaPilihan = cocokGaya ? cocokGaya[1].toLowerCase() : '';
   const pakaiAi = tugas.latar === 'ai' || gayaPilihan === 'photo-floating';
 
-  // Video Bakafrawi: selalu pakai tangkapan layar ASLI aplikasi (Ammu Online, Maktaba POS, dll.) + animasi UI/statistik
-  // yang berotasi gayanya agar tidak monoton + latar gambar AI sinematik (tanpa layar palsu) + suara Gemini TTS kreatif.
-  const layarApp = tugas.jenis === 'video' ? await kumpulkanLayar(produk, situs, peramban, folder, catatan) : [];
-  if (tugas.jenis === 'video' && !layarApp.length) throw new Error('Produk ini belum punya layar aplikasi (tautan/skenario demo atau gambar layar HP) untuk video.');
-  // Video: maskot & musik dari Drive "Bakafrawi Studio/Aset" (sekali per putaran).
+  // Video software Bakafrawi: tangkapan layar ASLI aplikasi + animasi UI + latar AI + maskot.
+  // Video non-software (mis. Lek Kopi): Video Storytelling Full AI tanpa tangkapan layar aplikasi.
   const dirMaskot = path.join(ASET_LOKAL, 'maskot'), dirMusik = path.join(ASET_LOKAL, 'musik');
-  if (tugas.jenis === 'video') await salinAsetDrive();
-  const karakter = tugas.jenis === 'video' ? kelompokKarakter(await readdir(dirMaskot, { recursive: true }).catch(() => [])) : new Map();
+  if (tugas.jenis === 'video') await salinAsetDrive().catch(() => {});
+  const layarApp = tugas.jenis === 'video' && adalahSoftware ? await kumpulkanLayar(produk, situs, peramban, folder, catatan) : [];
+  if (tugas.jenis === 'video' && adalahSoftware && !layarApp.length) {
+    throw new Error('Produk ini belum punya layar aplikasi (tautan/skenario demo atau gambar layar HP) untuk video.');
+  }
+  const karakter = tugas.jenis === 'video' && adalahSoftware ? kelompokKarakter(await readdir(dirMaskot, { recursive: true }).catch(() => [])) : new Map();
   const naskah = tugas.jenis === 'video'
-    ? await buatNaskahVideo(produk, situs, tugas.arahan, merek, layarApp, kecilkan, [...karakter.keys()])
+    ? (adalahSoftware
+        ? await buatNaskahVideo(produk, situs, tugas.arahan, merek, layarApp, kecilkan, [...karakter.keys()])
+        : await buatNaskahVideoFullAi(produk, situs, tugas.arahan, merek))
     : await buatNaskah(produk, situs, tugas.arahan, tugas.jenis, merek);
 
-  // Standar caption & hashtag konsisten Bakafrawi (anti-duplikat, maks 10 hashtag)
-  const tagIntiBakafrawi = ['bakafrawi', 'bakafrawiproject', 'jasapembuatanaplikasi', 'aplikasiumkm', 'softwarehouseindonesia', 'websitessidoarjo'];
-  const tagGabung = [...new Set([...tagIntiBakafrawi, ...(naskah.hashtag ?? [])].map((h) => String(h).replace(/^#+/, '').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()).filter(Boolean))].slice(0, 10);
-  const tujuan = [`WA ${kontak.whatsappTampil}`, tema.situs].filter(Boolean).join(' · ');
-  const caption = `${naskah.caption}\n\n💬 ${naskah.ajakan || 'Konsultasi gratis'} → ${tujuan}\n\n${tagGabung.map((h) => `#${h}`).join(' ')}`;
-  const layar = produk.layarHp?.[0]?.src ?? produk.layarDesktop?.[0]?.src;
-  const gambar = layar ?? produk.logo?.src;
+  // Standar caption & hashtag konsisten per merek (anti-duplikat, maks 10 hashtag)
+  let caption;
+  if (adalahLekKopi) {
+    const tagIntiLek = ['lekkopi', 'lekkopisidoarjo', 'kopiwaru', 'kopisidoarjo', 'ngopidisidoarjo', 'kedaikopisidoarjo'];
+    const tagGabung = [...new Set([...tagIntiLek, ...(merek?.profil?.hashtag ?? []), ...(naskah.hashtag ?? [])].map((h) => String(h).replace(/^#+/, '').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()).filter(Boolean))].slice(0, 10);
+    const ctaLek = '📍 Jl. Kolonel Sugiono No. 112, Panjunan, Waru, Sidoarjo\n⏰ Senin–Sabtu, 14.00–23.00 WIB (tersedia di GoFood, GrabFood, ShopeeFood & TikTok GO)';
+    caption = `${naskah.caption}\n\n${naskah.ajakan ? `✨ ${naskah.ajakan}\n` : ''}${ctaLek}\n\n${tagGabung.map((h) => `#${h}`).join(' ')}`;
+  } else {
+    const tagIntiBakafrawi = ['bakafrawi', 'bakafrawiproject', 'jasapembuatanaplikasi', 'aplikasiumkm', 'softwarehouseindonesia', 'websitessidoarjo'];
+    const tagGabung = [...new Set([...tagIntiBakafrawi, ...(naskah.hashtag ?? [])].map((h) => String(h).replace(/^#+/, '').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()).filter(Boolean))].slice(0, 10);
+    const tujuan = [`WA ${kontak.whatsappTampil}`, tema.situs].filter(Boolean).join(' · ');
+    caption = `${naskah.caption}\n\n💬 ${naskah.ajakan || 'Konsultasi gratis'} → ${tujuan}\n\n${tagGabung.map((h) => `#${h}`).join(' ')}`;
+  }
+
+  const layar = adalahSoftware ? (produk.layarHp?.[0]?.src ?? produk.layarDesktop?.[0]?.src) : null;
+  const gambar = adalahSoftware ? (layar ?? produk.logo?.src) : null;
   const logo = merek?.profil?.logo ?? (merek?.slug === 'bakafrawi' || !merek ? LOGO : '');
   const umum = { naskah, produk, logo, kontak, tema };
   const hasil = [];
   const berkas = (n) => path.join(folder, n);
 
   if (tugas.jenis === 'gambar') {
-    const gayaPoster = ['modern-clean', 'before-after', 'bold-typo', 'photo-floating'].includes(gayaPilihan) ? gayaPilihan : 'modern-clean';
+    const gayaBawaan = !adalahSoftware && pakaiAi ? 'photo-floating' : 'modern-clean';
+    const gayaPoster = ['modern-clean', 'before-after', 'bold-typo', 'photo-floating'].includes(gayaPilihan) ? gayaPilihan : gayaBawaan;
     if (gayaPoster !== 'modern-clean') catatan.push(`gaya poster: ${gayaPoster}`);
     for (const rasio of ['feed', 'potret', 'story']) {
       const foto = pakaiAi ? await fotoAi(naskah.adegan?.[0], RASIO_AI[rasio], berkas(`latar-${rasio}.png`), catatan) : null;
@@ -195,6 +253,58 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       await potret(peramban, { ...UKURAN[rasio], keluar, html: htmlPoster({ ...umum, rasio, foto, gaya: gayaPoster, gambar: gambar && mutlak(gambar, situs), gambarIkon: !layar }) });
       hasil.push({ jenis: 'gambar', rasio, url: await simpan(keluar, 'image/jpeg') });
     }
+  } else if (!adalahSoftware) {
+    // Video Storytelling Full AI untuk merek non-software (seperti Lek Kopi): visual gambar AI + suara TTS variatif + Remotion Sinematik.
+    const logoVideo = logo ? await ambilLokal(logo.startsWith('file:') ? logo : mutlak(logo, situs), berkas('logo-sumber')) : null;
+    const teksNarasi = naskah.adegan.map((a) => a.narasi);
+    const hasilSuara = await suaraAdegan(teksNarasi, folder);
+    if (hasilSuara.catatan) catatan.push(hasilSuara.catatan);
+    catatan.push(`mode: video Full AI · suara: ${hasilSuara.jalur}/${hasilSuara.profil ?? 'otomatis'}`);
+
+    const segmen = [];
+    let gambarTerakhir = null;
+    let totalDetik = 0;
+    for (const [i, a] of naskah.adegan.entries()) {
+      const infoSuara = hasilSuara.berkas[i] ? await probe(hasilSuara.berkas[i]).catch(() => ({ durasi: 4.5 })) : { durasi: 4.5 };
+      const durasi = Math.max(3.2, Math.min(9, (Number(infoSuara.durasi) || 4.5) + 0.55));
+      totalDetik += durasi;
+      let pathGambar = null;
+      try {
+        const g = await buatGambarAi(a.bidikan, '9:16', berkas(`ai-adegan-${i + 1}`));
+        pathGambar = g.berkas;
+        gambarTerakhir = pathGambar;
+      } catch (e) {
+        catatan.push(`gambar AI adegan ${i + 1} gagal: ${String(e.message ?? e).slice(0, 120)}`);
+        pathGambar = gambarTerakhir;
+      }
+      if (!pathGambar) throw new Error('Semua penyedia gambar AI gagal untuk video Full AI.');
+      segmen.push({ adegan: i, sumber: pathGambar, jenis: 'foto', durasi, mulaiKlip: 0 });
+    }
+    const rencana = {
+      adegan: naskah.adegan.map((a) => ({ teksLayar: a.teksLayar || '', gayaTeks: 'editorial', suara: a.narasi })),
+      segmen,
+      total: totalDetik + 2.2,
+    };
+    const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
+    const musik = process.env.STUDIO_MUSIK || (lagu && path.join(dirMusik, lagu));
+    const r = await renderSinematikRemotion({
+      rencana,
+      merek: {
+        nama: merek?.nama || 'Lek Kopi',
+        sub: tema.situs || 'Panjunan, Waru, Sidoarjo',
+        aksen: tema.aksen,
+        info: kontak.whatsappTampil ? `WA ${kontak.whatsappTampil}` : '',
+      },
+      logo: logoVideo,
+      musik,
+      musikVolume: 0.22,
+      suara: hasilSuara.berkas,
+      gaya: 'sinematik-kafe',
+      folder,
+      keluar: berkas('video.mp4'),
+    });
+    hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') });
+    if (r.sampul) hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   } else {
     // Rotasi otomatis gaya video bila 'otomatis' agar tidak monoton satu tampilan terus-menerus.
     const daftarGayaVideo = ['dark-keynote', 'pov-chat', 'split-hook', 'clean-ui'];
@@ -237,7 +347,7 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   }
   if (catatan.length) naskah.catatan = catatan;
-  return { naskah, caption, hasil, namaProduk: produk.nama };
+  return { naskah, caption, hasil, namaProduk: adalahSoftware ? produk.nama : (merek?.nama || produk.nama) };
 }
 
 /** Pastikan URL media dapat diunduh langsung oleh server Instagram (unggah berkas lokal public/ ke bucket studio bila perlu). */
@@ -616,8 +726,8 @@ async function modeAwan() {
     await kabar(`⚠️ Putaran Studio sebelumnya terhenti di tengah jalan: ${[pulih.buat && `${pulih.buat} konten gagal dibuat (tekan Buat ulang)`, pulih.tayang && `${pulih.tayang} konten terputus saat tayang — cek Instagram dulu sebelum menayangkan lagi`].filter(Boolean).join('; ')}.`);
   }
 
-  // Bank media merek yang indeksnya basi (> 6 jam): naskah butuh daftar isi bank terbaru.
-  for (const merek of await merekBankBasi().catch((e) => (console.error(e.message), []))) {
+  // Bank media merek yang indeksnya basi (> 6 jam): Lek Kopi sudah Full AI sehingga tidak perlu indeks bank Drive.
+  for (const merek of (await merekBankBasi().catch((e) => (console.error(e.message), []))).filter((m) => m.slug !== 'lekkopi')) {
     await bankMerek(merek, kabar).catch((e) => kabar(`⚠️ Gagal membaca bank ${merek.nama}: ${e.message.slice(0, 300)}`));
   }
 
@@ -674,7 +784,12 @@ async function modeAwan() {
               namaProduk: `${merek?.nama ?? slug} · Story Jam Buka`,
             };
           } else {
-            hasilKerja = pakaiBank(merek)
+            const adalahTugasBankLama =
+              pakaiBank(merek) &&
+              tugas.jenis === 'video' &&
+              Array.isArray(tugas.naskah?.adegan) &&
+              tugas.naskah.adegan.some((a) => a.tag);
+            hasilKerja = adalahTugasBankLama
               ? await kerjakanBank(tugas, merek, simpan, kabar)
               : await kerjakan(tugas, situs, peramban, folder, simpan, merek);
           }

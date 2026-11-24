@@ -421,7 +421,7 @@ class Api(private val sesi: Sesi) {
 
     suspend fun buatTugasStudio(
         merek: String,
-        adalahBank: Boolean,
+        @Suppress("UNUSED_PARAMETER") adalahBank: Boolean = false,
         jenis: String,
         produkSlug: String,
         arahan: String,
@@ -429,18 +429,6 @@ class Api(private val sesi: Sesi) {
         sasaran: String,
         jadwalIso: String?,
     ): String = withContext(Dispatchers.IO) {
-        if (adalahBank) {
-            val badan = buildJsonObject {
-                put("aksi", "buat")
-                put("merek", merek)
-                put("permintaan", arahan)
-                if (jadwalIso != null) put("jadwal_tayang", jadwalIso)
-                if (sasaran != "otomatis") put("sasaran", sasaran)
-            }
-            val isi = situs("/api/studio/naskah", badan)
-            return@withContext isi.teks("pesan") ?: "Naskah dibuat — cek Riwayat untuk menyetujui."
-        }
-
         val baris = buildJsonObject {
             put("merek", merek)
             put("jenis", jenis)

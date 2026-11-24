@@ -116,6 +116,13 @@ private val SASARAN_GAMBAR = listOf(
     "feed" to "Feed saja",
 )
 
+private val FOKUS_LEKKOPI = listOf(
+    ProdukRingkas("lekkopi-promo", "Promo & Hari Spesial"),
+    ProdukRingkas("lekkopi-menu", "Menu Minuman"),
+    ProdukRingkas("lekkopi-suasana", "Suasana Kedai"),
+    ProdukRingkas("lekkopi-story", "Cerita Kopi"),
+)
+
 private data class BerkasTerpilih(
     val uri: Uri,
     val nama: String,
@@ -867,10 +874,10 @@ private fun TabBuatKonten(
     selesaiBuat: () -> Unit,
 ) {
     var pilihMerek by remember(merek) { mutableStateOf(merek.firstOrNull()?.slug ?: "bakafrawi") }
-    var jenis by remember { mutableStateOf("video") }
+    var jenis by remember { mutableStateOf("gambar") }
     var pilihProduk by remember(produk) { mutableStateOf(produk.firstOrNull()?.slug ?: "maktaba-pos") }
     var gaya by remember { mutableStateOf("otomatis") }
-    var latarAi by remember { mutableStateOf(false) }
+    var latarAi by remember { mutableStateOf(true) }
     var sasaran by remember { mutableStateOf("otomatis") }
     var modeJadwal by remember { mutableStateOf("draf") }
     var tglCustom by remember { mutableStateOf(LocalDate.now(WIB).toString()) }
@@ -882,10 +889,10 @@ private fun TabBuatKonten(
     var sibukBuat by remember { mutableStateOf(false) }
     val cakupan = rememberCoroutineScope()
 
-    val objekMerek = merek.find { it.slug == pilihMerek }
-    val adalahBank = objekMerek?.adalahBank == true
-    val daftarPreset = if (adalahBank || jenis == "video") PRESET_VIDEO else PRESET_POSTER
-    val daftarSasaran = listOf("otomatis" to "Bawaan") + (if (adalahBank || jenis == "video") SASARAN_VIDEO else SASARAN_GAMBAR)
+    val adalahBakafrawi = pilihMerek == "bakafrawi"
+    val daftarPilihanProduk = if (adalahBakafrawi) produk else FOKUS_LEKKOPI
+    val daftarPreset = if (jenis == "video") PRESET_VIDEO else PRESET_POSTER
+    val daftarSasaran = listOf("otomatis" to "Bawaan") + (if (jenis == "video") SASARAN_VIDEO else SASARAN_GAMBAR)
 
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
@@ -898,7 +905,16 @@ private fun TabBuatKonten(
                         merek.forEach { m ->
                             FilterChip(
                                 selected = pilihMerek == m.slug,
-                                onClick = { pilihMerek = m.slug; usulan = emptyList() },
+                                onClick = {
+                                    pilihMerek = m.slug
+                                    pilihProduk = if (m.slug == "bakafrawi") {
+                                        produk.firstOrNull()?.slug ?: "maktaba-pos"
+                                    } else {
+                                        FOKUS_LEKKOPI.first().slug
+                                    }
+                                    usulan = emptyList()
+                                    latarAi = true
+                                },
                                 label = { Text(m.nama) },
                             )
                         }
@@ -907,31 +923,30 @@ private fun TabBuatKonten(
             }
         }
 
-        if (!adalahBank) {
-            item {
-                KartuStudio("Jenis & Produk") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = jenis == "video", onClick = { jenis = "video"; gaya = "otomatis"; sasaran = "otomatis" }, label = { Text("Video Reels") })
-                        FilterChip(selected = jenis == "gambar", onClick = { jenis = "gambar"; gaya = "otomatis"; sasaran = "otomatis" }, label = { Text("Poster / Feed") })
-                    }
-                    if (produk.isNotEmpty()) {
-                        Text("Produk", color = Redup, fontSize = 12.sp)
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            produk.forEach { p ->
-                                FilterChip(
-                                    selected = pilihProduk == p.slug,
-                                    onClick = { pilihProduk = p.slug },
-                                    label = { Text(p.nama, fontSize = 13.sp) },
-                                )
-                            }
+        item {
+            KartuStudio(if (adalahBakafrawi) "Jenis & Produk" else "Jenis & Fokus Konten") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = jenis == "gambar", onClick = { jenis = "gambar"; gaya = "otomatis"; sasaran = "otomatis" }, label = { Text("Poster (1:1, 4:5, 9:16)") })
+                    FilterChip(selected = jenis == "video", onClick = { jenis = "video"; gaya = "otomatis"; sasaran = "otomatis" }, label = { Text("Video Reels") })
+                }
+                if (daftarPilihanProduk.isNotEmpty()) {
+                    Text(if (adalahBakafrawi) "Produk" else "Fokus Konten", color = Redup, fontSize = 12.sp)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        daftarPilihanProduk.forEach { p ->
+                            FilterChip(
+                                selected = pilihProduk == p.slug,
+                                onClick = { pilihProduk = p.slug },
+                                label = { Text(p.nama, fontSize = 13.sp) },
+                            )
                         }
                     }
-                    if (jenis == "gambar") {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Latar foto AI (Cloudflare)", fontSize = 13.sp)
-                            Switch(checked = latarAi, onCheckedChange = { latarAi = it })
-                        }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Mode Visual Full AI", fontSize = 13.sp)
+                        Text("Gambar/latar AI via Cloudflare / FLUX / Gemini", color = Redup, fontSize = 11.sp)
                     }
+                    Switch(checked = latarAi, onCheckedChange = { latarAi = it })
                 }
             }
         }
@@ -1035,10 +1050,6 @@ private fun TabBuatKonten(
             Button(
                 onClick = {
                     val teks = arahan.trim()
-                    if (teks.isBlank() && !adalahBank) {
-                        kabar("Isi arahan konten dulu ya Kyai.")
-                        return@Button
-                    }
                     val jadwalIso = hitungJadwalIso(modeJadwal, tglCustom, jamCustom)
                     if (modeJadwal == "custom" && jadwalIso == null) {
                         kabar("Format tanggal/jam custom salah atau sudah lewat (gunakan YYYY-MM-DD & HH:MM WIB).")
@@ -1050,7 +1061,7 @@ private fun TabBuatKonten(
                         try {
                             val pesan = api.buatTugasStudio(
                                 merek = pilihMerek,
-                                adalahBank = adalahBank,
+                                adalahBank = false,
                                 jenis = jenis,
                                 produkSlug = pilihProduk,
                                 arahan = prefiks + teks,
@@ -1071,7 +1082,7 @@ private fun TabBuatKonten(
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             ) {
                 if (sibukBuat) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Text(if (adalahBank) "Buat Naskah Konten" else "Buat Konten Sekarang")
+                else Text("Buat Konten AI")
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -1170,7 +1181,7 @@ private fun TabRiwayatStudio(
                 val labelSumber = when (t.produkSlug) {
                     "rutin-buka" -> "Story Otomatis"
                     "unggah-manual" -> "Unggah Manual"
-                    else -> t.produkSlug.ifBlank { t.jenis }
+                    else -> FOKUS_LEKKOPI.find { it.slug == t.produkSlug }?.nama ?: t.produkSlug.ifBlank { t.jenis }
                 }
                 Column(
                     Modifier
@@ -1688,6 +1699,7 @@ private fun TabGoogleFlow(
                         "obrolan_2_orang" to "Obrolan 2 Orang",
                         "monolog_kamera" to "Ngobrol Kamera",
                         "storytelling_narasi" to "Storytelling",
+                        "tanpa_dialog_sfx" to "Tanpa Dialog (SFX)",
                     ).forEach { (k, l) ->
                         FilterChip(selected = formatDialog == k, onClick = { formatDialog = k }, label = { Text(l, fontSize = 12.sp) })
                     }
@@ -1709,13 +1721,36 @@ private fun TabGoogleFlow(
                         "komedi_santai" to "Komedi Santai",
                         "sinematik_produk" to "Sinematik AI",
                         "pov_relatable" to "POV",
+                        "fooh_3d" to "FOOH 3D",
+                        "iklan_komersial" to "Iklan Fast-Cut",
+                        "sketsa_visual" to "Sketsa Visual",
                     ).forEach { (k, l) ->
-                        FilterChip(selected = gaya == k, onClick = { gaya = k }, label = { Text(l, fontSize = 12.sp) })
+                        FilterChip(
+                            selected = gaya == k,
+                            onClick = {
+                                gaya = k
+                                when (k) {
+                                    "fooh_3d" -> {
+                                        formatDialog = "tanpa_dialog_sfx"
+                                        jumlahAdegan = 1
+                                    }
+                                    "sketsa_visual" -> {
+                                        formatDialog = "tanpa_dialog_sfx"
+                                        jumlahAdegan = 2
+                                    }
+                                    "iklan_komersial" -> {
+                                        formatDialog = "tanpa_dialog_sfx"
+                                        jumlahAdegan = 4
+                                    }
+                                }
+                            },
+                            label = { Text(l, fontSize = 12.sp) },
+                        )
                     }
                 }
                 Text("Jumlah Klip (@ 8 dtk)", color = Redup, fontSize = 12.sp)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(3, 4, 5).forEach { n ->
+                    listOf(1, 2, 3, 4, 5).forEach { n ->
                         FilterChip(selected = jumlahAdegan == n, onClick = { jumlahAdegan = n }, label = { Text("$n Klip", fontSize = 12.sp) })
                     }
                 }
@@ -1799,7 +1834,8 @@ private fun TabGoogleFlow(
             }
             items(p.adegan, key = { it.nomor }) { a ->
                 KartuStudio("Klip ${a.nomor} (${a.durasiDetik} dtk) · ${a.ringkasAksi}") {
-                    Text("Dialog: \"${a.dialog}\"", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    val labelSuara = if (formatDialog == "tanpa_dialog_sfx") "SFX / Suara" else "Dialog"
+                    Text("$labelSuara: \"${a.dialog}\"", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     if (a.arahanLogat.isNotBlank()) Text("Logat: ${a.arahanLogat}", fontSize = 12.sp, color = Redup)
                     Text(a.promptGoogleFlow, fontSize = 11.sp, color = Color(0xFFD4D4D8))
                     Button(

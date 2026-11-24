@@ -1,5 +1,25 @@
 # CHANGELOG — bakafrawi.com
 
+## Audit Performa IG Hemat AI & 3 Preset Gaya Google Flow Baru (24 Nov)
+
+- **Audit Performa Instagram Tanpa Claude / Tanpa Porter Metrics (`src/lib/audit-ig-murni.ts`, `src/lib/audit-ig-server.ts`, `/api/studio/audit-ig`, `deck.tsx`, `bot-ai.ts`):**
+  - Menambahkan tombol **Audit Performa AI** di tab **Insight Instagram** pada panel Deck Admin dan tool `audit_performa_ig` di Bot Telegram.
+  - Membaca 100% dari cache Insight Supabase (**0 request tambahan ke Meta Graph API**), lalu menganalisis penyebab postingan terakhir sepi/ramai, pola menang, perbaikan prioritas, dan 2–3 ide konten siap eksekusi memakai router AI hemat (**NVIDIA NIM → Gemini → Cloudflare**).
+- **3 Preset Gaya Google Flow Baru & Mode Tanpa Dialog (`google-flow-murni.ts`, `studio-google-flow.tsx`, `LayarStudio.kt`):**
+  - Menambahkan gaya **FOOH 3D Billboard / Objek Raksasa** (default 1 klip), **Iklan Komersial Fast-Cut** (default 4 klip), **Sketsa Komedi Visual** (default 2 klip), serta format **Tanpa Dialog (Visual + SFX)** dan opsi 1–2 klip di Web Admin & Android APK.
+
+## Penyatuan Fitur Studio AI Lek Kopi = Bakafrawi (Full AI Tanpa Bank Drive) (24 Nov)
+
+- **Lepas Penguncian Bank Media di Web Admin & APK Android (`studio.tsx`, `LayarStudio.kt`, `Api.kt`):**
+  - Merek **Lek Kopi** di tab **Buat AI** tidak lagi disembunyikan ke alur 2 langkah *Bank Media Google Drive*. Kini pilihan **Jenis (`Poster 1:1, 4:5, 9:16` vs `Video Reels`)**, **Fokus Konten** (*Promo & Hari Spesial*, *Menu Minuman*, *Suasana Kedai*, *Cerita Kopi*), **Gaya Desain Poster/Video**, **Mode Visual Full AI**, **Jadwal Tayang**, dan **Sasaran Instagram** tampil seragam seperti Bakafrawi dan langsung dieksekusi 1 langkah.
+- **Dukungan Poster & Video Full AI Lek Kopi di Worker (`studio/studio.mjs`, `studio/lib/naskah.mjs`, `studio/lib/templat.mjs`):**
+  - Worker kini membangun profil kedai Lek Kopi secara dinamis (`bangunProdukMerek`), berhenti mengindeks Bank Drive `lekkopi`, dan merender poster 3 rasio (`feed`, `potret`, `story`) 100% Full AI tanpa mockup HP (`htmlPoster` adaptif untuk kategori `kedai`) serta video storytelling Full AI (`buatNaskahVideoFullAi` + TTS + `renderSinematikRemotion`) dengan kontak/CTA & hashtag konsisten `@lekkopi.id`.
+- **Usulan Arahan & Bot Telegram (`src/lib/usul-arahan.ts`, `src/app/api/studio/arahan/route.ts`, `src/lib/bot-ai.ts`):**
+  - Memperbarui endpoint `/api/studio/arahan` dan bot Telegram (`buat_konten`, `usul_arahan_konten`) agar mendukung pembuatan Poster maupun Video Full AI untuk Lek Kopi langsung tanpa melewati alat Bank Media lama.
+- **Migrasi Profil Database (`supabase/migrations/20261124153435_lekkopi_full_ai.sql`):**
+  - Mencabut `'bank'` dari `studio_merek.profil.bahan` milik `lekkopi`, menyetel `alur: 'langsung'`, dan melengkapi identitas WA, alamat, warna aksen, hashtag, serta gaya copywriter Lek Kopi.
+- Diuji: 40/40 unit test (`npm run uji`), `tsc --noEmit`, `eslint` pada file terkait (0 error), `node --check` worker (`studio.mjs`, `naskah.mjs`, `templat.mjs`), smoke test 12 kombinasi poster Lek Kopi di `htmlPoster`, `npm run build` (Next.js 16.4.6), `gradlew.bat compileDebugKotlin` (Android), serta verifikasi migrasi SQL langsung di Supabase produksi (`sapxamvhfuecruqxmulf`). **Belum:** uji render gambar/video Lek Kopi sungguhan, uji Audit Performa IG & preset Google Flow baru di produksi/HP, serta build & rilis berkas APK Android terbaru.
+
 ## Upgrade Studio Full AI: NVIDIA NIM, Google Flow Bridge, Caption Konsisten, Variasi Suara, & Perbaikan HP/Insight IG (24 Nov)
 
 - **Perbaikan Layout Overlap Layar HP (`deck.tsx`, `beranda.tsx`, `aplikasi-admin.tsx`, `studio.tsx`):**

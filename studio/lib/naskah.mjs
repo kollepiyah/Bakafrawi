@@ -191,19 +191,30 @@ const PETUNJUK_JSON_FULL_AI = `\n\nJawab HANYA dengan JSON valid (tanpa markdown
 /** Naskah Video Storytelling Full AI (5-6 adegan gambar AI sinematik + narasi natural). */
 export async function buatNaskahVideoFullAi(produk, situs, arahan, merek = null) {
   const penyediaAktif = daftarPenyediaWorker(false);
+  const adalahKedai = produk.kategori === 'kedai';
   const templat = () => {
     const t = naskahTemplat(produk, situs, merek);
     return {
       judul: t.judul,
-      adegan: [
-        { narasi: `Masih sering pusing ngurus kerjaan manual tiap hari?`, teksLayar: 'Capek Cara Lama?', bidikan: 'Tired Indonesian small business owner sitting at a desk in the evening surrounded by paper notebooks, warm moody tungsten lamp light, cinematic vertical 9:16 film still' },
-        ...produk.fitur.slice(0, 3).map((f) => ({
-          narasi: `${f.judul}: ${f.isi}.`,
-          teksLayar: f.judul.slice(0, 28),
-          bidikan: 'Confident smiling Indonesian entrepreneur working smoothly in a modern tidy shop or office, warm golden natural window light, cinematic vertical 9:16 photography',
-        })),
-        { narasi: `Yuk cobain ${produk.nama} sekarang, cek link di bio ya!`, teksLayar: `Coba ${produk.nama}`, bidikan: 'Happy Indonesian business owner relaxing with a warm smile in a bright thriving modern shop, sunset golden hour glow, cinematic vertical 9:16 film still' },
-      ],
+      adegan: adalahKedai
+        ? [
+            { narasi: 'Butuh penyegar setelah aktivitas seharian? Mampir ke Lek Kopi yuk!', teksLayar: 'Waktunya Ngopi', bidikan: 'Tired young Indonesian adult walking into a cozy warm outdoor coffee shop at dusk, glowing warm lights, cinematic vertical 9:16 film still, no text' },
+            ...produk.fitur.slice(0, 3).map((f) => ({
+              narasi: `${f.judul}: ${f.isi}.`,
+              teksLayar: f.judul.slice(0, 28),
+              bidikan: 'Barista pouring creamy palm sugar iced coffee into a clear glass on a rustic wooden counter, rich golden hour light, cinematic vertical 9:16 photography, no text',
+            })),
+            { narasi: `Mampir ke ${produk.nama} Waru hari ini atau pesan lewat aplikasi online favoritmu!`, teksLayar: `Mampir ${produk.nama}`, bidikan: 'Friends smiling and relaxing over iced coffee and snacks at an outdoor wooden table in Indonesia at sunset, warm bokeh lights, vertical 9:16 film still, no text' },
+          ]
+        : [
+            { narasi: `Masih sering pusing ngurus kerjaan manual tiap hari?`, teksLayar: 'Capek Cara Lama?', bidikan: 'Tired Indonesian small business owner sitting at a desk in the evening surrounded by paper notebooks, warm moody tungsten lamp light, cinematic vertical 9:16 film still' },
+            ...produk.fitur.slice(0, 3).map((f) => ({
+              narasi: `${f.judul}: ${f.isi}.`,
+              teksLayar: f.judul.slice(0, 28),
+              bidikan: 'Confident smiling Indonesian entrepreneur working smoothly in a modern tidy shop or office, warm golden natural window light, cinematic vertical 9:16 photography',
+            })),
+            { narasi: `Yuk cobain ${produk.nama} sekarang, cek link di bio ya!`, teksLayar: `Coba ${produk.nama}`, bidikan: 'Happy Indonesian business owner relaxing with a warm smile in a bright thriving modern shop, sunset golden hour glow, cinematic vertical 9:16 film still' },
+          ],
       narasi: t.narasi,
       ajakan: t.ajakan,
       caption: t.caption,
@@ -213,9 +224,10 @@ export async function buatNaskahVideoFullAi(produk, situs, arahan, merek = null)
   };
   if (!penyediaAktif.length) return templat();
 
-  const system = (merek?.profil?.gaya || GAYA_BAWAAN)
-    + ' Kamu membuat naskah VIDEO STORYTELLING FULL AI vertikal 9:16 (bukan demo screenshot layar). Buat alur cerita sinematik 5 adegan yang memikat sejak 2 detik pertama: Adegan 1 Hook menyentil masalah nyata, Adegan 2-4 Cerita perubahan & manfaat nyata, Adegan 5 Penutup & ajakan hangat.';
-  const prompt = `Buat naskah video Reels/TikTok Storytelling Full AI (5 adegan) untuk produk berikut.\n\n${ringkasProduk(produk, situs)}\n\nArahan tambahan dari pemilik: ${arahan || '(pilih sudut cerita paling segar & relatable untuk audiens Indonesia)'}`;
+  const gayaDasar = merek?.profil?.gaya || (merek?.slug === 'lekkopi' ? GAYA_LEKKOPI : GAYA_BAWAAN);
+  const system = gayaDasar
+    + ' Kamu membuat naskah VIDEO STORYTELLING FULL AI vertikal 9:16 (bukan demo screenshot layar). Buat alur cerita sinematik 5 adegan yang memikat sejak 2 detik pertama: Adegan 1 Hook menyentil masalah/momen nyata, Adegan 2-4 Cerita suasana/keunggulan nyata, Adegan 5 Penutup & ajakan hangat.';
+  const prompt = `Buat naskah video Reels/TikTok Storytelling Full AI (5 adegan) untuk ${adalahKedai ? 'kedai/merek' : 'produk'} berikut.\n\n${ringkasProduk(produk, situs, merek)}\n\nArahan tambahan dari pemilik: ${arahan || '(pilih sudut cerita paling segar & relatable untuk audiens Indonesia)'}`;
 
   const galat = [];
   for (const p of penyediaAktif) {
@@ -265,8 +277,27 @@ const GAYA_BAWAAN =
   'Tulis dalam Bahasa Indonesia yang hangat, jelas, dan meyakinkan — bukan bahasa robot, tanpa klaim berlebihan atau angka yang tidak diberikan. ' +
   'Untuk karya pesanan, posisikan sebagai bukti kemampuan: "kami bisa membuatkan yang serupa untuk Anda". Jangan menyebut harga kecuali diberikan.';
 
-function ringkasProduk(produk, situs) {
+const GAYA_LEKKOPI =
+  'Kamu copywriter & direktur kreatif konten media sosial untuk Lek Kopi (@lekkopi.id), kedai kopi hangat di Jl. Kolonel Sugiono No. 112, Panjunan, Waru, Sidoarjo (buka Senin–Sabtu, 14.00–23.00 WIB). ' +
+  'Tulis dalam Bahasa Indonesia yang akrab, santai, dan menggugah selera (boleh sentuhan ramah khas Sidoarjo/Jawa Timur yang natural, jangan kaku seperti brosur). ' +
+  'Untuk promo atau hari besar (seperti Hari Guru, akhir pekan, promo spesial), tonjolkan kehangatan momen kebersamaan dan kopi segar tanpa mengarang besaran diskon/harga bila tidak disebutkan pemilik. ' +
+  'Pada kolom "adegan" (prompt gambar AI berbahasa Inggris), buat deskripsi fotografi editorial kedai kopi/minuman/momen tema yang estetik, pencahayaan hangat, TANPA teks/tulisan/watermark/logo acak, dan TANPA layar HP atau laptop.';
+
+function ringkasProduk(produk, situs, merek = null) {
   const fitur = produk.fitur.map((f) => `- ${f.judul}: ${f.isi}`).join('\n');
+  if (produk.kategori === 'kedai') {
+    const wa = merek?.profil?.whatsapp || '085710477372';
+    return [
+      `Nama Merek: ${produk.nama}`,
+      `Jenis: Kedai kopi & minuman segar (menu kopi/espresso, es kopi susu, matcha, non-kopi)`,
+      `Fokus Konten: ${produk.label || produk.judul}`,
+      `Deskripsi: ${produk.deskripsi}`,
+      `Lokasi & Jam Buka: Jl. Kolonel Sugiono No. 112, Panjunan, Waru, Sidoarjo · Senin–Sabtu 14.00–23.00 WIB`,
+      `Kanal Pesan: ${produk.platform.join(', ')}`,
+      `Keunggulan:\n${fitur}`,
+      `Kontak: WhatsApp ${wa}`,
+    ].join('\n');
+  }
   return [
     `Nama: ${produk.nama}`,
     `Jenis: ${produk.kategori === 'pesanan' ? `aplikasi yang Bakafrawi buat khusus untuk ${produk.klien ?? 'klien'} (contoh hasil jasa pembuatan aplikasi custom)` : 'aplikasi siap pakai buatan Bakafrawi'}`,
@@ -279,12 +310,17 @@ function ringkasProduk(produk, situs) {
 }
 
 /** Naskah hemat multi-provider (NVIDIA NIM → Gemini → Cloudflare → Claude); gagal semua → templat. */
-/** merek: baris studio_merek; profil.gaya = arahan copywriter merek itu (bawaan: Bakafrawi). */
+/** merek: baris studio_merek; profil.gaya = arahan copywriter merek itu (bawaan: Bakafrawi / Lek Kopi). */
 export async function buatNaskah(produk, situs, arahan, jenis, merek = null) {
   const penyediaAktif = daftarPenyediaWorker(false);
   if (!penyediaAktif.length) return { ...naskahTemplat(produk, situs, merek), sumber: 'templat (tanpa kunci API)' };
-  const system = merek?.profil?.gaya || GAYA_BAWAAN;
-  const prompt = `Buat naskah ${jenis === 'video' ? 'video iklan vertikal (Reels/TikTok) yang menampilkan rekaman layar aplikasinya' : 'poster promosi'}.\n\n${ringkasProduk(produk, situs)}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}`;
+  const system = merek?.profil?.gaya || (merek?.slug === 'lekkopi' ? GAYA_LEKKOPI : GAYA_BAWAAN);
+  const promptJenis = jenis === 'video'
+    ? 'video iklan vertikal (Reels/TikTok) yang menampilkan rekaman layar aplikasinya'
+    : produk.kategori === 'kedai'
+    ? 'poster promosi Full AI yang menarik perhatian untuk Instagram Feed & Story (pastikan "adegan" berisi prompt visual foto/ilustrasi kopi & suasana sesuai arahan tanpa tulisan)'
+    : 'poster promosi';
+  const prompt = `Buat naskah ${promptJenis}.\n\n${ringkasProduk(produk, situs, merek)}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}`;
   const galat = [];
   for (const p of penyediaAktif) {
     try {
@@ -454,6 +490,26 @@ export function naskahVideoTemplat(produk, situs, merek = null, jumlahLayar = 0)
 export function naskahTemplat(produk, situs, merek = null) {
   const poin = produk.fitur.slice(0, 4).map((f) => f.judul);
   const pesanan = produk.kategori === 'pesanan';
+  const kedai = produk.kategori === 'kedai';
+  if (kedai) {
+    return {
+      judul: produk.judul || 'Waktunya Ngopi Santai di Waru',
+      sub: produk.deskripsi.split('. ')[0],
+      poin,
+      ajakan: `Mampir ke ${produk.nama}`,
+      narasi: [
+        `Lagi cari kopi segar dan suasana santai di Waru? Mampir ke ${produk.nama}!`,
+        ...produk.fitur.slice(0, 3).map((f) => `${f.judul}: ${f.isi}`),
+        `Buka Senin sampai Sabtu pukul 14.00–23.00 WIB di Panjunan, Waru, Sidoarjo.`,
+      ],
+      caption: `${produk.judul}. ${produk.deskripsi}`,
+      hashtag: merek?.profil?.hashtag?.length ? merek.profil.hashtag : ['lekkopi', 'lekkopisidoarjo', 'kopiwaru', 'kopisidoarjo', 'ngopidisidoarjo'],
+      adegan: [
+        'Warm aesthetic Indonesian coffee shop table with freshly brewed iced palm sugar milk coffee and latte art, golden sunlight, cozy wooden atmosphere, shallow depth of field, no text, no screens',
+        'Smiling Indonesian barista preparing espresso and iced coffee behind a warm wooden cafe counter, soft amber lighting, editorial beverage photography, no text, no watermark',
+      ],
+    };
+  }
   return {
     judul: pesanan ? `Butuh aplikasi seperti ${produk.nama}?` : produk.judul,
     sub: pesanan ? `Kami membangunnya untuk ${produk.klien ?? 'klien kami'} — kami bisa membuatkan untuk Anda.` : produk.deskripsi.split('. ')[0],

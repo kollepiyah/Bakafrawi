@@ -108,11 +108,15 @@ export function PanelGoogleFlow({
   const [progresUpload, setProgresUpload] = useState("");
 
   useEffect(() => {
-    if (merekAwal) setMerek(merekAwal);
+    if (!merekAwal) return;
+    const t = setTimeout(() => setMerek(merekAwal), 0);
+    return () => clearTimeout(t);
   }, [merekAwal]);
 
   useEffect(() => {
-    if (topikAwal) setTopik(topikAwal);
+    if (!topikAwal) return;
+    const t = setTimeout(() => setTopik(topikAwal), 0);
+    return () => clearTimeout(t);
   }, [topikAwal]);
 
   useEffect(() => {
@@ -373,7 +377,20 @@ export function PanelGoogleFlow({
             <span className="text-xs font-medium text-muted-foreground">Gaya Cerita / Visual</span>
             <select
               value={gaya}
-              onChange={(e) => setGaya(e.target.value as GayaFlow)}
+              onChange={(e) => {
+                const g = e.target.value as GayaFlow;
+                setGaya(g);
+                if (g === "fooh_3d") {
+                  setFormatDialog("tanpa_dialog_sfx");
+                  setJumlahAdegan(1);
+                } else if (g === "sketsa_visual") {
+                  setFormatDialog("tanpa_dialog_sfx");
+                  setJumlahAdegan(2);
+                } else if (g === "iklan_komersial") {
+                  setFormatDialog("tanpa_dialog_sfx");
+                  setJumlahAdegan(4);
+                }
+              }}
               className="h-10 rounded-xl border border-input bg-card px-3 text-xs"
             >
               {OPSI_GAYA_FLOW.map((g) => (
@@ -391,6 +408,8 @@ export function PanelGoogleFlow({
               onChange={(e) => setJumlahAdegan(Number(e.target.value))}
               className="h-10 rounded-xl border border-input bg-card px-3 text-xs"
             >
+              <option value={1}>1 Klip (±8 detik · Cocok FOOH 3D)</option>
+              <option value={2}>2 Klip (±16 detik · Cocok Sketsa Visual)</option>
               <option value={3}>3 Klip (±24 detik)</option>
               <option value={4}>4 Klip (±32 detik · Disarankan)</option>
               <option value={5}>5 Klip (±40 detik)</option>
@@ -528,7 +547,9 @@ export function PanelGoogleFlow({
 
                   <div className="grid gap-1.5 text-xs sm:grid-cols-2">
                     <div className="rounded-lg bg-black/25 px-2.5 py-2">
-                      <span className="block text-[10px] uppercase text-zinc-500">Dialog</span>
+                      <span className="block text-[10px] uppercase text-zinc-500">
+                        {formatDialog === "tanpa_dialog_sfx" ? "SFX / Suara" : "Dialog"}
+                      </span>
                       <p className="mt-0.5 text-foreground">&ldquo;{a.dialog}&rdquo;</p>
                     </div>
                     <div className="rounded-lg bg-black/25 px-2.5 py-2">
