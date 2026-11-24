@@ -10,8 +10,11 @@ import sharp from 'sharp';
 import { ffmpeg, probe } from './bank/alat.mjs';
 
 const MODEL = process.env.STUDIO_MODEL_LATAR || 'Xenova/modnet';
+const MODEL_PRODUK = process.env.STUDIO_MODEL_PRODUK || 'briaai/RMBG-1.4';
 const CACHE = process.env.STUDIO_MODEL_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.model');
 let hapus = null;
+let modelProduk = null;
+let prosesorProduk = null;
 
 /** Sudah transparan bila punya kanal alfa dan ada piksel yang benar-benar tembus pandang. */
 async function sudahTransparan(berkas) {
@@ -57,10 +60,164 @@ async function topeng(masuk) {
   return sharp(data, { raw: { width: gambar.width, height: gambar.height, channels: gambar.channels } }).png().toBuffer();
 }
 
+/**
+ * Pembersih tepi khusus produk (minuman/gelas/kemasan): TANPA green-despill agar warna hijau
+ * (mis. Matcha / Pandan) tidak kusam, serta ambang alfa halus supaya tepi kaca tetap bersih.
+ */
+export function bersihkanTepiProduk(data, kanal = 4) {
+  if (kanal !== 4) return data;
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3];
+    if (a <= 18) data[i + 3] = 0;
+    else if (a >= 242) data[i + 3] = 255;
+    else data[i + 3] = Math.round(((a - 18) * 255) / 224);
+  }
+  return data;
+}
+
+/**
+ * Buang serpihan kecil terpisah (noda meja, remah, bayangan liar) di luar objek produk utama.
+ * Mempertahankan komponen terbesar dan komponen lain yang luasnya >= `rasioMin` dari objek utama.
+ */
+export function buangSerpihanKecil(data, lebar, tinggi, rasioMin = 0.06) {
+  const total = lebar * tinggi;
+  const label = new Int32Array(total);
+  const antre = new Int32Array(total);
+  const luas = [0];
+  let idSekarang = 0;
+  let maksLuas = 0;
+
+  for (let idx = 0; idx < total; idx++) {
+    if (label[idx] !== 0 || data[idx * 4 + 3] < 32) continue;
+    idSekarang++;
+    let kepala = 0;
+    let ekor = 0;
+    label[idx] = idSekarang;
+    antre[ekor++] = idx;
+    let hitung = 0;
+    while (kepala < ekor) {
+      const p = antre[kepala++];
+      hitung++;
+      const x = p % lebar;
+      const y = (p - x) / lebar;
+      if (x > 0) {
+        const n = p - 1;
+        if (label[n] === 0 && data[n * 4 + 3] >= 32) { label[n] = idSekarang; antre[ekor++] = n; }
+      }
+      if (x + 1 < lebar) {
+        const n = p + 1;
+        if (label[n] === 0 && data[n * 4 + 3] >= 32) { label[n] = idSekarang; antre[ekor++] = n; }
+      }
+      if (y > 0) {
+        const n = p - lebar;
+        if (label[n] === 0 && data[n * 4 + 3] >= 32) { label[n] = idSekarang; antre[ekor++] = n; }
+      }
+      if (y + 1 < tinggi) {
+        const n = p + lebar;
+        if (label[n] === 0 && data[n * 4 + 3] >= 32) { label[n] = idSekarang; antre[ekor++] = n; }
+      }
+    }
+    luas.push(hitung);
+    if (hitung > maksLuas) maksLuas = hitung;
+  }
+
+  if (maksLuas === 0) return { data, rasioTerisi: 0 };
+
+  const ambang = Math.max(1, Math.floor(maksLuas * rasioMin));
+  let terisi = 0;
+  for (let idx = 0; idx < total; idx++) {
+    const id = label[idx];
+    if (id === 0) continue;
+    if (luas[id] < ambang) {
+      data[idx * 4 + 3] = 0;
+    } else {
+      terisi++;
+    }
+  }
+  return { data, rasioTerisi: terisi / total };
+}
+
+/** Gambar produk (minuman/objek) → PNG transparan (Buffer) lewat briaai/RMBG-1.4. */
+async function topengProduk(masuk) {
+  const { AutoModel, AutoProcessor, RawImage, env } = await import('@huggingface/transformers');
+  if (!modelProduk || !prosesorProduk) {
+    env.cacheDir = CACHE;
+    modelProduk = await AutoModel.from_pretrained(MODEL_PRODUK, {
+      config: { model_type: 'custom' },
+    });
+    prosesorProduk = await AutoProcessor.from_pretrained(MODEL_PRODUK, {
+      config: {
+        do_normalize: true,
+        do_pad: false,
+        do_rescale: true,
+        do_resize: true,
+        image_mean: [0.5, 0.5, 0.5],
+        feature_extractor_type: 'ImageFeatureExtractor',
+        image_std: [1, 1, 1],
+        resample: 2,
+        rescale_factor: 0.00392156862745098,
+        size: { width: 1024, height: 1024 },
+      },
+    });
+  }
+
+  // Normalkan orientasi EXIF & baca RGB mentah lewat sharp agar semua format (JPEG/PNG/WebP) aman.
+  const { data: rgb, info } = await sharp(masuk).rotate().removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const gambarRaw = new RawImage(new Uint8ClampedArray(rgb), info.width, info.height, 3);
+  const { pixel_values } = await prosesorProduk(gambarRaw);
+  const { output } = await modelProduk({ input: pixel_values });
+
+  // Ekstrak peta alfa dari tensor keluaran [1, 1, H, W] atau [1, H, W] → Uint8 0..255.
+  const tensorMask = output[0];
+  const dims = tensorMask.dims;
+  const maskH = dims[dims.length - 2];
+  const maskW = dims[dims.length - 1];
+  const maskFloat = tensorMask.data;
+  const maskU8 = Buffer.allocUnsafe(maskW * maskH);
+  for (let i = 0; i < maskU8.length; i++) {
+    const v = maskFloat[i];
+    maskU8[i] = v <= 0 ? 0 : v >= 1 ? 255 : Math.round(v * 255);
+  }
+
+  // Skala balik masker ke dimensi gambar asli (extractChannel(0) wajib agar sharp tetap 1-channel, bukan 3-channel sRGB).
+  const alfaAsli = await sharp(maskU8, { raw: { width: maskW, height: maskH, channels: 1 } })
+    .resize(info.width, info.height, { fit: 'fill', kernel: 'lanczos3' })
+    .extractChannel(0)
+    .raw()
+    .toBuffer();
+
+  const rgba = Buffer.allocUnsafe(info.width * info.height * 4);
+  for (let i = 0, j = 0; i < alfaAsli.length; i++, j += 4) {
+    const rIdx = i * 3;
+    rgba[j] = rgb[rIdx];
+    rgba[j + 1] = rgb[rIdx + 1];
+    rgba[j + 2] = rgb[rIdx + 2];
+    rgba[j + 3] = alfaAsli[i];
+  }
+
+  bersihkanTepiProduk(rgba, 4);
+  const { rasioTerisi } = buangSerpihanKecil(rgba, info.width, info.height, 0.06);
+  if (rasioTerisi < 0.025) {
+    throw new Error(`Cutout produk terlalu tipis (${(rasioTerisi * 100).toFixed(1)}% piksel)`);
+  }
+
+  return sharp(rgba, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+}
+
 /** Gambar karakter → PNG transparan terpangkas. Gambar yang sudah transparan cukup dipangkas. */
 export async function hapusLatar(masuk, keluar) {
   const png = (await sudahTransparan(masuk)) ? await sharp(masuk).png().toBuffer() : await topeng(masuk);
   // Pangkas ruang tembus pandang di keempat sisi (ambang 10 supaya sisa samar ikut terbuang).
+  await sharp(png).trim({ threshold: 10 }).png().toFile(keluar);
+  return keluar;
+}
+
+/**
+ * Gambar produk (gelas minuman / kemasan) → PNG transparan terpangkas dengan RMBG-1.4.
+ * Berbeda dari `hapusLatar` (MODNet khusus manusia), fungsi ini dirancang untuk objek produk utuh.
+ */
+export async function hapusLatarProduk(masuk, keluar) {
+  const png = (await sudahTransparan(masuk)) ? await sharp(masuk).png().toBuffer() : await topengProduk(masuk);
   await sharp(png).trim({ threshold: 10 }).png().toFile(keluar);
   return keluar;
 }

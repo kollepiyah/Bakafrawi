@@ -153,16 +153,17 @@ const MenuTerbang: React.FC<{
 
   return (
     <>
-      {/* Bayangan kontak realistis di permukaan meja */}
+      {/* Bayangan kontak realistis di dasar gelas pada permukaan meja */}
       <div
         style={{
           position: 'absolute',
-          left: slot.x - slot.ukuran * 0.46,
-          top: slot.y + slot.ukuran * 0.25,
-          width: slot.ukuran * 0.92,
-          height: slot.ukuran * 0.28,
+          left: slot.x - slot.ukuran * 0.34,
+          top: slot.y + slot.ukuran * 0.36,
+          width: slot.ukuran * 0.68,
+          height: slot.ukuran * 0.16,
           borderRadius: '50%',
-          background: 'radial-gradient(ellipse at center, rgba(16,9,4,0.78) 0%, rgba(16,9,4,0.34) 48%, transparent 74%)',
+          background: 'radial-gradient(ellipse at center, rgba(16,9,4,0.52) 0%, rgba(16,9,4,0.22) 50%, transparent 74%)',
+          filter: 'blur(4px)',
           opacity: opBayangan,
           transform: `scale(${skalaBayangan})`,
           zIndex: slot.z - 2,
@@ -175,12 +176,12 @@ const MenuTerbang: React.FC<{
         <div
           style={{
             position: 'absolute',
-            left: slot.x - slot.ukuran * 0.44,
-            top: slot.y + slot.ukuran * 0.22,
-            width: slot.ukuran * 0.88,
-            height: slot.ukuran * 0.26,
+            left: slot.x - slot.ukuran * 0.36,
+            top: slot.y + slot.ukuran * 0.34,
+            width: slot.ukuran * 0.72,
+            height: slot.ukuran * 0.18,
             borderRadius: '50%',
-            border: '2.5px solid rgba(246, 224, 178, 0.85)',
+            border: '2px solid rgba(246, 224, 178, 0.75)',
             opacity: opRiak,
             transform: `scale(${skalaRiak})`,
             zIndex: slot.z - 1,
@@ -189,7 +190,7 @@ const MenuTerbang: React.FC<{
         />
       ) : null}
 
-      {/* Objek menu (transparan hasil MODNet atau piring bundar estetik) */}
+      {/* Objek minuman (cutout transparan RMBG-1.4, atau kartu foto estetik jika cutout gagal) */}
       <div
         style={{
           position: 'absolute',
@@ -199,11 +200,11 @@ const MenuTerbang: React.FC<{
           height: slot.ukuran,
           opacity: opasitas,
           transform: `scale(${skalaTerbang * squashX}, ${skalaTerbang * squashY}) rotate(${rotasi}deg)`,
-          transformOrigin: '50% 82%',
+          transformOrigin: '50% 85%',
           zIndex: p < 0.96 ? 120 + indeks : slot.z,
           pointerEvents: 'none',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-end',
           justifyContent: 'center',
         }}
       >
@@ -215,18 +216,19 @@ const MenuTerbang: React.FC<{
                 width: '100%',
                 height: '100%',
                 objectFit: 'contain',
-                filter: 'drop-shadow(0 18px 24px rgba(15, 8, 3, 0.55)) contrast(1.04) saturate(1.08)',
+                objectPosition: 'center bottom',
+                filter: 'drop-shadow(0 12px 18px rgba(15, 8, 3, 0.42)) contrast(1.03) saturate(1.06)',
               }}
             />
           ) : (
             <div
               style={{
-                width: '86%',
-                height: '86%',
-                borderRadius: '50%',
-                padding: 10,
+                width: '82%',
+                height: '92%',
+                borderRadius: 28,
+                padding: 8,
                 background: 'linear-gradient(145deg, #FFFDF8 0%, #E8DCC7 100%)',
-                boxShadow: '0 22px 34px -10px rgba(16, 9, 4, 0.65), inset 0 2px 6px rgba(255,255,255,0.85)',
+                boxShadow: '0 18px 28px -10px rgba(16, 9, 4, 0.55), inset 0 2px 4px rgba(255,255,255,0.85)',
                 overflow: 'hidden',
               }}
             >
@@ -235,7 +237,7 @@ const MenuTerbang: React.FC<{
                 style={{
                   width: '100%',
                   height: '100%',
-                  borderRadius: '50%',
+                  borderRadius: 22,
                   objectFit: 'cover',
                 }}
               />
@@ -332,22 +334,22 @@ export const StoryDrop: React.FC<{ props: PropsSinematik }> = ({ props }) => {
           }}
         />
 
-        {/* Table tent / kartu merek kecil di belakang kiri meja (seperti Aurelia Cafe) */}
+        {/* Table tent / kartu merek kecil di pinggir belakang kiri meja */}
         <div
           style={{
             position: 'absolute',
-            left: 190,
-            top: 475,
-            width: 158,
-            padding: '18px 14px',
+            left: 84,
+            top: 560,
+            width: 146,
+            padding: '15px 12px',
             borderRadius: 12,
             background: 'linear-gradient(160deg, #FBF6EC 0%, #E7D9C2 100%)',
-            boxShadow: '0 18px 34px -8px rgba(18,10,4,0.55)',
+            boxShadow: '0 16px 28px -8px rgba(18,10,4,0.48)',
             transform: 'rotate(-2.5deg)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 8,
+            gap: 6,
             zIndex: 8,
           }}
         >

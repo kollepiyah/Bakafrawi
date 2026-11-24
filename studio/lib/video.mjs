@@ -6,10 +6,10 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ffmpeg, jalankan, probe } from './bank/alat.mjs';
-import { adaGambarAi, buatGambarAi } from './bank/gambar-ai.mjs';
+import { adaGambarAi, buatGambarAi, rapikanHasil } from './bank/gambar-ai.mjs';
 import { suaraAdegan } from './bank/suara.mjs';
 import { musikContoh, suaraKata } from './iklan.mjs';
-import { hapusLatar, videoTransparan } from './latar.mjs';
+import { hapusLatar, hapusLatarProduk, videoTransparan } from './latar.mjs';
 import { FPS, hitungWaktu } from '../remotion/src/data/script.ts';
 
 export const REMOTION = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'remotion');
@@ -350,32 +350,47 @@ export async function renderSinematikRemotion({
     ? segmen.filter((s, i) => i === 0 || segmen[i - 1].adeganKe !== s.adeganKe).slice(0, 4)
     : segmen;
 
-  // Khusus story-drop: siapkan latar meja kafe kosong (AI gratis) + potong latar belakang foto menu lewat MODNet.
+  // Khusus story-drop: siapkan latar meja kafe kosong (AI gratis) + potong latar belakang foto produk lewat RMBG-1.4.
   let latarMejaNama;
   if (gaya === 'story-drop') {
     if (adaGambarAi()) {
       try {
-        const berkasMeja = path.join(publik, 'meja-kafe.jpg');
-        await buatGambarAi(
-          'Empty warm marble round cafe table in foreground occupying bottom half of frame, cozy sunlit coffee shop interior bokeh background with warm pendant lights and wooden chairs, golden hour aesthetic, vertical 9:16 photo, no cups, no food, no text, no people',
-          '9:16',
-          berkasMeja,
+        // buatGambarAi mengharapkan path TANPA ekstensi dan mengembalikan { berkas } dengan ekstensi asli (.jpg/.png).
+        const hasilMeja = rapikanHasil(
+          await buatGambarAi(
+            'Empty warm marble round cafe table in foreground occupying bottom half of frame, cozy sunlit coffee shop interior bokeh background with warm pendant lights and wooden chairs, golden hour aesthetic, vertical 9:16 photo, no cups, no food, no text, no people',
+            '9:16',
+            path.join(publik, 'meja-kafe'),
+          ),
         );
-        if (existsSync(berkasMeja)) latarMejaNama = 'meja-kafe.jpg';
+        if (hasilMeja?.berkas && existsSync(hasilMeja.berkas)) {
+          latarMejaNama = path.basename(hasilMeja.berkas);
+        }
       } catch (e) {
         log(`Latar meja AI story-drop gagal (pakai fallback meja CSS): ${String(e.message ?? e).slice(0, 120)}`);
       }
     }
+    const labelDariBerkas = (jalur) => {
+      if (!jalur) return '';
+      const dasar = path.basename(String(jalur), path.extname(String(jalur))).replace(/[_-]+/g, ' ').trim();
+      if (!dasar || /^(ai|foto|img|dsc|vid|klip|media|menu|screenshot|wa|pxl)\s*\d*$/i.test(dasar)) return '';
+      return dasar.replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 24);
+    };
     for (let i = 0; i < segmenFinal.length; i++) {
       const s = segmenFinal[i];
+      if (!String(s.teksLayar ?? '').trim()) {
+        const sumberAsli = r.segmen.find((x) => x.adegan === s.adeganKe)?.sumber;
+        const namaBerkas = labelDariBerkas(sumberAsli);
+        if (namaBerkas) s.teksLayar = namaBerkas;
+      }
       if (!s.berkas || s.jenis !== 'foto') continue;
       try {
         const sumberPublik = path.join(publik, s.berkas);
         const namaCutout = `cutout-${i}.png`;
-        await hapusLatar(sumberPublik, path.join(publik, namaCutout));
+        await hapusLatarProduk(sumberPublik, path.join(publik, namaCutout));
         s.berkasTransparan = namaCutout;
       } catch (e) {
-        log(`Potong latar menu #${i + 1} gagal (pakai piring bundar): ${String(e.message ?? e).slice(0, 120)}`);
+        log(`Potong latar produk #${i + 1} gagal (pakai bingkai foto): ${String(e.message ?? e).slice(0, 120)}`);
       }
     }
   }

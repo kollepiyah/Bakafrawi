@@ -132,12 +132,12 @@ export async function tulisNaskahBank(
     // Gaya referensi (laptop POUR/PLAY, keypad Happy Cake, atau Story Drop Aurelia Cafe) butuh visual produk bersih & seragam (gratis via Cloudflare FLUX.2).
     data.gambarAi = Math.max(Number(data.gambarAi) || 0, adalahDial ? 8 : adalahStoryDrop ? 6 : 4);
   }
-  const sudutStoryDrop = `MODE STORY-DROP (persis referensi "Aurelia Cafe", ±9 detik): buat TEPAT 5 adegan, satu adegan = satu menu andalan (minuman kopi, matcha, non-kopi, atau cemilan) yang akan melompat turun dari lingkaran Instagram Story ke atas meja kafe (durasi 1.4 detik per adegan).
+  const sudutStoryDrop = `MODE STORY-DROP (persis referensi "Aurelia Cafe", ±9 detik): buat TEPAT 5 adegan, satu adegan = satu menu MINUMAN andalan (kopi, es kopi susu, matcha, non-kopi, atau signature drink — JANGAN membuat makanan, cemilan, gorengan, atau piring karena produk saat ini hanya minuman!) yang akan melompat turun dari lingkaran Instagram Story ke atas meja kafe (durasi 1.4 detik per adegan).
 ATURAN VISUAL WAJIB:
-- DILARANG memakai tag "suasana", "racik", atau "logo"! Hanya fokus pada 5 item menu produk.
-- Gunakan tag "ai" untuk setiap menu agar tiap produk tampil utuh (satu gelas/cangkir/piring utuh terpusat pada latar polos terang/krem bersih sehingga mudah dipotong rapi otomatis ke atas meja).
-- Tulis "bidikan" dalam BAHASA INGGRIS yang spesifik menggambarkan satu objek utuh terpusat (mis. "Single iced palm sugar milk coffee (es kopi susu) in a clear aesthetic cafe glass with ice cubes, centered product photography on a clean solid light cream background, studio lighting, sharp focus, no hands, no text").
-- WAJIB isi "teks_layar" tiap adegan singkat dalam format "Jenis | Nama Pendek" agar rapi di bawah lingkaran Story (mis. "Kopi | Kopi Susu", "Matcha | Matcha Latte", "Spesial | Sakura Coffee", "Cemilan | Cireng", "Minuman | Milkshake"). Tanpa narasi.`;
+- DILARANG memakai tag "suasana", "racik", atau "logo"! Hanya fokus pada 5 item MINUMAN dalam gelas/cup utuh.
+- Gunakan tag "ai" untuk setiap menu agar tiap minuman tampil utuh (satu gelas/cup utuh berdiri tegak terpusat pada latar polos terang/krem bersih, tanpa tumpahan, tanpa hiasan terpisah, sehingga mudah dipotong rapi otomatis ke atas meja).
+- Tulis "bidikan" dalam BAHASA INGGRIS yang spesifik menggambarkan satu gelas/cup minuman utuh terpusat (mis. "Single iced palm sugar milk coffee (es kopi susu) in a clear aesthetic cafe glass with ice cubes, centered studio product photography on a clean solid light cream background, soft studio lighting, sharp focus, no saucer, no crumbs, no hands, no text").
+- WAJIB isi "teks_layar" pada SEMUA 5 adegan (TIDAK BOLEH KOSONG) dalam format "Jenis | Nama Pendek" agar rapi di bawah lingkaran Story (mis. "Kopi | Kopi Susu", "Matcha | Matcha Latte", "Spesial | Sakura Coffee", "Kopi | Americano", "Kopi | Tubruk"). Tanpa narasi.`;
   const sudutDial = `MODE DIAL-MENU (persis "Dial a slice" Happy Cake, cepat ±10 detik): buat TEPAT 7 adegan, satu adegan = satu menu minuman/cemilan andalan Lek Kopi (durasi 0.9 detik per adegan).
 ATURAN VISUAL WAJIB (SANGAT PENTING):
 - DILARANG memakai tag "suasana", "racik", atau "logo"! Jangan pernah tampilkan foto jendela kedai, barista, atau logo pada mode ini.
