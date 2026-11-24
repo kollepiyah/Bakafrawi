@@ -13,8 +13,7 @@ const VERSI = () => process.env.IG_API_VERSI || "v27.0";
 const COOLDOWN_SEGAR_MS = 15 * 60_000;
 const JEDA_CIRCUIT_BREAKER_MS = 6 * 3_600_000;
 const JEDA_ANTAR_REQ_MS = 250;
-const MAKS_MEDIA_TARIK = 15;
-const MAKS_METRIK_MEDIA = 6;
+const MAKS_MEDIA_TARIK = 20;
 const MAKS_CACHE_PER_MEREK = 40;
 
 const tidur = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -463,7 +462,8 @@ export async function ambilInsightInstagram(paksaSegar = false): Promise<Ringkas
           }
         }
 
-        // 3b. Ambil daftar Feed/Reels terbaru (1 request = 15 post), lalu tarik metrik views/reach hanya untuk 6 terbaru
+        // 3b. Ambil daftar Feed/Reels terbaru (1 request = maks 20 post), lalu tarik metrik asli views/reach
+        // untuk post baru (< 7 hari) atau post lama yang angka penontonnya belum pernah tersimpan di cache.
         if (!hentikan) {
           await tidur(JEDA_ANTAR_REQ_MS);
           const qMedia = new URLSearchParams({
@@ -485,11 +485,14 @@ export async function ambilInsightInstagram(paksaSegar = false): Promise<Ringkas
               }
             } else if (Array.isArray(jm?.data)) {
               const daftarMedia = (jm.data as MediaAkunIg[]).slice(0, MAKS_MEDIA_TARIK);
-              for (const [idx, m] of daftarMedia.entries()) {
+              for (const m of daftarMedia) {
                 if (!m.id || hentikan) break;
-                let views: number | null = null;
-                let reach: number | null = null;
-                if (idx < MAKS_METRIK_MEDIA) {
+                const lama = postsGabung.get(m.id);
+                const umurHari = m.timestamp ? (sekarangMs - new Date(m.timestamp).getTime()) / 86_400_000 : 0;
+                const perluTarikMetrik = lama?.views == null || umurHari < 7;
+                let views: number | null = lama?.views ?? null;
+                let reach: number | null = lama?.reach ?? null;
+                if (perluTarikMetrik) {
                   await tidur(JEDA_ANTAR_REQ_MS);
                   const met = await tarikMetrikRingan(host, token, m.id);
                   if (met.hentikanAkun) {
@@ -497,13 +500,8 @@ export async function ambilInsightInstagram(paksaSegar = false): Promise<Ringkas
                     galatMerek = met.galat;
                     break;
                   }
-                  views = met.views;
-                  reach = met.reach;
-                } else {
-                  // Pertahankan metrik views/reach lama dari cache bila sudah pernah ditarik sebelumnya
-                  const lama = postsGabung.get(m.id);
-                  views = lama?.views ?? null;
-                  reach = lama?.reach ?? null;
+                  if (met.views != null) views = met.views;
+                  if (met.reach != null) reach = met.reach;
                 }
                 const adalahVideo = m.media_type === "VIDEO" || m.media_product_type === "REELS";
                 const format: PostInsight["format"] =
