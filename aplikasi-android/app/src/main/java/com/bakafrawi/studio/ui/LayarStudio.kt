@@ -1612,8 +1612,10 @@ private fun TabGoogleFlow(
     val cakupan = rememberCoroutineScope()
 
     var pilihMerek by remember(merek) { mutableStateOf(merek.firstOrNull()?.slug ?: "lekkopi") }
+    var pilihProduk by remember { mutableStateOf("ammu-online") }
     var bahasa by remember { mutableStateOf("jawa_campur") }
     var gaya by remember { mutableStateOf("storytelling_hangat") }
+    var formatDialog by remember { mutableStateOf("obrolan_2_orang") }
     var jumlahAdegan by remember { mutableStateOf(4) }
     var topik by remember { mutableStateOf("") }
     var sedangBuat by remember { mutableStateOf(false) }
@@ -1667,6 +1669,29 @@ private fun TabGoogleFlow(
                         }
                     }
                 }
+                if (pilihMerek == "bakafrawi") {
+                    Text("Produk Bakafrawi", color = Redup, fontSize = 12.sp)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(
+                            "ammu-online" to "Ammu Online",
+                            "maktaba-pos" to "Maktaba POS",
+                            "waseela" to "Waseela",
+                            "custom" to "Aplikasi Custom",
+                        ).forEach { (k, l) ->
+                            FilterChip(selected = pilihProduk == k, onClick = { pilihProduk = k }, label = { Text(l, fontSize = 12.sp) })
+                        }
+                    }
+                }
+                Text("Format Dialog", color = Redup, fontSize = 12.sp)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "obrolan_2_orang" to "Obrolan 2 Orang",
+                        "monolog_kamera" to "Ngobrol Kamera",
+                        "storytelling_narasi" to "Storytelling",
+                    ).forEach { (k, l) ->
+                        FilterChip(selected = formatDialog == k, onClick = { formatDialog = k }, label = { Text(l, fontSize = 12.sp) })
+                    }
+                }
                 Text("Bahasa & Logat", color = Redup, fontSize = 12.sp)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(
@@ -1707,7 +1732,15 @@ private fun TabGoogleFlow(
                             sedangBuat = true
                             cakupan.launch {
                                 try {
-                                    val p = api.buatPaketGoogleFlow(pilihMerek, topik.trim(), bahasa, gaya, jumlahAdegan)
+                                    val p = api.buatPaketGoogleFlow(
+                                        merek = pilihMerek,
+                                        produk = if (pilihMerek == "bakafrawi") pilihProduk else null,
+                                        topik = topik.trim(),
+                                        bahasa = bahasa,
+                                        gaya = gaya,
+                                        formatDialog = formatDialog,
+                                        jumlahAdegan = jumlahAdegan,
+                                    )
                                     paket = p
                                     caption = p.caption
                                     kabar("Paket prompt Google Flow siap!")
@@ -1745,6 +1778,16 @@ private fun TabGoogleFlow(
             item {
                 KartuStudio(p.judul) {
                     if (p.ringkasanKonsep.isNotBlank()) Text(p.ringkasanKonsep, color = Redup, fontSize = 12.sp)
+                    if (p.promptGambarKarakter.isNotBlank()) {
+                        Text("Langkah 0 — Gambar Karakter Referensi (Ingredient):", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color(0xFF38BDF8))
+                        Text(p.promptGambarKarakter, fontSize = 11.sp, color = Color(0xFFD4D4D8))
+                        Button(
+                            onClick = { salinKeClipboard("Prompt Gambar Karakter", p.promptGambarKarakter) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Copy Prompt Karakter (Langkah 0)", fontSize = 12.sp)
+                        }
+                    }
                     if (p.karakterBible.isNotBlank()) {
                         Text("Panduan Karakter Konsisten:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Emas)
                         Text(p.karakterBible, fontSize = 12.sp, color = Redup)

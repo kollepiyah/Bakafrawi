@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ffmpeg, jalankan, probe } from './bank/alat.mjs';
 import { adaGambarAi, buatGambarAi } from './bank/gambar-ai.mjs';
+import { suaraAdegan } from './bank/suara.mjs';
 import { musikContoh, suaraKata } from './iklan.mjs';
 import { hapusLatar, videoTransparan } from './latar.mjs';
 import { FPS, hitungWaktu } from '../remotion/src/data/script.ts';
@@ -192,11 +193,50 @@ export async function renderIklan({ naskah, aset, folder, musik = null, suara = 
     await copyFile(l.berkas, path.join(publik, nama));
     n.layar.push({ berkas: nama, lebar: l.lebar, tinggi: l.tinggi });
   }
+  if (aset.latarGambar) {
+    const namaLatar = `latar-ai${path.extname(aset.latarGambar) || '.jpg'}`;
+    await copyFile(aset.latarGambar, path.join(publik, namaLatar));
+    n.latarGambar = namaLatar;
+  }
   n.suara = [];
-  for (const [i, a] of n.adegan.entries()) {
-    const s = await suaraKata(a.narasi, path.join(publik, `narasi-${i}.mp3`), suara ? { suara } : {});
-    n.suara.push({ berkas: `narasi-${i}.mp3`, durasi: s.durasi, kata: s.kata });
-    log(`🎙 ${i + 1}. ${a.jenis}: ${s.durasi.toFixed(2)} dtk`);
+  // Utamakan Gemini TTS + 6 profil suara kreatif (suara.mjs); bila gagal, jatuh ke edge-tts (suaraKata).
+  const perkirakanKata = (kalimat, durasi) => {
+    const k = String(kalimat ?? '').split(/\s+/).filter(Boolean);
+    const total = k.reduce((acc, w) => acc + w.length + 2, 0) || 1;
+    let t = 0;
+    return k.map((teks) => {
+      const d = ((teks.length + 2) / total) * durasi;
+      const item = { teks, mulai: t, selesai: t + d };
+      t += d;
+      return item;
+    });
+  };
+  let pakaiSuaraBaru = false;
+  try {
+    const hasilSuara = await suaraAdegan(n.adegan.map((a) => a.narasi), folder);
+    if (hasilSuara.berkas?.length === n.adegan.length) {
+      for (const [i, a] of n.adegan.entries()) {
+        const sumber = hasilSuara.berkas[i];
+        const ext = path.extname(sumber) || '.wav';
+        const nama = `narasi-${i}${ext}`;
+        await copyFile(sumber, path.join(publik, nama));
+        const info = await probe(sumber).catch(() => ({ durasi: 4.5 }));
+        const durasi = Number(info.durasi) || 4.5;
+        n.suara.push({ berkas: nama, durasi, kata: perkirakanKata(a.narasi, durasi) });
+        log(`🎙 ${i + 1}. ${a.jenis} (${hasilSuara.jalur}/${hasilSuara.profil ?? 'auto'}): ${durasi.toFixed(2)} dtk`);
+      }
+      pakaiSuaraBaru = true;
+    }
+  } catch (e) {
+    log(`Suara kreatif gagal, pakai cadangan edge-tts: ${String(e?.message ?? e).slice(0, 120)}`);
+    n.suara = [];
+  }
+  if (!pakaiSuaraBaru) {
+    for (const [i, a] of n.adegan.entries()) {
+      const s = await suaraKata(a.narasi, path.join(publik, `narasi-${i}.mp3`), suara ? { suara } : {});
+      n.suara.push({ berkas: `narasi-${i}.mp3`, durasi: s.durasi, kata: s.kata });
+      log(`🎙 ${i + 1}. ${a.jenis}: ${s.durasi.toFixed(2)} dtk`);
+    }
   }
   const detik = hitungWaktu(n).total / FPS;
   if (musik) await copyFile(musik, path.join(publik, `musik${path.extname(musik)}`));

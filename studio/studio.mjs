@@ -161,19 +161,17 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   const cocokGaya = String(tugas.arahan ?? '').match(/\[Gaya:\s*([a-z0-9-]+)\]/i);
   const gayaPilihan = cocokGaya ? cocokGaya[1].toLowerCase() : '';
   const pakaiAi = tugas.latar === 'ai' || gayaPilihan === 'photo-floating';
-  const modeVideoFullAi = tugas.jenis === 'video' && tugas.latar === 'ai' && adaGambarAi();
 
-  // Video non-Full-AI: layar aplikasi dipotret dulu; Video Full AI tidak butuh tangkapan layar asli.
-  const layarApp = tugas.jenis === 'video' && !modeVideoFullAi ? await kumpulkanLayar(produk, situs, peramban, folder, catatan) : [];
-  if (tugas.jenis === 'video' && !modeVideoFullAi && !layarApp.length) throw new Error('Produk ini belum punya layar aplikasi (tautan/skenario demo atau gambar layar HP) untuk video.');
+  // Video Bakafrawi: selalu pakai tangkapan layar ASLI aplikasi (Ammu Online, Maktaba POS, dll.) + animasi UI/statistik
+  // yang berotasi gayanya agar tidak monoton + latar gambar AI sinematik (tanpa layar palsu) + suara Gemini TTS kreatif.
+  const layarApp = tugas.jenis === 'video' ? await kumpulkanLayar(produk, situs, peramban, folder, catatan) : [];
+  if (tugas.jenis === 'video' && !layarApp.length) throw new Error('Produk ini belum punya layar aplikasi (tautan/skenario demo atau gambar layar HP) untuk video.');
   // Video: maskot & musik dari Drive "Bakafrawi Studio/Aset" (sekali per putaran).
   const dirMaskot = path.join(ASET_LOKAL, 'maskot'), dirMusik = path.join(ASET_LOKAL, 'musik');
   if (tugas.jenis === 'video') await salinAsetDrive();
-  const karakter = tugas.jenis === 'video' && !modeVideoFullAi ? kelompokKarakter(await readdir(dirMaskot, { recursive: true }).catch(() => [])) : new Map();
+  const karakter = tugas.jenis === 'video' ? kelompokKarakter(await readdir(dirMaskot, { recursive: true }).catch(() => [])) : new Map();
   const naskah = tugas.jenis === 'video'
-    ? (modeVideoFullAi
-        ? await buatNaskahVideoFullAi(produk, situs, tugas.arahan, merek)
-        : await buatNaskahVideo(produk, situs, tugas.arahan, merek, layarApp, kecilkan, [...karakter.keys()]))
+    ? await buatNaskahVideo(produk, situs, tugas.arahan, merek, layarApp, kecilkan, [...karakter.keys()])
     : await buatNaskah(produk, situs, tugas.arahan, tugas.jenis, merek);
 
   // Standar caption & hashtag konsisten Bakafrawi (anti-duplikat, maks 10 hashtag)
@@ -197,57 +195,26 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       await potret(peramban, { ...UKURAN[rasio], keluar, html: htmlPoster({ ...umum, rasio, foto, gaya: gayaPoster, gambar: gambar && mutlak(gambar, situs), gambarIkon: !layar }) });
       hasil.push({ jenis: 'gambar', rasio, url: await simpan(keluar, 'image/jpeg') });
     }
-  } else if (modeVideoFullAi) {
-    // Video Storytelling Full AI: 100% visual gambar AI (Cloudflare/NVIDIA/Gemini) + suara Gemini TTS variatif + Remotion Sinematik.
-    const logoVideo = await ambilLokal(produk.logo?.src ? mutlak(produk.logo.src, situs) : logo, berkas('logo-sumber'));
-    const teksNarasi = naskah.adegan.map((a) => a.narasi);
-    const hasilSuara = await suaraAdegan(teksNarasi, folder);
-    if (hasilSuara.catatan) catatan.push(hasilSuara.catatan);
-    catatan.push(`mode: video Full AI · suara: ${hasilSuara.jalur}/${hasilSuara.profil ?? 'otomatis'}`);
-
-    const segmen = [];
-    let gambarTerakhir = null;
-    let totalDetik = 0;
-    for (const [i, a] of naskah.adegan.entries()) {
-      const infoSuara = hasilSuara.berkas[i] ? await probe(hasilSuara.berkas[i]).catch(() => ({ durasi: 4.5 })) : { durasi: 4.5 };
-      const durasi = Math.max(3.2, Math.min(9, (Number(infoSuara.durasi) || 4.5) + 0.55));
-      totalDetik += durasi;
-      let pathGambar = null;
-      try {
-        const g = await buatGambarAi(a.bidikan, '9:16', berkas(`ai-adegan-${i + 1}`));
-        pathGambar = g.berkas;
-        gambarTerakhir = pathGambar;
-      } catch (e) {
-        catatan.push(`gambar AI adegan ${i + 1} gagal: ${String(e.message ?? e).slice(0, 120)}`);
-        pathGambar = gambarTerakhir;
-      }
-      if (!pathGambar) throw new Error('Semua penyedia gambar AI gagal untuk video Full AI.');
-      segmen.push({ adegan: i, sumber: pathGambar, jenis: 'foto', durasi, mulaiKlip: 0 });
-    }
-    const rencana = {
-      adegan: naskah.adegan.map((a) => ({ teksLayar: a.teksLayar || '', gayaTeks: 'editorial', suara: a.narasi })),
-      segmen,
-      total: totalDetik + 2.2,
-    };
-    const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
-    const musik = process.env.STUDIO_MUSIK || (lagu && path.join(dirMusik, lagu));
-    const r = await renderSinematikRemotion({
-      rencana,
-      merek: { nama: merek?.nama || 'Bakafrawi Project', lokasi: tema.situs || 'bakafrawi.com', akun: '@bakafrawi.project' },
-      logo: logoVideo,
-      musik,
-      musikVolume: 0.22,
-      suara: hasilSuara.berkas,
-      gaya: 'sinematik-kafe',
-      folder,
-      keluar: berkas('video.mp4'),
-    });
-    hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') });
-    hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   } else {
-    // Video iklan Remotion lama (latar polos + tangkapan layar HP + maskot). Logo = logo produk, cadangannya logo merek.
-    const gayaVideo = ['clean-ui', 'dark-keynote', 'pov-chat', 'split-hook'].includes(gayaPilihan) ? gayaPilihan : 'clean-ui';
-    if (gayaVideo !== 'clean-ui') catatan.push(`gaya video: ${gayaVideo}`);
+    // Rotasi otomatis gaya video bila 'otomatis' agar tidak monoton satu tampilan terus-menerus.
+    const daftarGayaVideo = ['dark-keynote', 'pov-chat', 'split-hook', 'clean-ui'];
+    const hashGaya = String(tugas.id || Date.now()).split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 0);
+    const gayaVideo = daftarGayaVideo.includes(gayaPilihan) ? gayaPilihan : daftarGayaVideo[hashGaya % daftarGayaVideo.length];
+    catatan.push(`gaya video: ${gayaVideo}`);
+
+    // Bila latar AI aktif, buat 1 foto suasana cerita manusia (TANPA layar HP/komputer palsu) sebagai latar Ken Burns di balik animasi UI.
+    let latarGambarAi = null;
+    if (pakaiAi && adaGambarAi()) {
+      const konteksSuasana = /ammu|pesantren|santri|tpq|madrasah/i.test(`${produk.slug} ${produk.nama}`)
+        ? 'Warm cinematic Indonesian Islamic boarding school (pesantren) courtyard and tidy office atmosphere at golden hour, peaceful architecture, lush tropical greenery, soft bokeh, NO smartphone screens, NO laptops, NO computer monitors, NO text'
+        : 'Modern tidy Indonesian small business shop and warm workspace atmosphere at golden hour, warm architectural lighting, clean minimal interior bokeh, NO smartphone screens, NO laptops, NO computer monitors, NO text';
+      try {
+        latarGambarAi = (await buatGambarAi(konteksSuasana, '9:16', berkas('latar-ui-ai'))).berkas;
+      } catch (e) {
+        catatan.push(`latar AI video dilewati: ${String(e?.message ?? e).slice(0, 120)}`);
+      }
+    }
+
     const logoVideo = await ambilLokal(produk.logo?.src ? mutlak(produk.logo.src, situs) : logo, berkas('logo-sumber'));
     const props = keNaskah(naskah, {
       nama: produk.nama,
@@ -259,13 +226,13 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       info: [tema.situs, kontak.whatsappTampil && `WA ${kontak.whatsappTampil}`].filter(Boolean).join(' · '),
       fitur: produk.fitur.map((f) => f.judul),
     });
-    // Satu karakter per video (pilihan Claude → slug merek → acak), pose berganti per adegan.
+    // Satu karakter per video (pilihan AI → slug merek → acak), pose berganti per adegan.
     const tokoh = pilihKarakter([...karakter.keys()], { pilihan: naskah.karakter, slug: merek?.slug });
     const maskot = tokoh ? maskotAdegan(props.adegan, karakter.get(tokoh)).map((b) => b && path.join(dirMaskot, b)) : null;
     if (tokoh) naskah.karakter = tokoh;
     const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
     const musik = process.env.STUDIO_MUSIK || (lagu && path.join(dirMusik, lagu));
-    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot }, folder, musik, suara: suaraKarakter(tokoh), keluar: berkas('video.mp4') });
+    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot, latarGambar: latarGambarAi }, folder, musik, suara: suaraKarakter(tokoh), keluar: berkas('video.mp4') });
     hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') });
     hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   }

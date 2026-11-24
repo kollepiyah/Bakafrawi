@@ -82,7 +82,7 @@ export const Iklan: React.FC<Naskah> = (naskah) => {
 
   return (
     <AbsoluteFill style={{ background: gelap ? '#07090F' : merek.latar }}>
-      <Latar merek={merek} gaya={gaya} />
+      <Latar merek={merek} gaya={gaya} latarGambar={naskah.latarGambar} />
       {adegan.map((a, i) => (
         <Sequence key={i} from={waktu[i].mulai} durationInFrames={waktu[i].durasi} name={`${i + 1}. ${a.jenis}`}>
           <Panggung a={a} merek={merek} durasi={waktu[i].durasi} atas={letak.visualAtas} bawah={letak.visualBawah} jumlah={adegan.length} layar={naskah.layar ?? []} />

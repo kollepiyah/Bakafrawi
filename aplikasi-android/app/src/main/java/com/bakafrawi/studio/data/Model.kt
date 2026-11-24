@@ -254,6 +254,7 @@ data class PaketFlow(
     val judul: String,
     val ringkasanKonsep: String,
     val karakterBible: String,
+    val promptGambarKarakter: String = "",
     val adegan: List<AdeganFlow>,
     val caption: String,
     val penyedia: String = "",

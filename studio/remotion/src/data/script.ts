@@ -28,6 +28,7 @@ export type GayaVideo = 'clean-ui' | 'dark-keynote' | 'pov-chat' | 'split-hook' 
 export type Naskah = {
   merek: { nama: string; logo?: string; utama: string; kedua: string; latar: string; kisi: string; tinta: string };
   gaya?: GayaVideo;
+  latarGambar?: string; // foto suasana AI di public/ sebagai latar sinematik bergerak (Ken Burns) di balik UI
   adegan: Adegan[];
   layar?: Layar[];
   maskot?: string; // berkas di public/ (.webm transparan / .png); kosong = tata letak tanpa maskot

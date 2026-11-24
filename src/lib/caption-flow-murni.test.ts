@@ -38,16 +38,21 @@ test("promptCaptionOtomatis menghasilkan instruksi sesuai merek", () => {
   assert.match(p.prompt, /Promo Matcha Sore/);
 });
 
-test("buatPromptGoogleFlow menyertakan aturan logat, jumlah adegan, dan riwayat anti-ulang", () => {
+test("buatPromptGoogleFlow menyertakan aturan logat, obrolan 2 orang, produk pesantren, larangan logo palsu, dan riwayat anti-ulang", () => {
   const p = buatPromptGoogleFlow({
-    merek: "lekkopi",
+    merek: "bakafrawi",
+    produk: "ammu-online",
     bahasa: "jawa_timur",
     gaya: "komedi_santai",
+    formatDialog: "obrolan_2_orang",
     jumlahAdegan: 4,
     riwayat: ["Promo Es Kopi Susu Gula Aren"],
   });
   assert.match(p.system, /Google Flow/);
+  assert.match(p.system, /Ammu Online/);
   assert.match(p.prompt, /TEPAT 4 adegan/);
+  assert.match(p.prompt, /OBROLAN 2 ORANG/);
+  assert.match(p.prompt, /STRICTLY NO shop signs/);
   assert.match(p.prompt, /Jawa Timur/);
   assert.match(p.prompt, /Promo Es Kopi Susu Gula Aren/);
 });

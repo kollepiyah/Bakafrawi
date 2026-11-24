@@ -16,8 +16,11 @@ import {
 } from "lucide-react";
 import {
   OPSI_BAHASA_FLOW,
+  OPSI_FORMAT_DIALOG_FLOW,
   OPSI_GAYA_FLOW,
+  OPSI_PRODUK_BAKAFRAWI,
   type BahasaFlow,
+  type FormatDialogFlow,
   type GayaFlow,
   type PaketGoogleFlow,
 } from "@/lib/google-flow-murni";
@@ -82,8 +85,10 @@ export function PanelGoogleFlow({
   selesaiUpload: (pesan: string) => void;
 }) {
   const [merek, setMerek] = useState(merekAwal || merekDaftar[0]?.slug || "lekkopi");
+  const [produk, setProduk] = useState("ammu-online");
   const [bahasa, setBahasa] = useState<BahasaFlow>("jawa_campur");
   const [gaya, setGaya] = useState<GayaFlow>("storytelling_hangat");
+  const [formatDialog, setFormatDialog] = useState<FormatDialogFlow>("obrolan_2_orang");
   const [jumlahAdegan, setJumlahAdegan] = useState(4);
   const [topik, setTopik] = useState(topikAwal ?? "");
   const [sedangBuat, setSedangBuat] = useState(false);
@@ -136,7 +141,15 @@ export function PanelGoogleFlow({
       const res = await fetch("/api/studio/google-flow", {
         method: "POST",
         headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ merek, topik: topik.trim(), bahasa, gaya, jumlahAdegan }),
+        body: JSON.stringify({
+          merek,
+          produk: merek === "bakafrawi" ? produk : undefined,
+          topik: topik.trim(),
+          bahasa,
+          gaya,
+          formatDialog,
+          jumlahAdegan,
+        }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok || !j.paket) {
@@ -302,7 +315,45 @@ export function PanelGoogleFlow({
           </div>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        {/* Pilihan Produk Bakafrawi */}
+        {merek === "bakafrawi" && (
+          <div className="space-y-1.5">
+            <span className="block text-xs font-medium text-muted-foreground">Produk yang Dipromosikan</span>
+            <div className="flex flex-wrap gap-2">
+              {OPSI_PRODUK_BAKAFRAWI.map((p) => (
+                <button
+                  key={p.slug}
+                  type="button"
+                  onClick={() => setProduk(p.slug)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                    produk === p.slug
+                      ? "border-sky-400 bg-sky-500/20 text-sky-200"
+                      : "border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/25 hover:text-foreground"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="grid gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Format Dialog</span>
+            <select
+              value={formatDialog}
+              onChange={(e) => setFormatDialog(e.target.value as FormatDialogFlow)}
+              className="h-10 rounded-xl border border-input bg-card px-3 text-xs"
+            >
+              {OPSI_FORMAT_DIALOG_FLOW.map((f) => (
+                <option key={f.kode} value={f.kode}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <label className="grid gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Bahasa &amp; Logat Dialog</span>
             <select
@@ -394,6 +445,37 @@ export function PanelGoogleFlow({
               </span>
             )}
           </div>
+
+          {/* Langkah 0: Prompt Gambar Referensi Karakter (Ingredients to Video) */}
+          {paket.promptGambarKarakter && (
+            <div className="space-y-2 rounded-xl border border-sky-400/35 bg-sky-500/[0.06] p-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="block text-xs font-semibold text-sky-300">
+                    Langkah 0 (Biar Wajah Karakter Tidak Berubah-Ubah!)
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Generate 1× gambar ini dulu di Google Flow, lalu masukkan sebagai <b>Ingredient / Bahan Referensi</b> di semua klip di bawah.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void salinTeks("karakter-ref", paket.promptGambarKarakter)}
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition ${
+                    salinKunci === "karakter-ref"
+                      ? "bg-emerald-500/20 text-emerald-300"
+                      : "bg-sky-400 text-black hover:brightness-110"
+                  }`}
+                >
+                  {salinKunci === "karakter-ref" ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  {salinKunci === "karakter-ref" ? "Tersalin" : "Copy Prompt Karakter"}
+                </button>
+              </div>
+              <pre className="whitespace-pre-wrap break-words rounded-lg border border-white/10 bg-black/40 p-2.5 font-mono text-[11px] leading-relaxed text-zinc-200">
+                {paket.promptGambarKarakter}
+              </pre>
+            </div>
+          )}
 
           {/* Character Bible */}
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">

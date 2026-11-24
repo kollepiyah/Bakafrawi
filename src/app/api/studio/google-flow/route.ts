@@ -7,6 +7,7 @@ import {
   SKEMA_GOOGLE_FLOW,
   type AdeganGoogleFlow,
   type BahasaFlow,
+  type FormatDialogFlow,
   type GayaFlow,
 } from "@/lib/google-flow-murni";
 
@@ -16,6 +17,7 @@ type HasilMentahFlow = {
   judul?: string;
   ringkasanKonsep?: string;
   karakterBible?: string;
+  promptGambarKarakter?: string;
   adegan?: AdeganGoogleFlow[];
   isiCaption?: string;
   hashtagTambahan?: string[];
@@ -26,9 +28,11 @@ export async function POST(req: Request) {
 
   const isi = (await req.json().catch(() => ({}))) as {
     merek?: string;
+    produk?: string;
     topik?: string;
     bahasa?: BahasaFlow;
     gaya?: GayaFlow;
+    formatDialog?: FormatDialogFlow;
     jumlahAdegan?: number;
   };
 
@@ -44,9 +48,11 @@ export async function POST(req: Request) {
 
     const { system, prompt } = buatPromptGoogleFlow({
       merek,
+      produk: isi.produk,
       topik: isi.topik,
       bahasa: isi.bahasa ?? "jawa_campur",
       gaya: isi.gaya ?? "storytelling_hangat",
+      formatDialog: isi.formatDialog ?? "obrolan_2_orang",
       jumlahAdegan: Number(isi.jumlahAdegan) || 4,
       riwayat,
     });
@@ -79,6 +85,7 @@ export async function POST(req: Request) {
         judul: String(data.judul ?? "Konsep Video AI"),
         ringkasanKonsep: String(data.ringkasanKonsep ?? ""),
         karakterBible: String(data.karakterBible ?? ""),
+        promptGambarKarakter: String(data.promptGambarKarakter ?? ""),
         adegan: (data.adegan ?? []).map((a, idx) => ({
           nomor: Number(a.nomor) || idx + 1,
           durasiDetik: Number(a.durasiDetik) || 8,

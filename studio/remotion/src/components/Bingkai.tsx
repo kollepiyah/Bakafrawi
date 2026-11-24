@@ -4,8 +4,11 @@ import { AbsoluteFill, Img, interpolate, spring, staticFile, useCurrentFrame, us
 import type { Naskah } from '../data/script';
 import { SANS } from './dasar';
 
-export const Latar: React.FC<{ merek: Naskah['merek']; gaya?: string }> = ({ merek, gaya }) => {
+export const Latar: React.FC<{ merek: Naskah['merek']; gaya?: string; latarGambar?: string }> = ({ merek, gaya, latarGambar }) => {
+  const frame = useCurrentFrame();
+  const { durationInFrames } = useVideoConfig();
   const gelap = gaya === 'dark-keynote';
+  const zoom = interpolate(frame, [0, Math.max(1, durationInFrames)], [1, 1.12], { extrapolateRight: 'clamp' });
   return (
     <AbsoluteFill
       style={{
@@ -14,6 +17,27 @@ export const Latar: React.FC<{ merek: Naskah['merek']; gaya?: string }> = ({ mer
           : merek.latar,
       }}
     >
+      {latarGambar ? (
+        <AbsoluteFill style={{ overflow: 'hidden', opacity: gelap ? 0.28 : 0.16 }}>
+          <Img
+            src={staticFile(latarGambar)}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transform: `scale(${zoom})`,
+              filter: 'blur(3px) saturate(1.1)',
+            }}
+          />
+          <AbsoluteFill
+            style={{
+              background: gelap
+                ? 'linear-gradient(180deg, rgba(7,9,15,0.65) 0%, rgba(7,9,15,0.45) 50%, rgba(7,9,15,0.85) 100%)'
+                : 'linear-gradient(180deg, rgba(250,250,250,0.72) 0%, rgba(250,250,250,0.55) 50%, rgba(250,250,250,0.85) 100%)',
+            }}
+          />
+        </AbsoluteFill>
+      ) : null}
       <AbsoluteFill
         style={{
           backgroundImage: `linear-gradient(${gelap ? 'rgba(255,255,255,0.045)' : merek.kisi} 2px, transparent 2px), linear-gradient(90deg, ${gelap ? 'rgba(255,255,255,0.045)' : merek.kisi} 2px, transparent 2px)`,

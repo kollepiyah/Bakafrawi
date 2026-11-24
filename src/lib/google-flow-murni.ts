@@ -3,6 +3,7 @@
 
 export type BahasaFlow = "indonesia" | "jawa_timur" | "jawa_campur";
 export type GayaFlow = "storytelling_hangat" | "komedi_santai" | "sinematik_produk" | "pov_relatable";
+export type FormatDialogFlow = "obrolan_2_orang" | "monolog_kamera" | "storytelling_narasi";
 
 export type AdeganGoogleFlow = {
   nomor: number;
@@ -18,10 +19,24 @@ export type PaketGoogleFlow = {
   judul: string;
   ringkasanKonsep: string;
   karakterBible: string;
+  promptGambarKarakter: string;
   adegan: AdeganGoogleFlow[];
   caption: string;
   hashtag: string[];
 };
+
+export const OPSI_FORMAT_DIALOG_FLOW: { kode: FormatDialogFlow; label: string; ket: string }[] = [
+  { kode: "obrolan_2_orang", label: "Obrolan 2 Orang (Banyak Ngobrol)", ket: "Tektokan natural 2 tokoh, paling hidup di Reels" },
+  { kode: "monolog_kamera", label: "Ngobrol ke Kamera (POV/Curhat)", ket: "1 tokoh cerita santai langsung ke penonton" },
+  { kode: "storytelling_narasi", label: "Storytelling Sinematik", ket: "Cerita visual + narasi hangat" },
+];
+
+export const OPSI_PRODUK_BAKAFRAWI: { slug: string; label: string; info: string }[] = [
+  { slug: "ammu-online", label: "Ammu Online (Pesantren)", info: "Aplikasi manajemen pondok pesantren: data santri, SPP/pembayaran, absensi, tahfidz, dan laporan langsung ke HP wali santri" },
+  { slug: "maktaba-pos", label: "Maktaba POS (Kasir UMKM)", info: "Aplikasi kasir & stok UMKM: catat transaksi cepat, struk otomatis, laporan omzet & laba bersih langsung dari HP" },
+  { slug: "waseela", label: "Waseela", info: "Aplikasi layanan digital buatan Bakafrawi Project" },
+  { slug: "custom", label: "Jasa Aplikasi & Website Custom", info: "Jasa pembuatan website, aplikasi Android, dan sistem bisnis custom sesuai kebutuhan usaha/lembaga" },
+];
 
 export const OPSI_BAHASA_FLOW: { kode: BahasaFlow; label: string; ket: string }[] = [
   { kode: "indonesia", label: "Indonesia Santai", ket: "Natural sehari-hari, tidak kaku" },
@@ -39,14 +54,19 @@ export const OPSI_GAYA_FLOW: { kode: GayaFlow; label: string; ket: string }[] = 
 export const SKEMA_GOOGLE_FLOW = {
   type: "object",
   additionalProperties: false,
-  required: ["judul", "ringkasanKonsep", "karakterBible", "adegan", "isiCaption", "hashtagTambahan"],
+  required: ["judul", "ringkasanKonsep", "karakterBible", "promptGambarKarakter", "adegan", "isiCaption", "hashtagTambahan"],
   properties: {
     judul: { type: "string", description: "Judul konsep Reels 3-7 kata yang menarik" },
     ringkasanKonsep: { type: "string", description: "Ringkasan alur cerita 1-2 kalimat" },
     karakterBible: {
       type: "string",
       description:
-        "Deskripsi konsisten dalam bahasa Inggris untuk karakter utama (usia, pakaian, wajah/rambut) & latar tempat agar semua klip Google Flow terlihat seperti 1 video utuh",
+        "Deskripsi konsisten dalam bahasa Inggris untuk karakter utama (usia, pakaian, wajah/rambut, peci/hijab bila pesantren) & latar tempat agar semua klip Google Flow terlihat seperti 1 video utuh",
+    },
+    promptGambarKarakter: {
+      type: "string",
+      description:
+        "Prompt gambar (Text-to-Image) dalam bahasa Inggris untuk dibuat SEKALI di Google Flow lalu dipakai sebagai Ingredient/Bahan Referensi di semua klip agar wajah & pakaian karakter 100% konsisten tidak berubah-ubah. Tanpa teks, tanpa logo palsu, tanpa layar HP.",
     },
     adegan: {
       type: "array",
@@ -83,27 +103,41 @@ export const SKEMA_GOOGLE_FLOW = {
 
 export function buatPromptGoogleFlow({
   merek,
+  produk,
   topik,
   bahasa = "jawa_campur",
   gaya = "storytelling_hangat",
+  formatDialog = "obrolan_2_orang",
   jumlahAdegan = 4,
   riwayat = [],
 }: {
   merek?: string | null;
+  produk?: string;
   topik?: string;
   bahasa?: BahasaFlow;
   gaya?: GayaFlow;
+  formatDialog?: FormatDialogFlow;
   jumlahAdegan?: number;
   riwayat?: string[];
 }) {
   const m = String(merek ?? "").toLowerCase().includes("lek") ? "lekkopi" : "bakafrawi";
-  const namaBrand = m === "lekkopi" ? "Lek Kopi" : "Bakafrawi Project";
+  const infoProduk = m === "bakafrawi"
+    ? OPSI_PRODUK_BAKAFRAWI.find((p) => p.slug === produk) ?? OPSI_PRODUK_BAKAFRAWI[0]
+    : null;
+  const namaBrand = m === "lekkopi" ? "Lek Kopi" : (infoProduk ? `${infoProduk.label} — Bakafrawi Project` : "Bakafrawi Project");
   const jml = Math.min(6, Math.max(2, Math.round(jumlahAdegan)));
 
   const deskripsiMerek =
     m === "lekkopi"
-      ? "Lek Kopi (@lekkopi.id): kedai kopi outdoor hangat di Panjunan, Waru, Sidoarjo dengan logo kotak hitam minimalis tulisan putih 'Lek Kopi', menu andalan kopi susu, espresso, matcha, Sakura Iced Coffee, suasana nongkrong sore-malam yang ramah."
-      : "Bakafrawi Project (@bakafrawi.project): studio software & desain di Sidoarjo yang membuat aplikasi kasir UMKM (Maktaba POS), sistem pesantren (Ammu Online), Waseela, dan website/aplikasi custom.";
+      ? "Lek Kopi (@lekkopi.id): kedai kopi outdoor hangat di Panjunan, Waru, Sidoarjo, menu andalan kopi susu, espresso, matcha, Sakura Iced Coffee, suasana nongkrong sore-malam yang ramah."
+      : `Bakafrawi Project (@bakafrawi.project): studio software & desain di Sidoarjo. Produk yang dipromosikan: ${infoProduk?.label} — ${infoProduk?.info}.`;
+
+  const arahanFormat =
+    formatDialog === "obrolan_2_orang"
+      ? "FORMAT WAJIB: OBROLAN 2 ORANG (BANYAK NGOBROL TEKTOKAN). Setiap klip 8 detik harus berisi percakapan 2 arah yang hidup (Tokoh A bicara 1 kalimat singkat, Tokoh B langsung menimpali 1 kalimat singkat dengan ekspresi wajah & gerak tangan alami). Total 16-22 kata per klip."
+      : formatDialog === "monolog_kamera"
+      ? "FORMAT WAJIB: NGOBROL LANGSUNG KE KAMERA (POV/CURHAT). 1 tokoh berbicara akrab langsung menatap kamera seperti kreator Reels viral (15-20 kata per klip, ekspresif)."
+      : "FORMAT: STORYTELLING SINEMATIK dengan dialog/narasi hangat dan visual ekspresif (14-18 kata per klip).";
 
   const arahanBahasa =
     bahasa === "jawa_timur"
@@ -120,19 +154,20 @@ export function buatPromptGoogleFlow({
     system:
       `Kamu sutradara kreatif & prompt engineer ahli untuk Google Flow (Veo 3 / Veo 3.1) khusus konten Reels Instagram vertikal 9:16. ` +
       `Brand: ${deskripsiMerek} ` +
-      `Semua visual adalah 100% Full AI (bukan foto rekaman asli). Pastikan setiap prompt Google Flow sangat detail secara sinematografi (kamera, pencahayaan, ekspresi, pakaian konsisten, ambient sound) dan mencantumkan dialog persis yang diucapkan agar Veo 3 menghasilkan suara & logat yang sangat natural.`,
+      `Semua visual adalah 100% Full AI. Pastikan setiap prompt Google Flow sangat detail secara sinematografi (kamera, pencahayaan, ekspresi, pakaian konsisten, ambient sound) dan mencantumkan dialog persis yang diucapkan agar Veo 3 menghasilkan suara & logat yang sangat natural.`,
     prompt: [
       `Buatkan 1 paket storyboard & prompt siap-copy Google Flow (Veo 3) terdiri dari TEPAT ${jml} adegan (@ 8 detik per klip, total ${jml * 8} detik).`,
+      arahanFormat,
       `Gaya konten: ${gaya.replace(/_/g, " ")}.`,
       arahanBahasa,
       topik?.trim()
         ? `Topik/arahan dari pemilik: ${topik.trim()}`
-        : `Topik bebas — pilihkan 1 ide storytelling/sketsa paling segar yang sedang tren di Instagram Reels & TikTok Indonesia untuk ${namaBrand}.`,
+        : `Topik bebas — pilihkan 1 ide cerita/obrolan paling segar & relatable untuk ${namaBrand}.`,
       "Aturan wajib tiap adegan:",
       "- Adegan 1 harus langsung HOOK kuat di 2 detik pertama (tanpa salam pembuka klise).",
-      "- Setiap promptGoogleFlow harus self-contained (mengulang deskripsi singkat karakter & lokasi dari karakterBible agar Google Flow tidak mengubah wajah/baju antar klip).",
-      "- Di dalam promptGoogleFlow, wajib sertakan format: `Vertical 9:16 cinematic video, ... The character speaks naturally in [Indonesian/East Javanese accent] with [emotion]: \"<dialog persis>\" ... Ambient sound: ... No on-screen text, no watermarks.`",
-      "- Dialog per adegan maksimal 15-18 kata supaya pas diucapkan dalam 8 detik tanpa terpotong.",
+      "- Buat promptGambarKarakter (Langkah 0) agar pemilik bisa men-generate 1 gambar referensi karakter utama untuk fitur 'Ingredients to Video' Google Flow supaya wajah & baju karakter 100% KONSISTEN tidak berubah-ubah antar klip.",
+      "- Di setiap promptGoogleFlow, wajib sertakan instruksi: `Keep the exact same character face, hair, and outfit from the reference ingredient. Vertical 9:16 cinematic video, ...` lalu tulis dialog PERSIS dalam tanda kutip beserta arahan logat.",
+      "- LARANGAN KERAS di semua prompt visual: `STRICTLY NO shop signs, NO wooden logo boards, NO brand logos on walls/cups, NO readable phone/laptop screens, NO on-screen text, NO watermarks.` (agar tidak pernah muncul logo palsu atau tampilan aplikasi palsu).",
       blokRiwayat,
     ]
       .filter(Boolean)

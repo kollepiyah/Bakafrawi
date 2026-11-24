@@ -575,18 +575,22 @@ class Api(private val sesi: Sesi) {
     /** Buat paket storyboard + prompt siap-copy Google Flow (Veo 3) per adegan + caption konsisten. */
     suspend fun buatPaketGoogleFlow(
         merek: String,
+        produk: String?,
         topik: String,
         bahasa: String,
         gaya: String,
+        formatDialog: String,
         jumlahAdegan: Int,
     ): PaketFlow = withContext(Dispatchers.IO) {
         val res = situs(
             "/api/studio/google-flow",
             buildJsonObject {
                 put("merek", merek)
+                if (!produk.isNullOrBlank()) put("produk", produk)
                 if (topik.isNotBlank()) put("topik", topik)
                 put("bahasa", bahasa)
                 put("gaya", gaya)
+                put("formatDialog", formatDialog)
                 put("jumlahAdegan", jumlahAdegan)
             },
         )
@@ -607,6 +611,7 @@ class Api(private val sesi: Sesi) {
             judul = p.teks("judul") ?: "Konsep Video AI",
             ringkasanKonsep = p.teks("ringkasanKonsep") ?: "",
             karakterBible = p.teks("karakterBible") ?: "",
+            promptGambarKarakter = p.teks("promptGambarKarakter") ?: "",
             adegan = adegan,
             caption = p.teks("caption") ?: "",
             penyedia = res.teks("penyedia") ?: "",
