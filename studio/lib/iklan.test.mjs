@@ -321,3 +321,40 @@ test('keNaskah: dark-keynote pakai latar gelap + teal Bakafrawi; split-hook & po
   assert.equal(clean.merek.latar, '#FAFAFA');
   assert.equal(clean.merek.tinta, '#0B0B0F');
 });
+
+test('uraiPilihanKarakter & deteksiGenderKarakter: baca tag, arahan bebas, dan nama suara', async () => {
+  const { uraiPilihanKarakter, deteksiGenderKarakter } = await import('./video.mjs');
+
+  assert.deepEqual(uraiPilihanKarakter('[Gaya: otomatis] [Karakter: wanita] Promosi kasir cepat'), {
+    karakter: 'wanita',
+    bersih: '[Gaya: otomatis] Promosi kasir cepat',
+  });
+  assert.deepEqual(uraiPilihanKarakter('Tanpa tag'), { karakter: null, bersih: 'Tanpa tag' });
+
+  assert.equal(deteksiGenderKarakter('[Karakter: wanita] Buat video Maktaba POS'), 'wanita');
+  assert.equal(deteksiGenderKarakter('Tolong pakai karakter wanita untuk Maktaba POS'), 'wanita');
+  assert.equal(deteksiGenderKarakter('Promosi Ammu Online', { namaSuara: 'Mbak Indah' }), 'wanita');
+  assert.equal(deteksiGenderKarakter('Promosi Waseela', { namaSuara: 'Mas Jowo' }), 'pria');
+  assert.equal(deteksiGenderKarakter('[Karakter: tanpa] Buat video produk'), 'tanpa');
+  assert.equal(deteksiGenderKarakter('Buat video promosi aplikasi kasir'), null);
+});
+
+test('pilihKarakter dengan gender: wanita memaksa ibu-hijab, pria ke bapak-kopiah, tanpa → null', async () => {
+  const { pilihKarakter } = await import('./video.mjs');
+  const daftar = ['bapak-kopiah', 'ibu-hijab'];
+
+  assert.equal(pilihKarakter(daftar, { pilihan: 'bapak-kopiah', gender: 'wanita' }), 'ibu-hijab');
+  assert.equal(pilihKarakter(daftar, { pilihan: 'ibu-hijab', gender: 'pria' }), 'bapak-kopiah');
+  assert.equal(pilihKarakter(daftar, { pilihan: 'ibu-hijab', gender: 'tanpa' }), null);
+});
+
+test('pilihVoiceElevenLabs dengan gender: menyaring daftarVoice sesuai wanita/pria', async () => {
+  const { pilihVoiceElevenLabs } = await import('./bank/suara.mjs');
+  const daftar = [
+    { id: 'id_indah_11', nama: 'Mbak Indah' },
+    { id: 'id_jowo_22', nama: 'Mas Jowo' },
+  ];
+
+  assert.equal(pilihVoiceElevenLabs({ daftarVoice: daftar, gender: 'wanita', benih: 'uji', envNilai: '' }), 'id_indah_11');
+  assert.equal(pilihVoiceElevenLabs({ daftarVoice: daftar, gender: 'pria', benih: 'uji', envNilai: '' }), 'id_jowo_22');
+});

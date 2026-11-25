@@ -26,6 +26,7 @@ import {
   Trash2,
   TrendingUp,
   Upload,
+  User,
   Video,
   Volume2,
   Wand2,
@@ -62,7 +63,7 @@ const FOKUS_LEKKOPI = [
 ];
 
 const PRESET_VIDEO = [
-  { kode: "otomatis", label: "Otomatis (Rotasi Gelap / Sinematik / Editorial sesuai referensi)" },
+  { kode: "otomatis", label: "Otomatis (Rotasi Gelap / Split Hook / POV / Sinematik AI)" },
   { kode: "dark-keynote", label: "Dark Tech Bakafrawi (Latar Gelap #0A0C10 + Aksen Teal)" },
   { kode: "sinematik-ai", label: "Storytelling Full AI (5 Adegan Sinematik Penuh Tanpa Kotak UI)" },
   { kode: "editorial-scroll", label: "Laptop / Scroll Website & Aplikasi (ala POUR·PLAY)" },
@@ -75,6 +76,13 @@ const PRESET_VIDEO = [
 ];
 
 type SuaraFavorit = { id: string; nama: string; catatan?: string };
+
+const PILIHAN_KARAKTER = [
+  { kode: "otomatis", label: "Otomatis (Ikuti suara / arahan)" },
+  { kode: "wanita", label: "Karakter Wanita (Ibu Hijab)" },
+  { kode: "pria", label: "Karakter Pria (Bapak Kopiah)" },
+  { kode: "tanpa", label: "Tanpa Karakter Maskot" },
+];
 
 const PROFIL_SUARA_BAWAAN = [
   { kode: "santai_indo", label: "Profil AI: Santai Indonesia (Hangat & Ramah)" },
@@ -215,6 +223,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [pilihJenis, setPilihJenis] = useState<"gambar" | "video">("gambar");
   const [pilihGaya, setPilihGaya] = useState("otomatis");
   const [pilihSuara, setPilihSuara] = useState("otomatis");
+  const [pilihKarakter, setPilihKarakter] = useState("otomatis");
   const [daftar, setDaftar] = useState<Tugas[]>([]);
   const [pesan, setPesan] = useState("");
   const [sibuk, setSibuk] = useState(false);
@@ -681,7 +690,11 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     const arahanMentah = String(d.get("arahan") ?? "").trim();
     const prefiksGaya = pilihGaya !== "otomatis" ? `[Gaya: ${pilihGaya}] ` : "";
     const prefiksSuara = pilihJenis === "video" && pilihSuara !== "otomatis" ? `[Suara: ${pilihSuara}] ` : "";
-    const arahanAkhir = prefiksGaya + prefiksSuara + arahanMentah;
+    const prefiksKarakter =
+      pilihJenis === "video" && adalahBakafrawi && pilihKarakter !== "otomatis"
+        ? `[Karakter: ${pilihKarakter}] `
+        : "";
+    const arahanAkhir = prefiksGaya + prefiksSuara + prefiksKarakter + arahanMentah;
 
     let jadwalOtomatisIso: string | null = null;
     if (modeJadwalBuat === "prime19") {
@@ -1500,6 +1513,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                           onClick={() => {
                             setPilihMerek(m.slug);
                             setPilihProduk(m.slug === "bakafrawi" ? (situs.produk[0]?.slug ?? "maktaba-pos") : FOKUS_LEKKOPI[0].slug);
+                            if (m.slug !== "bakafrawi") setPilihKarakter("otomatis");
                             setUsulan([]);
                             setGalatUsulan("");
                           }}
@@ -1550,6 +1564,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                       onChange={(e) => {
                         setPilihJenis(e.target.value as "gambar" | "video");
                         setPilihGaya("otomatis");
+                        setPilihKarakter("otomatis");
                       }}
                       className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
                     >
@@ -1559,8 +1574,16 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   </label>
                 </div>
 
-                <div className={pilihJenis === "video" ? "grid gap-4 sm:grid-cols-2" : "grid gap-4"}>
-                  <label className={pilihJenis === "video" ? "grid gap-1.5" : "grid gap-1.5 sm:w-1/2"}>
+                <div
+                  className={
+                    pilihJenis === "video"
+                      ? adalahBakafrawi
+                        ? "grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3"
+                        : "grid items-start gap-4 sm:grid-cols-2"
+                      : "grid gap-4"
+                  }
+                >
+                  <label className={pilihJenis === "video" ? "grid gap-1.5 content-start" : "grid gap-1.5 sm:w-1/2"}>
                     <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                       <Palette className="size-3.5 text-emas" /> Gaya Desain {pilihJenis === "video" ? "Video" : "Poster"}
                     </span>
@@ -1577,7 +1600,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   </label>
 
                   {pilihJenis === "video" && (
-                    <div className="grid gap-1.5">
+                    <div className="grid gap-1.5 content-start">
                       <label htmlFor="studio-pilih-suara" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                         <Volume2 className="size-3.5 text-emas" /> Suara Narasi (ElevenLabs / AI)
                       </label>
@@ -1615,6 +1638,28 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                           ? `Kelola ${suaraFavorit.length} Voice ID favorit di Sambungan →`
                           : "Tambah / kelola daftar Voice ID ElevenLabs di Sambungan →"}
                       </button>
+                    </div>
+                  )}
+
+                  {pilihJenis === "video" && adalahBakafrawi && (
+                    <div className="grid gap-1.5 content-start">
+                      <label htmlFor="studio-pilih-karakter" className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                        <User className="size-3.5 text-emas" /> Karakter Maskot
+                      </label>
+                      <select
+                        id="studio-pilih-karakter"
+                        name="karakter"
+                        value={pilihKarakter}
+                        onChange={(e) => setPilihKarakter(e.target.value)}
+                        className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
+                      >
+                        {PILIHAN_KARAKTER.map((k) => (
+                          <option key={k.kode} value={k.kode} className="bg-card">{k.label}</option>
+                        ))}
+                      </select>
+                      <span className="text-[11px] text-muted-foreground">
+                        Wanita/Pria otomatis mengunci gaya bermaskot &amp; suara senada.
+                      </span>
                     </div>
                   )}
                 </div>

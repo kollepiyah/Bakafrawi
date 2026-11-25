@@ -338,6 +338,14 @@ const HalamanEditorialScroll: React.FC<{
   const adalahKafe = /kopi|cafe|kafe/i.test(`${merek.nama} ${merek.sub ?? ''}`);
   const daftarSubLaptop = adalahKafe ? SUB_LAPTOP_KAFE : SUB_LAPTOP_DIGITAL;
   const daftarJudulCadangan = adalahKafe ? JUDUL_CADANGAN_KAFE : JUDUL_CADANGAN_DIGITAL;
+  const latarLayar = adalahKafe ? '#F4ECE0' : '#0B0E14';
+  const latarBlokGenap = adalahKafe ? '#EFE5D6' : '#10151F';
+  const tintaLayar = adalahKafe ? '#1A130E' : '#F8FAFC';
+  const tintaSub = adalahKafe ? 'rgba(26,19,14,0.68)' : 'rgba(248,250,252,0.72)';
+  const aksenEditorial = adalahKafe ? '#8C6239' : '#34E0CD';
+  const garisBlok = adalahKafe ? 'rgba(26,19,14,0.08)' : 'rgba(255,255,255,0.08)';
+  const latarNav = adalahKafe ? 'rgba(244,236,224,0.94)' : 'rgba(11,14,20,0.94)';
+  const garisNav = adalahKafe ? 'rgba(26,19,14,0.1)' : 'rgba(255,255,255,0.1)';
 
   // Micro-zoom kamera yang sangat halus selama 1 scene penuh (tidak pernah cut/ganti scene!).
   const skalaKamera = interpolate(frame, [0, total], [1.0, 1.045], { extrapolateRight: 'clamp' });
@@ -360,14 +368,28 @@ const HalamanEditorialScroll: React.FC<{
   const renderMediaLayar = (s: SegmenSinematik, i: number, style: React.CSSProperties) => {
     const j = jadwal[i] ?? { mulai: 0, durasi: total };
     return (
-      <div style={{ overflow: 'hidden', position: 'relative', background: '#E5D6C0', ...style }}>
+      <div
+        style={{
+          overflow: 'hidden',
+          position: 'relative',
+          background: adalahKafe ? '#E5D6C0' : '#070A0F',
+          ...(adalahKafe ? {} : { padding: 8, boxSizing: 'border-box', border: '1px solid rgba(255,255,255,0.08)' }),
+          ...style,
+        }}
+      >
         {s.berkas ? (
           s.jenis === 'video' ? (
             <OffthreadVideo
               src={staticFile(s.berkas)}
               startFrom={Math.max(0, Math.round((Number(s.mulaiKlip) || 0) * FPS_SINEMATIK))}
               muted
-              style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'contrast(1.06) saturate(1.1) sepia(0.05)' }}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: adalahKafe ? 'cover' : 'contain',
+                borderRadius: adalahKafe ? 0 : 14,
+                filter: adalahKafe ? 'contrast(1.06) saturate(1.1) sepia(0.05)' : 'contrast(1.04)',
+              }}
             />
           ) : (
             <Img
@@ -375,9 +397,12 @@ const HalamanEditorialScroll: React.FC<{
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',
-                transform: `scale(${interpolate(Math.max(0, frame - j.mulai), [0, j.durasi], [1.02, 1.09], { extrapolateRight: 'clamp' })})`,
-                filter: 'contrast(1.06) saturate(1.1) sepia(0.05)',
+                objectFit: adalahKafe ? 'cover' : 'contain',
+                borderRadius: adalahKafe ? 0 : 14,
+                transform: adalahKafe
+                  ? `scale(${interpolate(Math.max(0, frame - j.mulai), [0, j.durasi], [1.02, 1.09], { extrapolateRight: 'clamp' })})`
+                  : undefined,
+                filter: adalahKafe ? 'contrast(1.06) saturate(1.1) sepia(0.05)' : 'contrast(1.04)',
               }}
             />
           )
@@ -494,7 +519,7 @@ const HalamanEditorialScroll: React.FC<{
               }}
             />
 
-            {/* AREA LAYAR WEBSITE (920 × 575, overflow hidden, latar krem #F4ECE0) */}
+            {/* AREA LAYAR WEBSITE (920 × 575, overflow hidden, adaptif krem kafe / gelap Bakafrawi) */}
             <div
               style={{
                 width: LAYAR_W,
@@ -502,8 +527,8 @@ const HalamanEditorialScroll: React.FC<{
                 borderRadius: 12,
                 overflow: 'hidden',
                 position: 'relative',
-                background: '#F4ECE0',
-                color: '#1A130E',
+                background: latarLayar,
+                color: tintaLayar,
               }}
             >
               {/* Kanvas Website Panjang yang Menggulir Mulus */}
@@ -516,20 +541,24 @@ const HalamanEditorialScroll: React.FC<{
                   const judul = gabungJudul
                     ? `${bagian[0]} ${bagian[1]}`
                     : (bagian[0] || daftarJudulCadangan[i % daftarJudulCadangan.length]);
+                  const ringkasNarasi = String(s.narasi ?? '').replace(/\s+/g, ' ').trim();
+                  const subNarasi = ringkasNarasi
+                    ? (ringkasNarasi.length > 90 ? `${ringkasNarasi.slice(0, 87).trimEnd()}…` : ringkasNarasi)
+                    : '';
                   const sub = (!gabungJudul && bagian[1])
                     ? bagian[1]
                     : (i === blok.length - 1
                       ? (merek.info || (adalahKafe ? 'Buka tiap hari · Waru, Sidoarjo' : 'Siap pakai & konsultasi gratis'))
-                      : (adalahKafe ? `Nikmati racikan kopi segar khas ${merek.nama}.` : `Solusi praktis dari ${merek.nama}.`));
+                      : (subNarasi || (adalahKafe ? `Nikmati racikan kopi segar khas ${merek.nama}.` : `Solusi praktis dari ${merek.nama}.`)));
                   const subLabel = daftarSubLaptop[i % daftarSubLaptop.length];
 
-                  // BLOK 3 (indeks 2): Full-bleed showcase kopi lebar penuh (persis detik 00:05 POUR / PLAY!)
+                  // BLOK 3 (indeks 2): Full-bleed showcase lebar penuh (persis detik 00:05 POUR / PLAY!)
                   if (i === 2 && blok.length >= 3) {
                     return (
-                      <div key={i} style={{ width: LAYAR_W, height: BLOK_H, position: 'relative' }}>
+                      <div key={i} style={{ width: LAYAR_W, height: BLOK_H, position: 'relative', background: latarLayar }}>
                         {renderMediaLayar(s, i, { width: '100%', height: '100%' })}
                         <div style={{ position: 'absolute', left: 38, top: 34 }}>
-                          <span style={{ background: '#1A130E', color: '#F4ECE0', borderRadius: 999, padding: '10px 22px', fontFamily: SANS, fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                          <span style={{ background: adalahKafe ? '#1A130E' : '#18B4A8', color: adalahKafe ? '#F4ECE0' : '#061214', borderRadius: 999, padding: '10px 22px', fontFamily: SANS, fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase' }}>
                             {judul.slice(0, 22)} →
                           </span>
                         </div>
@@ -537,7 +566,7 @@ const HalamanEditorialScroll: React.FC<{
                     );
                   }
 
-                  // BLOK 1, 2, 4: Layout Asimetris 2 Kolom Kiri (Tipografi Serif) + Kanan (Visual Kopi)
+                  // BLOK 1, 2, 4: Layout Asimetris 2 Kolom Kiri (Tipografi Serif) + Kanan (Visual Kopi / Aplikasi)
                   const adalahHero = i === 0;
                   const adalahAkhir = i === blok.length - 1;
                   return (
@@ -551,19 +580,19 @@ const HalamanEditorialScroll: React.FC<{
                         gridTemplateColumns: '1fr 1.12fr',
                         gap: 30,
                         alignItems: 'center',
-                        background: i % 2 === 1 ? '#EFE5D6' : '#F4ECE0',
-                        borderBottom: '1px solid rgba(26,19,14,0.08)',
+                        background: i % 2 === 1 ? latarBlokGenap : latarLayar,
+                        borderBottom: `1px solid ${garisBlok}`,
                       }}
                     >
                       {/* Kolom Kiri: Nomor, Sublabel, Judul Serif Besar, Deskripsi, Tombol Pil */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
                           {!adalahHero ? (
-                            <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 34, color: '#8C6239', lineHeight: 1 }}>
+                            <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 34, color: aksenEditorial, lineHeight: 1 }}>
                               {i + 1}.
                             </span>
                           ) : null}
-                          <span style={{ fontFamily: SANS, fontSize: 12, fontWeight: 700, letterSpacing: 2.4, textTransform: 'uppercase', color: '#8C6239' }}>
+                          <span style={{ fontFamily: SANS, fontSize: 12, fontWeight: 700, letterSpacing: 2.4, textTransform: 'uppercase', color: aksenEditorial }}>
                             {subLabel}
                           </span>
                         </div>
@@ -574,14 +603,14 @@ const HalamanEditorialScroll: React.FC<{
                             fontSize: judul.length > 24 ? 58 : 72,
                             lineHeight: 0.94,
                             letterSpacing: -1.2,
-                            color: '#1A130E',
+                            color: tintaLayar,
                             textTransform: 'uppercase',
                           }}
                         >
                           {judul}
                         </div>
 
-                        <div style={{ fontFamily: SANS, fontSize: 16, lineHeight: 1.45, color: 'rgba(26,19,14,0.68)', maxWidth: 340 }}>
+                        <div style={{ fontFamily: SANS, fontSize: 16, lineHeight: 1.45, color: tintaSub, maxWidth: 340 }}>
                           {sub}
                         </div>
 
@@ -591,9 +620,9 @@ const HalamanEditorialScroll: React.FC<{
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 8,
-                              background: adalahHero ? 'transparent' : '#1A130E',
-                              color: adalahHero ? '#1A130E' : '#F4ECE0',
-                              border: '1.5px solid #1A130E',
+                              background: adalahHero ? 'transparent' : (adalahKafe ? '#1A130E' : '#18B4A8'),
+                              color: adalahHero ? (adalahKafe ? '#1A130E' : '#34E0CD') : (adalahKafe ? '#F4ECE0' : '#061214'),
+                              border: `1.5px solid ${adalahKafe ? '#1A130E' : '#18B4A8'}`,
                               borderRadius: 999,
                               padding: '10px 22px',
                               fontFamily: SANS,
@@ -617,7 +646,7 @@ const HalamanEditorialScroll: React.FC<{
                         width: '100%',
                         height: BLOK_H - 64,
                         borderRadius: 22,
-                        boxShadow: '0 22px 44px -16px rgba(26,19,14,0.28)',
+                        boxShadow: adalahKafe ? '0 22px 44px -16px rgba(26,19,14,0.28)' : '0 22px 44px -16px rgba(0,0,0,0.58)',
                       })}
                     </div>
                   );
@@ -633,8 +662,8 @@ const HalamanEditorialScroll: React.FC<{
                   right: 0,
                   height: NAV_H,
                   padding: '0 34px',
-                  background: 'rgba(244,236,224,0.94)',
-                  borderBottom: '1px solid rgba(26,19,14,0.1)',
+                  background: latarNav,
+                  borderBottom: `1px solid ${garisNav}`,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -644,11 +673,11 @@ const HalamanEditorialScroll: React.FC<{
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   {merek.logo ? <Img src={staticFile(merek.logo)} style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'contain' }} /> : null}
-                  <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: 2.5, textTransform: 'uppercase', color: '#1A130E' }}>
+                  <span style={{ fontWeight: 800, fontSize: 16, letterSpacing: 2.5, textTransform: 'uppercase', color: tintaLayar }}>
                     {merek.nama}
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: 18, fontSize: 11, fontWeight: 600, letterSpacing: 1.6, textTransform: 'uppercase', color: 'rgba(26,19,14,0.62)' }}>
+                <div style={{ display: 'flex', gap: 18, fontSize: 11, fontWeight: 600, letterSpacing: 1.6, textTransform: 'uppercase', color: adalahKafe ? 'rgba(26,19,14,0.62)' : 'rgba(248,250,252,0.68)' }}>
                   {adalahKafe ? (
                     <>
                       <span>MENU</span>
@@ -665,7 +694,7 @@ const HalamanEditorialScroll: React.FC<{
                     </>
                   )}
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, border: '1px solid rgba(26,19,14,0.35)', borderRadius: 999, padding: '5px 12px', color: '#1A130E' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, border: `1px solid ${adalahKafe ? 'rgba(26,19,14,0.35)' : 'rgba(52,224,205,0.45)'}`, borderRadius: 999, padding: '5px 12px', color: tintaLayar }}>
                   {adalahKafe ? 'ORDER' : 'KONSULTASI'}
                 </span>
               </div>

@@ -300,6 +300,8 @@ async function narasiSekaligus(teks, berkas, minta) {
 // ------------------------------------------------------------------ ElevenLabs
 
 const POLA_VOICE_ID = /^[A-Za-z0-9_-]{8,64}$/
+const NAMA_SUARA_WANITA = /(^|[\s\-_])(ibu|bu|mbak|mba|wanita|perempuan|cewek|hijab|bunda|umi|ning|siti|indah|putri|ayu|dewi|rina|sari|nisa|aisyah)(?=[\s\-_]|$)/i
+const NAMA_SUARA_PRIA = /(^|[\s\-_])(bapak|pak|mas|pria|laki|cowok|kang|cak|gus|abang|bang|bro|jowo|budi|andi|rizky|ahmad|dimas|ardi)(?=[\s\-_]|$)/i
 
 /**
  * Kumpulkan daftar Voice ID ElevenLabs valid dari daftar favorit DB (`tambahan`) dan env
@@ -329,27 +331,53 @@ export function daftarVoiceElevenLabs(tambahan = [], envNilai = ELEVENLABS_VOICE
 /**
  * Pilih 1 Voice ID ElevenLabs:
  * 1) `voiceId` pilihan manual dari Studio jika valid,
- * 2) Rotasi deterministik per video dari daftar favorit + `ELEVENLABS_VOICE_ID` multi-ID,
- * 3) Fallback ke `profil.elevenVoiceId` / bawaan.
+ * 2) Jika `gender` ('wanita'/'pria') diketahui & `daftarVoice` punya item ber-nama, saring dulu sesuai gender,
+ * 3) Rotasi deterministik per video dari daftar favorit + `ELEVENLABS_VOICE_ID` multi-ID,
+ * 4) Fallback ke suara bawaan sesuai gender / `profil.elevenVoiceId`.
  */
 export function pilihVoiceElevenLabs({
   voiceId = null,
   daftarVoice = [],
   profil = null,
   benih = '',
+  gender = null,
   envNilai = ELEVENLABS_VOICE_ID(),
 } = {}) {
   const eksplisit = String(voiceId ?? '').trim()
   if (POLA_VOICE_ID.test(eksplisit)) return eksplisit
 
-  const kolam = daftarVoiceElevenLabs(daftarVoice, envNilai)
-  if (kolam.length === 1) return kolam[0]
-  if (kolam.length > 1) {
+  const pilihHash = (kolam) => {
+    if (kolam.length === 1) return kolam[0]
     const teksBenih = Array.isArray(benih) ? benih.join(' ') : String(benih || '')
     let hash = 0
     for (let i = 0; i < teksBenih.length; i++) hash = (hash * 31 + teksBenih.charCodeAt(i)) >>> 0
     return kolam[hash % kolam.length]
   }
+
+  if ((gender === 'wanita' || gender === 'pria') && Array.isArray(daftarVoice)) {
+    const cocokGender = daftarVoice
+      .filter((item) => item && typeof item === 'object' && item.id && item.nama)
+      .filter((item) => {
+        const nama = String(item.nama)
+        return gender === 'wanita'
+          ? NAMA_SUARA_WANITA.test(nama)
+          : NAMA_SUARA_PRIA.test(nama)
+      })
+    const kolamGender = daftarVoiceElevenLabs(cocokGender, '')
+    if (kolamGender.length) return pilihHash(kolamGender)
+
+    if (gender === 'pria') {
+      const bukanWanita = daftarVoice
+        .filter((item) => item && typeof item === 'object' && item.id && item.nama && !NAMA_SUARA_WANITA.test(String(item.nama)))
+      const kolamNonWanita = daftarVoiceElevenLabs(bukanWanita, '')
+      if (kolamNonWanita.length) return pilihHash(kolamNonWanita)
+    }
+  }
+
+  const kolam = daftarVoiceElevenLabs(daftarVoice, envNilai)
+  if (kolam.length) return pilihHash(kolam)
+  if (gender === 'wanita') return 'EXAVITQu4vr4xnSDxMaL'
+  if (gender === 'pria') return 'TX3LPaxmHKxFdv7VOQHJ'
   return profil?.elevenVoiceId || 'EXAVITQu4vr4xnSDxMaL'
 }
 
@@ -461,12 +489,14 @@ export async function buatSuara(teks, keluar, jalur = jalurSuara(), profil = nul
  * Bila jalur utama gagal, otomatis beralih berjenjang: ElevenLabs → Gemini → Edge TTS.
  */
 export async function suaraAdegan(teks, folder, opsi = {}) {
-  const profil = pilihProfilSuara(opsi.profilSuara, teks)
+  const profilKode = opsi.profilSuara || (opsi.gender === 'wanita' ? 'santai_indo' : opsi.gender === 'pria' ? 'jawa_timur' : null)
+  const profil = pilihProfilSuara(profilKode, teks)
   const voiceId = pilihVoiceElevenLabs({
     voiceId: opsi.voiceId,
     daftarVoice: opsi.daftarVoice,
     profil,
     benih: teks,
+    gender: opsi.gender ?? null,
   })
   const buat = opsi.buat ?? ((t, k, j, info) => buatSuara(t, k, j, info?.profil ?? profil, { voiceId: info?.voiceId ?? voiceId }))
   const jalurAwal = opsi.jalur ?? jalurSuara()

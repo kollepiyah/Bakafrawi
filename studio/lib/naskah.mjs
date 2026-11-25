@@ -50,7 +50,7 @@ function ekstrakJson(teks) {
 
 async function panggilNvidiaWorker({ system, prompt, maksToken = 4096 }) {
   const baseUrl = (process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, '');
-  const kandidat = [...new Set([process.env.STUDIO_NVIDIA_TEKS, 'qwen/qwen2.5-72b-instruct', 'deepseek-ai/deepseek-v3.2', 'meta/llama-3.3-70b-instruct'].filter(Boolean))];
+  const kandidat = [...new Set([process.env.STUDIO_NVIDIA_TEKS, 'qwen/qwen2.5-72b-instruct', 'deepseek-ai/deepseek-v3.2', 'meta/llama-3.1-70b-instruct'].filter(Boolean))];
   let galat = null;
   for (const model of kandidat) {
     try {
@@ -67,7 +67,7 @@ async function panggilNvidiaWorker({ system, prompt, maksToken = 4096 }) {
       });
       if (!res.ok) {
         const msg = `NVIDIA ${res.status}: ${(await res.text().catch(() => '')).slice(0, 160)}`;
-        if (res.status === 404) { galat = new Error(msg); continue; }
+        if (res.status === 404 || res.status === 410) { galat = new Error(msg); continue; }
         throw new Error(msg);
       }
       const j = await res.json();
@@ -80,7 +80,7 @@ async function panggilNvidiaWorker({ system, prompt, maksToken = 4096 }) {
       };
     } catch (e) {
       galat = e;
-      if (!String(e).includes('NVIDIA 404')) throw e;
+      if (!/NVIDIA (404|410)/.test(String(e))) throw e;
     }
   }
   throw galat ?? new Error('NVIDIA NIM gagal merespons.');

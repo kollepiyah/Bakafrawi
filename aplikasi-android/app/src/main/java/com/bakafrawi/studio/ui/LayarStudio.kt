@@ -93,7 +93,7 @@ private enum class SubStudio(val label: String) {
 }
 
 private val PRESET_VIDEO = listOf(
-    "otomatis" to "Otomatis (Rotasi Gelap / AI)",
+    "otomatis" to "Otomatis (Rotasi Gelap / Split / POV / AI)",
     "dark-keynote" to "Dark Tech Teal",
     "sinematik-ai" to "Storytelling Full AI",
     "editorial-scroll" to "Laptop Scroll Web",
@@ -103,6 +103,13 @@ private val PRESET_VIDEO = listOf(
     "story-drop" to "Story Drop (Kafe)",
     "dial-menu" to "Dial Menu (Kafe)",
     "sinematik-kafe" to "Sinematik Kafe",
+)
+
+private val PILIHAN_KARAKTER = listOf(
+    "otomatis" to "Otomatis",
+    "wanita" to "Wanita (Ibu Hijab)",
+    "pria" to "Pria (Bapak Kopiah)",
+    "tanpa" to "Tanpa Karakter",
 )
 
 private val PRESET_POSTER = listOf(
@@ -1022,6 +1029,7 @@ private fun TabBuatKonten(
     var pilihProduk by remember(produk) { mutableStateOf(produk.firstOrNull()?.slug ?: "maktaba-pos") }
     var gaya by remember { mutableStateOf("otomatis") }
     var suara by remember { mutableStateOf("otomatis") }
+    var karakter by remember { mutableStateOf("otomatis") }
     var latarAi by remember { mutableStateOf(true) }
     var sasaran by remember { mutableStateOf("otomatis") }
     var modeJadwal by remember { mutableStateOf("draf") }
@@ -1057,6 +1065,7 @@ private fun TabBuatKonten(
                                     } else {
                                         FOKUS_LEKKOPI.first().slug
                                     }
+                                    if (m.slug != "bakafrawi") karakter = "otomatis"
                                     usulan = emptyList()
                                     latarAi = true
                                 },
@@ -1071,8 +1080,8 @@ private fun TabBuatKonten(
         item {
             KartuStudio(if (adalahBakafrawi) "Jenis & Produk" else "Jenis & Fokus Konten") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = jenis == "gambar", onClick = { jenis = "gambar"; gaya = "otomatis"; sasaran = "otomatis" }, label = { Text("Poster (1:1, 4:5, 9:16)") })
-                    FilterChip(selected = jenis == "video", onClick = { jenis = "video"; gaya = "otomatis"; sasaran = "otomatis" }, label = { Text("Video Reels") })
+                    FilterChip(selected = jenis == "gambar", onClick = { jenis = "gambar"; gaya = "otomatis"; sasaran = "otomatis"; karakter = "otomatis" }, label = { Text("Poster (1:1, 4:5, 9:16)") })
+                    FilterChip(selected = jenis == "video", onClick = { jenis = "video"; gaya = "otomatis"; sasaran = "otomatis"; karakter = "otomatis" }, label = { Text("Video Reels") })
                 }
                 if (daftarPilihanProduk.isNotEmpty()) {
                     Text(if (adalahBakafrawi) "Produk" else "Fokus Konten", color = Redup, fontSize = 12.sp)
@@ -1136,6 +1145,18 @@ private fun TabBuatKonten(
                             fontSize = 11.sp,
                             color = Emas,
                         )
+                    }
+                    if (adalahBakafrawi) {
+                        Text("Karakter Maskot", color = Redup, fontSize = 12.sp)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            PILIHAN_KARAKTER.forEach { (kode, label) ->
+                                FilterChip(
+                                    selected = karakter == kode,
+                                    onClick = { karakter = kode },
+                                    label = { Text(label, fontSize = 12.sp) },
+                                )
+                            }
+                        }
                     }
                 }
                 Text("Sasaran Instagram", color = Redup, fontSize = 12.sp)
@@ -1236,7 +1257,8 @@ private fun TabBuatKonten(
                     }
                     val prefiksGaya = if (gaya != "otomatis") "[Gaya: $gaya] " else ""
                     val prefiksSuara = if (jenis == "video" && suara != "otomatis") "[Suara: $suara] " else ""
-                    val prefiks = prefiksGaya + prefiksSuara
+                    val prefiksKarakter = if (jenis == "video" && adalahBakafrawi && karakter != "otomatis") "[Karakter: $karakter] " else ""
+                    val prefiks = prefiksGaya + prefiksSuara + prefiksKarakter
                     sibukBuat = true
                     cakupan.launch {
                         try {

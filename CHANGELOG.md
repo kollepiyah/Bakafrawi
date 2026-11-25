@@ -1,5 +1,19 @@
 # CHANGELOG — bakafrawi.com
 
+## Perbaikan Penguncian Karakter Wanita/Pria, Penyelarasan Suara & Rotasi Gaya Bakafrawi (25 Nov)
+
+- **Kunci Karakter Maskot & Penyelarasan Suara (`studio/lib/video.mjs`, `studio/lib/bank/suara.mjs`, `studio/studio.mjs`):**
+  - Menemukan penyebab video Bakafrawi mengabaikan permintaan *"karakter wanita"*: rotasi `otomatis` melempar tugas ke gaya laptop `editorial-scroll` yang mematikan maskot total, belum ada pemilih Karakter Maskot di form Web/Android, dan `pilihKarakter()` tidak membaca arahan maupun nama suara favorit.
+  - Menambahkan `uraiPilihanKarakter()` dan `deteksiGenderKarakter()` agar pilihan dropdown/chip `[Karakter: wanita/pria/tanpa]`, kata kunci arahan bebas (seperti *"karakter wanita"*), maupun nama suara favorit (`Mbak Indah`, `Mbak Siti`, `Mas Jowo`) otomatis dikenali.
+  - Apabila karakter atau suara bergender diminta saat gaya `otomatis`, `studio.mjs` membatasi pilihan hanya pada gaya bermaskot (`dark-keynote`, `split-hook`, `pov-chat`) sehingga karakter selalu tampil, serta meneruskan `gender` ke `pilihVoiceElevenLabs()` dan profil cadangan `suaraAdegan()` agar gender suara & karakter tidak berlawanan.
+- **Keluarkan `editorial-scroll` dari Rotasi Otomatis & Gelapkan Tema Laptop (`studio/studio.mjs`, `studio/remotion/src/Sinematik.tsx`):**
+  - Mengeluarkan `editorial-scroll` dari rotasi otomatis Bakafrawi (tetap tersedia bila dipilih manual).
+  - Memperbarui `HalamanEditorialScroll` untuk produk digital/software ke palet gelap Bakafrawi (`#0B0E14`, aksen `#18B4A8`/`#34E0CD`), memakai `objectFit: 'contain'` agar tangkapan layar aplikasi tidak terpotong, dan mengisi sub-teks dari ringkasan narasi.
+- **Perbaikan Fallback NVIDIA EOL (`studio/lib/naskah.mjs`):**
+  - Menghapus `meta/llama-3.3-70b-instruct` (yang mengembalikan HTTP `410 Gone`) dari kandidat bawaan dan membuat `panggilNvidiaWorker()` lanjut mencoba model berikutnya pada HTTP `404` maupun `410`.
+- **Pemilih Karakter Maskot di Web & Android (`src/components/admin/studio.tsx`, `aplikasi-android/.../LayarStudio.kt`):**
+  - Menambahkan dropdown/chip **Karakter Maskot** (*Otomatis*, *Wanita (Ibu Hijab)*, *Pria (Bapak Kopiah)*, *Tanpa Karakter*) khusus saat membuat Video Bakafrawi dan mengirimkannya melalui tag `[Karakter: ...]`.
+
 ## Perbaikan Penjadwalan Otomatis & Perombakan 5 Gaya Video Bakafrawi (25 Nov)
 
 - **Perbaikan Pemicu Jadwal Tayang Otomatis (`src/lib/studio-server.ts`, `src/lib/agenda-server.ts`):**

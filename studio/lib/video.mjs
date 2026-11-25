@@ -68,10 +68,30 @@ export function kelompokKarakter(berkas) {
   return peta;
 }
 
-/** Karakter video: pilihan Claude → karakter bernama slug merek → acak (supaya bervariasi). Murni. */
-export function pilihKarakter(nama, { pilihan = '', slug = '', acak = Math.random } = {}) {
-  const sama = (x) => nama.find((n) => n.toLowerCase() === String(x).toLowerCase().trim());
-  return sama(pilihan) ?? sama(slug) ?? (nama.length ? [...nama].sort()[Math.floor(acak() * nama.length) % nama.length] : null);
+/** Baca tag `[Karakter: ...]` dari arahan Studio → `{ karakter, bersih }`. */
+export function uraiPilihanKarakter(arahan) {
+  const teksAsli = String(arahan ?? '');
+  const cocok = teksAsli.match(/\[Karakter:\s*([A-Za-z0-9_-]+)\]/i);
+  const bersih = teksAsli.replace(/\[Karakter:\s*[A-Za-z0-9_-]+\]\s*/gi, '').trim();
+  return {
+    karakter: cocok ? cocok[1].trim().toLowerCase() : null,
+    bersih,
+  };
+}
+
+/** Karakter video: pilihan eksplisit/AI → karakter bernama slug merek → acak (supaya bervariasi). Murni. */
+export function pilihKarakter(nama, { pilihan = '', slug = '', gender = null, acak = Math.random } = {}) {
+  if (gender === 'tanpa') return null;
+  let kolam = nama;
+  if (gender === 'wanita') {
+    const k = nama.filter((n) => KATA_WANITA.test(n));
+    if (k.length) kolam = k;
+  } else if (gender === 'pria') {
+    const k = nama.filter((n) => !KATA_WANITA.test(n));
+    if (k.length) kolam = k;
+  }
+  const sama = (x) => kolam.find((n) => n.toLowerCase() === String(x).toLowerCase().trim());
+  return sama(pilihan) ?? sama(slug) ?? (kolam.length ? [...kolam].sort()[Math.floor(acak() * kolam.length) % kolam.length] : null);
 }
 
 /**
@@ -99,8 +119,45 @@ export function maskotAdegan(adegan, berkasKarakter) {
 
 // Suara narasi mengikuti karakter: nama folder berisi kata perempuan → suara wanita (Gadis), selain
 // itu pria (Ardi). Kyai: "pakai karakter ibu hijab tapi kok suaranya pria" (19 Nov 2026).
-const KATA_WANITA = /(^|[-_\s])(ibu|bu|mbak|mba|kak|wanita|perempuan|cewek|hijab|jilbab|akhwat|putri|nyonya|bunda|umi|ning)([-_\s]|$)/i;
+const KATA_WANITA = /(^|[\s\-_,.;:!?()[\]])(ibu|bu|mbak|mba|kak|wanita|perempuan|cewek|hijab|jilbab|akhwat|putri|nyonya|bunda|umi|ning)(?=[\s\-_,.;:!?()[\]]|$)/i;
+const KATA_PRIA = /(^|[\s\-_,.;:!?()[\]])(bapak|pak|mas|pria|laki|cowok|kopiah|peci|ikhwan|ustadz|kang|cak|gus)(?=[\s\-_,.;:!?()[\]]|$)/i;
+const NAMA_WANITA_SUARA = /(^|[\s\-_,.;:!?()[\]])(ibu|bu|mbak|mba|wanita|perempuan|cewek|hijab|bunda|umi|ning|siti|indah|putri|ayu|dewi|rina|sari|nisa|aisyah)(?=[\s\-_,.;:!?()[\]]|$)/i;
+const NAMA_PRIA_SUARA = /(^|[\s\-_,.;:!?()[\]])(bapak|pak|mas|pria|laki|cowok|kang|cak|gus|abang|bang|bro|jowo|budi|andi|rizky|ahmad|dimas|ardi)(?=[\s\-_,.;:!?()[\]]|$)/i;
 export const SUARA = { wanita: 'id-ID-GadisNeural', pria: 'id-ID-ArdiNeural' };
+
+/** Deteksi permintaan gender karakter ('wanita' | 'pria' | 'tanpa' | null) dari arahan/suara. Murni. */
+export function deteksiGenderKarakter(arahan, { namaSuara = '' } = {}) {
+  const { karakter, bersih } = uraiPilihanKarakter(arahan);
+  if (karakter) {
+    if (karakter === 'tanpa' || karakter === 'none' || karakter === 'off') return 'tanpa';
+    if (karakter === 'wanita' || KATA_WANITA.test(karakter)) return 'wanita';
+    if (karakter === 'pria' || KATA_PRIA.test(karakter)) return 'pria';
+  }
+  const teksBersih = bersih.replace(/\[(?:Gaya|Suara):\s*[^\]]+\]\s*/gi, '').trim();
+  if (/\b(tanpa|jangan pakai|gak usah|tidak pakai)\s+(karakter|maskot|orang|tokoh)\b/i.test(teksBersih)) {
+    return 'tanpa';
+  }
+  if (
+    /(karakter|maskot|tokoh|host|presenter|pembawa|avatar|pakai|gunakan|figur)\s+(?:yang\s+)?(?:seorang\s+)?(wanita|perempuan|cewek|ibu|mbak|hijab|berhijab)/i.test(teksBersih)
+    || /\b(karakter\s+wanita|ibu[\s-]hijab|wanita\s+berhijab|perempuan\s+berhijab|cewek\s+hijab)\b/i.test(teksBersih)
+    || (/\b(karakter|maskot|host|tokoh|orang|pakai)\b/i.test(teksBersih) && /\b(wanita|perempuan|cewek|mbak)\b/i.test(teksBersih))
+  ) {
+    return 'wanita';
+  }
+  if (
+    /(karakter|maskot|tokoh|host|presenter|pembawa|avatar|pakai|gunakan|figur)\s+(?:yang\s+)?(?:seorang\s+)?(pria|laki(?:[\s-]laki)?|cowok|bapak|mas|kopiah|berkopiah)/i.test(teksBersih)
+    || /\b(karakter\s+pria|bapak[\s-]kopiah|laki[\s-]laki)\b/i.test(teksBersih)
+    || (/\b(karakter|maskot|host|tokoh|orang|pakai)\b/i.test(teksBersih) && /\b(pria|laki[\s-]laki|cowok|bapak|mas)\b/i.test(teksBersih))
+  ) {
+    return 'pria';
+  }
+  const suaraTeks = String(namaSuara ?? '').trim();
+  if (suaraTeks) {
+    if (NAMA_WANITA_SUARA.test(suaraTeks)) return 'wanita';
+    if (NAMA_PRIA_SUARA.test(suaraTeks)) return 'pria';
+  }
+  return null;
+}
 
 /** Suara edge-tts untuk karakter; tanpa karakter → STUDIO_SUARA atau pria. Murni. */
 export function suaraKarakter(nama, bawaan = process.env.STUDIO_SUARA || SUARA.pria) {

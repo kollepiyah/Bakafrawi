@@ -13,7 +13,7 @@ import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } fr
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { ffmpeg, probe } from './lib/bank/alat.mjs';
-import { ASET_LOKAL, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihMusik, renderIklan, renderSinematikRemotion, salinAsetDrive, suaraKarakter, WARNA } from './lib/video.mjs';
+import { ASET_LOKAL, deteksiGenderKarakter, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihMusik, renderIklan, renderSinematikRemotion, salinAsetDrive, SUARA, suaraKarakter, uraiPilihanKarakter, WARNA } from './lib/video.mjs';
 import { buatNaskah, buatNaskahVideo, buatNaskahVideoFullAi } from './lib/naskah.mjs';
 import { suaraAdegan, uraiPilihanSuara } from './lib/bank/suara.mjs';
 import { renderOpeningAI } from './lib/opening-ai.mjs';
@@ -207,7 +207,8 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   const gayaRaw = cocokGaya ? cocokGaya[1].toLowerCase() : '';
   const gayaPilihan = adalahSoftware && gayaRaw === 'sinematik-kafe' ? 'sinematik-ai' : gayaRaw;
   const pilihanSuara = uraiPilihanSuara(tugas.arahan);
-  const arahanNaskah = String(tugas.arahan ?? '').replace(/\[Suara:\s*[A-Za-z0-9_-]+\]\s*/gi, '').trim();
+  const pilihanKarakter = uraiPilihanKarakter(tugas.arahan);
+  const arahanNaskah = pilihanKarakter.bersih.replace(/\[(?:Gaya|Suara):\s*[A-Za-z0-9_-]+\]\s*/gi, '').trim();
   const pakaiAi = tugas.latar === 'ai' || gayaPilihan === 'photo-floating';
   const dbAktif = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
 
@@ -221,30 +222,44 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
         ? (await bacaMerek('bakafrawi').catch(() => null))?.profil?.suara_elevenlabs
         : []
       : [];
+  const daftarVoiceFavorit = Array.isArray(daftarSuaraFavorit) ? daftarSuaraFavorit : [];
+  const suaraTerpilihObj = pilihanSuara.voiceId
+    ? daftarVoiceFavorit.find((v) => String(v?.id ?? '').trim() === pilihanSuara.voiceId)
+    : null;
+  const namaSuaraTerpilih = String(suaraTerpilihObj?.nama ?? '');
+  const kebutuhanKarakter = deteksiGenderKarakter(tugas.arahan, { namaSuara: namaSuaraTerpilih });
+  const mintaKarakter =
+    kebutuhanKarakter === 'wanita' ||
+    kebutuhanKarakter === 'pria' ||
+    (kebutuhanKarakter !== 'tanpa' && /\b(karakter|maskot)\b/i.test(arahanNaskah));
   const opsiSuara = {
     profilSuara: pilihanSuara.profilSuara ?? undefined,
     voiceId: pilihanSuara.voiceId ?? undefined,
-    daftarVoice: Array.isArray(daftarSuaraFavorit) ? daftarSuaraFavorit : [],
+    daftarVoice: daftarVoiceFavorit,
+    ...(kebutuhanKarakter === 'wanita' || kebutuhanKarakter === 'pria' ? { gender: kebutuhanKarakter } : {}),
   };
 
   const referensiMerek = tugas.jenis === 'video' && dbAktif
     ? await semuaReferensi(merek?.slug || 'bakafrawi').catch(() => [])
     : [];
 
-  // Gaya video Bakafrawi (clean-ui putih tidak masuk rotasi otomatis; tersedia jika dipilih manual).
-  const GAYA_SOFTWARE = ['dark-keynote', 'sinematik-ai', 'editorial-scroll', 'split-hook', 'pov-chat'];
+  // Gaya video Bakafrawi: editorial-scroll & clean-ui tidak masuk rotasi otomatis; bila karakter/suara bergender diminta, pilih gaya bermaskot.
+  const GAYA_SOFTWARE_KARAKTER = ['dark-keynote', 'split-hook', 'pov-chat'];
+  const GAYA_SOFTWARE_AUTO = ['dark-keynote', 'split-hook', 'pov-chat', 'sinematik-ai'];
+  const GAYA_SOFTWARE_MANUAL = [...GAYA_SOFTWARE_AUTO, 'editorial-scroll', 'clean-ui'];
   let gayaVideo = '';
   if (tugas.jenis === 'video' && adalahSoftware) {
-    if ([...GAYA_SOFTWARE, 'clean-ui'].includes(gayaPilihan)) {
+    if (GAYA_SOFTWARE_MANUAL.includes(gayaPilihan)) {
       gayaVideo = gayaPilihan;
     } else {
-      const refTerbaru = referensiMerek.find((r) => GAYA_SOFTWARE.includes(String(r?.analisis?.presetCocok ?? '').toLowerCase()));
+      const kolamGaya = mintaKarakter ? GAYA_SOFTWARE_KARAKTER : GAYA_SOFTWARE_AUTO;
+      const refTerbaru = referensiMerek.find((r) => kolamGaya.includes(String(r?.analisis?.presetCocok ?? '').toLowerCase()));
       const inginTiru = /tiru|referensi|pola/i.test(arahanNaskah);
       if (refTerbaru && inginTiru) {
         gayaVideo = String(refTerbaru.analisis.presetCocok).toLowerCase();
       } else {
         const hashGaya = String(tugas.id || Date.now()).split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 0);
-        gayaVideo = GAYA_SOFTWARE[hashGaya % GAYA_SOFTWARE.length];
+        gayaVideo = kolamGaya[hashGaya % kolamGaya.length];
       }
     }
     catatan.push(`gaya video: ${gayaVideo}`);
@@ -260,13 +275,20 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     throw new Error('Produk ini belum punya layar aplikasi (tautan/skenario demo atau gambar layar HP) untuk video.');
   }
   const karakter =
-    tugas.jenis === 'video' && adalahSoftware && !adalahSinematikSoftware && !adalahEditorialSoftware
+    tugas.jenis === 'video' && adalahSoftware && !adalahSinematikSoftware && !adalahEditorialSoftware && kebutuhanKarakter !== 'tanpa'
       ? kelompokKarakter(await readdir(dirMaskot, { recursive: true }).catch(() => []))
       : new Map();
 
+  const arahanUntukAi =
+    kebutuhanKarakter === 'wanita'
+      ? `${arahanNaskah}${arahanNaskah ? '\n' : ''}(Gunakan karakter pembawa acara wanita dari daftar karakter)`
+      : kebutuhanKarakter === 'pria'
+      ? `${arahanNaskah}${arahanNaskah ? '\n' : ''}(Gunakan karakter pembawa acara pria dari daftar karakter)`
+      : arahanNaskah;
+
   const naskah = tugas.jenis === 'video'
     ? (adalahSoftware && !adalahSinematikSoftware && !adalahEditorialSoftware
-        ? await buatNaskahVideo(produk, situs, arahanNaskah, merek, layarApp, kecilkan, [...karakter.keys()], referensiMerek)
+        ? await buatNaskahVideo(produk, situs, arahanUntukAi, merek, layarApp, kecilkan, [...karakter.keys()], referensiMerek)
         : await buatNaskahVideoFullAi(produk, situs, arahanNaskah, merek, referensiMerek))
     : await buatNaskah(produk, situs, arahanNaskah, tugas.jenis, merek);
 
@@ -391,13 +413,35 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       info: [tema.situs, kontak.whatsappTampil && `WA ${kontak.whatsappTampil}`].filter(Boolean).join(' · '),
       fitur: produk.fitur.map((f) => f.judul),
     });
-    // Satu karakter per video (pilihan AI → slug merek → acak), pose berganti per adegan.
-    const tokoh = pilihKarakter([...karakter.keys()], { pilihan: naskah.karakter, slug: merek?.slug });
+    // Satu karakter per video (pilihan eksplisit → AI → slug merek → acak), selaraskan gender karakter & suara.
+    const pilihanKarakterSlug =
+      pilihanKarakter.karakter && !['otomatis', 'wanita', 'pria', 'tanpa'].includes(pilihanKarakter.karakter)
+        ? pilihanKarakter.karakter
+        : naskah.karakter;
+    const tokoh =
+      kebutuhanKarakter === 'tanpa'
+        ? null
+        : pilihKarakter([...karakter.keys()], {
+            pilihan: pilihanKarakterSlug,
+            slug: merek?.slug,
+            gender: kebutuhanKarakter,
+          });
     const maskot = tokoh ? maskotAdegan(props.adegan, karakter.get(tokoh)).map((b) => b && path.join(dirMaskot, b)) : null;
     if (tokoh) naskah.karakter = tokoh;
+    else if (kebutuhanKarakter === 'tanpa') naskah.karakter = '';
+    const genderFinal =
+      kebutuhanKarakter === 'wanita' || kebutuhanKarakter === 'pria'
+        ? kebutuhanKarakter
+        : tokoh
+        ? suaraKarakter(tokoh) === SUARA.wanita
+          ? 'wanita'
+          : 'pria'
+        : null;
+    const opsiSuaraVideo = genderFinal ? { ...opsiSuara, gender: genderFinal } : opsiSuara;
+    catatan.push(`karakter: ${tokoh || 'tanpa'}`);
     const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
     const musik = process.env.STUDIO_MUSIK || (lagu && path.join(dirMusik, lagu));
-    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot, latarGambar: latarGambarAi }, folder, musik, suara: suaraKarakter(tokoh), opsiSuara, keluar: berkas('video.mp4') });
+    const r = await renderIklan({ naskah: props, aset: { logo: logoVideo, layar: layarApp, maskot, latarGambar: latarGambarAi }, folder, musik, suara: suaraKarakter(tokoh), opsiSuara: opsiSuaraVideo, keluar: berkas('video.mp4') });
     hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') });
     hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   }
