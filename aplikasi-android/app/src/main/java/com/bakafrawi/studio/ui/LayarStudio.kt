@@ -93,13 +93,16 @@ private enum class SubStudio(val label: String) {
 }
 
 private val PRESET_VIDEO = listOf(
-    "otomatis" to "Otomatis",
-    "story-drop" to "Story Drop",
-    "dial-menu" to "Dial Menu",
+    "otomatis" to "Otomatis (Rotasi Gelap / AI)",
+    "dark-keynote" to "Dark Tech Teal",
+    "sinematik-ai" to "Storytelling Full AI",
+    "editorial-scroll" to "Laptop Scroll Web",
+    "split-hook" to "Bold Editorial Gelap",
+    "pov-chat" to "POV / Chat Gelap",
+    "clean-ui" to "Clean UI Putih",
+    "story-drop" to "Story Drop (Kafe)",
+    "dial-menu" to "Dial Menu (Kafe)",
     "sinematik-kafe" to "Sinematik Kafe",
-    "clean-ui" to "Clean UI + Maskot",
-    "dark-keynote" to "Dark Keynote",
-    "pov-chat" to "POV / Chat WA",
 )
 
 private val PRESET_POSTER = listOf(

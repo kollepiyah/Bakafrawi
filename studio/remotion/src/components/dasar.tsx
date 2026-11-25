@@ -33,9 +33,21 @@ export function useKeluar(durasi: number) {
 }
 
 export const bayangan = '0 30px 60px -20px rgba(15,23,42,.22), 0 8px 18px -8px rgba(15,23,42,.12)';
+export const bayanganGelap = '0 24px 60px -18px rgba(0,0,0,0.65), 0 8px 20px -8px rgba(0,0,0,0.45)';
 
-export const Kartu: React.FC<{ style?: React.CSSProperties; children?: React.ReactNode }> = ({ style, children }) => (
-  <div style={{ background: '#fff', borderRadius: 28, boxShadow: bayangan, border: '1.5px solid #EDEDED', ...style }}>{children}</div>
+export const Kartu: React.FC<{ style?: React.CSSProperties; gelap?: boolean; children?: React.ReactNode }> = ({ style, gelap, children }) => (
+  <div
+    style={{
+      background: gelap ? 'rgba(17,24,39,0.82)' : '#fff',
+      borderRadius: 28,
+      boxShadow: gelap ? bayanganGelap : bayangan,
+      border: gelap ? '1.5px solid rgba(255,255,255,0.14)' : '1.5px solid #EDEDED',
+      color: gelap ? '#F8FAFC' : undefined,
+      ...style,
+    }}
+  >
+    {children}
+  </div>
 );
 
 type IkonNama = 'buku' | 'toko' | 'scan' | 'lonceng' | 'grafik' | 'centang' | 'hp' | 'kotak' | 'struk' | 'panah';

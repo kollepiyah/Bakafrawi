@@ -27,15 +27,15 @@ export function kataRata(narasi: string, detik: number): Kata[] {
   });
 }
 
-type PIsi = { a: Adegan; merek: Naskah['merek']; durasi: number; atas: number; jumlah: number; layar: LayarT[] };
+type PIsi = { a: Adegan; merek: Naskah['merek']; durasi: number; atas: number; jumlah: number; layar: LayarT[]; gelap: boolean };
 
-const Isi: React.FC<PIsi> = ({ a, merek, durasi, atas, jumlah, layar }) => {
+const Isi: React.FC<PIsi> = ({ a, merek, durasi, atas, jumlah, layar, gelap }) => {
   switch (a.jenis) {
-    case 'hook': return <Hook a={a} merek={merek} jumlah={jumlah} />;
+    case 'hook': return <Hook a={a} merek={merek} jumlah={jumlah} gelap={gelap} />;
     case 'layar': return <Layar a={a} merek={merek} durasi={durasi} layar={layar} />;
-    case 'kasir': return <Kasir a={a} merek={merek} durasi={durasi} />;
-    case 'alur': return <Alur a={a} merek={merek} durasi={durasi} />;
-    case 'daftar': return <Daftar a={a} merek={merek} durasi={durasi} />;
+    case 'kasir': return <Kasir a={a} merek={merek} durasi={durasi} gelap={gelap} />;
+    case 'alur': return <Alur a={a} merek={merek} durasi={durasi} gelap={gelap} />;
+    case 'daftar': return <Daftar a={a} merek={merek} durasi={durasi} gelap={gelap} />;
     default: return <Penutup a={a} merek={merek} atas={atas} />;
   }
 };
@@ -65,7 +65,7 @@ function volumeMusik(frame: number, kata: { mulai: number; selesai: number }[]) 
 export const Iklan: React.FC<Naskah> = (naskah) => {
   const frame = useCurrentFrame();
   const { merek, adegan, suara, maskot, musik, gaya } = naskah;
-  const gelap = gaya === 'dark-keynote';
+  const gelap = gaya !== 'clean-ui';
   const hookAdegan = adegan.find((a) => a.jenis === 'hook');
   const judulHook = hookAdegan && hookAdegan.jenis === 'hook' ? hookAdegan.judul : merek.nama;
   const { adegan: waktu, total } = hitungWaktu(naskah);
@@ -81,11 +81,11 @@ export const Iklan: React.FC<Naskah> = (naskah) => {
   const kataGlobal = adegan.flatMap((a, i) => (suara?.[i]?.kata ?? []).map((k) => ({ mulai: waktu[i].mulai / FPS + JEDA_AWAL + k.mulai, selesai: waktu[i].mulai / FPS + JEDA_AWAL + k.selesai })));
 
   return (
-    <AbsoluteFill style={{ background: gelap ? '#07090F' : merek.latar }}>
+    <AbsoluteFill style={{ background: gelap ? merek.latar || '#0A0C10' : merek.latar }}>
       <Latar merek={merek} gaya={gaya} latarGambar={naskah.latarGambar} />
       {adegan.map((a, i) => (
         <Sequence key={i} from={waktu[i].mulai} durationInFrames={waktu[i].durasi} name={`${i + 1}. ${a.jenis}`}>
-          <Panggung a={a} merek={merek} durasi={waktu[i].durasi} atas={letak.visualAtas} bawah={letak.visualBawah} jumlah={adegan.length} layar={naskah.layar ?? []} />
+          <Panggung a={a} merek={merek} durasi={waktu[i].durasi} atas={letak.visualAtas} bawah={letak.visualBawah} jumlah={adegan.length} layar={naskah.layar ?? []} gelap={gelap} />
           {suara?.[i] ? (
             <Sequence from={Math.round(JEDA_AWAL * FPS)} layout="none">
               <Audio src={staticFile(suara[i].berkas)} />

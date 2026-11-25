@@ -188,8 +188,22 @@ export const SkemaVideoFullAi = z.object({
 
 const PETUNJUK_JSON_FULL_AI = `\n\nJawab HANYA dengan JSON valid (tanpa markdown) berstruktur:\n{"judul":"...","adegan":[{"narasi":"...","teksLayar":"...","bidikan":"english cinematic vertical 9:16 visual prompt, no text, no watermark"}],"ajakan":"...","caption":"...","hashtag":["..."]}`;
 
+/** Ringkas daftar video referensi dari `studio_referensi` agar AI meniru pola hook/visualnya. */
+function ringkasReferensiWorker(referensi = []) {
+  if (!Array.isArray(referensi) || !referensi.length) return '';
+  const daftar = referensi
+    .map((r) => r?.analisis)
+    .filter((a) => a && (a.judul || a.arahanTiru || a.hook3Detik))
+    .slice(0, 4);
+  if (!daftar.length) return '';
+  const baris = daftar.map((a, i) =>
+    `${i + 1}. ${a.judul || 'Referensi'}${a.presetCocok ? ` [preset: ${a.presetCocok}]` : ''}\n   Hook 3s: ${a.hook3Detik || '-'}\n   Visual & Pacing: ${a.gayaVisual || '-'} · ${a.pacing || '-'}\n   Arahan: ${a.arahanTiru || a.ringkas || '-'}`,
+  );
+  return `\n\nPOLA REFERENSI VIDEO FAVORIT PEMILIK (serap struktur hook, ritme, & gaya penceritaannya tanpa meniru mentah kata-katanya):\n${baris.join('\n')}`;
+}
+
 /** Naskah Video Storytelling Full AI (5-6 adegan gambar AI sinematik + narasi natural). */
-export async function buatNaskahVideoFullAi(produk, situs, arahan, merek = null) {
+export async function buatNaskahVideoFullAi(produk, situs, arahan, merek = null, referensi = []) {
   const penyediaAktif = daftarPenyediaWorker(false);
   const adalahKedai = produk.kategori === 'kedai';
   const templat = () => {
@@ -225,9 +239,10 @@ export async function buatNaskahVideoFullAi(produk, situs, arahan, merek = null)
   if (!penyediaAktif.length) return templat();
 
   const gayaDasar = merek?.profil?.gaya || (merek?.slug === 'lekkopi' ? GAYA_LEKKOPI : GAYA_BAWAAN);
+  const blokRef = ringkasReferensiWorker(referensi);
   const system = gayaDasar
     + ' Kamu membuat naskah VIDEO STORYTELLING FULL AI vertikal 9:16 (bukan demo screenshot layar). Buat alur cerita sinematik 5 adegan yang memikat sejak 2 detik pertama: Adegan 1 Hook menyentil masalah/momen nyata, Adegan 2-4 Cerita suasana/keunggulan nyata, Adegan 5 Penutup & ajakan hangat.';
-  const prompt = `Buat naskah video Reels/TikTok Storytelling Full AI (5 adegan) untuk ${adalahKedai ? 'kedai/merek' : 'produk'} berikut.\n\n${ringkasProduk(produk, situs, merek)}\n\nArahan tambahan dari pemilik: ${arahan || '(pilih sudut cerita paling segar & relatable untuk audiens Indonesia)'}`;
+  const prompt = `Buat naskah video Reels/TikTok Storytelling Full AI (5 adegan) untuk ${adalahKedai ? 'kedai/merek' : 'produk'} berikut.\n\n${ringkasProduk(produk, situs, merek)}${blokRef}\n\nArahan tambahan dari pemilik: ${arahan || '(pilih sudut cerita paling segar & relatable untuk audiens Indonesia)'}`;
 
   const galat = [];
   for (const p of penyediaAktif) {
@@ -401,7 +416,7 @@ export const SkemaVideo = z.object({
   hashtag: z.array(z.string()).describe('5-8 hashtag tanpa tanda #'),
 });
 
-const ATURAN_VIDEO = `Bentuk video: Reels/TikTok iklan 9:16 gaya motion-graphic UI yang sedang ramai (latar putih berkisi,
+const ATURAN_VIDEO = `Bentuk video: Reels/TikTok iklan 9:16 gaya motion-graphic UI modern (latar dinamis & gelap/tegas sesuai merek,
 kartu UI beranimasi, lencana langkah 1-2-3, subtitle kata-per-kata). Urutan:
 - Adegan 1 "hook": langsung menyentil masalah/rasa penasaran penonton; judul besar bergaya karosel IG.
 - 3-4 adegan langkah, satu manfaat per adegan. Utamakan "layar" (tampilan ASLI aplikasi) untuk tiap gambar layar yang
@@ -415,7 +430,7 @@ kartu UI beranimasi, lencana langkah 1-2-3, subtitle kata-per-kata). Urutan:
  * Claude sebagai gambar (diperkecil) supaya ia memilih bagian yang disorot. Tanpa kunci / gagal →
  * templat. Hasil: keluaran mentah (dirapikan video.mjs keNaskah) + narasi/judul untuk tampilan lama.
  */
-export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar = [], kecilkan = null, karakter = []) {
+export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar = [], kecilkan = null, karakter = [], referensi = []) {
   const templat = () => naskahVideoTemplat(produk, situs, merek, layar.length);
   const gambarSiap = [];
   for (const [i, l] of layar.entries()) {
@@ -427,7 +442,8 @@ export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar
   if (!penyediaAktif.length) return { ...templat(), sumber: 'templat (tanpa kunci API)' };
 
   const system = merek?.profil?.gaya || GAYA_BAWAAN;
-  const prompt = `${ATURAN_VIDEO}\n\nAda ${layar.length} layar aplikasi di atas (nomor 0-${Math.max(0, layar.length - 1)}).${layar.length ? '' : ' Tidak ada layar: jangan pakai jenis "layar".'}\n\nKarakter maskot 3D yang tersedia (tampil di bawah layar, satu karakter untuk seluruh video): ${karakter.length ? karakter.join(', ') : '(belum ada — isi karakter kosong)'}.\n\n${ringkasProduk(produk, situs)}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}`;
+  const blokRef = ringkasReferensiWorker(referensi);
+  const prompt = `${ATURAN_VIDEO}\n\nAda ${layar.length} layar aplikasi di atas (nomor 0-${Math.max(0, layar.length - 1)}).${layar.length ? '' : ' Tidak ada layar: jangan pakai jenis "layar".'}\n\nKarakter maskot 3D yang tersedia (tampil di bawah layar, satu karakter untuk seluruh video): ${karakter.length ? karakter.join(', ') : '(belum ada — isi karakter kosong)'}.\n\n${ringkasProduk(produk, situs)}${blokRef}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}`;
   const galat = [];
 
   for (const p of penyediaAktif) {

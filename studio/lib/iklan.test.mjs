@@ -293,3 +293,31 @@ test('kotakGabung: gabungan kotak karakter di beberapa bingkai, diperlebar & gen
   const tepi = kotakGabung([{ x: 0, y: 0, w: 720, h: 1280 }], 720, 1280);
   assert.deepEqual(tepi, { x: 0, y: 0, w: 720, h: 1280 });
 });
+
+test('keNaskah: dark-keynote pakai latar gelap + teal Bakafrawi; split-hook & pov-chat gelap; clean-ui tetap putih', async () => {
+  const { keNaskah } = await import('./video.mjs');
+  const bahan = {
+    adegan: [
+      { jenis: 'hook', narasi: 'Masih manual?', kunci: ['manual'], label: 'Hook', judul: 'Stop Manual', tekan: 'Manual', sub: 'Sub', coretan: 'coba', dari: 'Lama', ke: 'Baru' },
+      { jenis: 'penutup', narasi: 'Coba sekarang!', kunci: ['sekarang'], judul: 'Ayo Coba', tombol: 'Daftar' },
+    ],
+  };
+
+  const dark = keNaskah(bahan, { nama: 'Maktaba POS', info: 'bakafrawi.com', gaya: 'dark-keynote' });
+  assert.equal(dark.merek.latar, '#0A0C10');
+  assert.equal(dark.merek.utama, '#18B4A8');
+  assert.equal(dark.merek.kedua, '#34E0CD');
+  assert.equal(dark.merek.tinta, '#F8FAFC');
+
+  const split = keNaskah(bahan, { nama: 'Maktaba POS', info: 'bakafrawi.com', gaya: 'split-hook' });
+  assert.equal(split.merek.latar, '#0D1017');
+  assert.equal(split.merek.tinta, '#F8FAFC');
+
+  const pov = keNaskah(bahan, { nama: 'Maktaba POS', info: 'bakafrawi.com', gaya: 'pov-chat' });
+  assert.equal(pov.merek.latar, '#0F1419');
+  assert.equal(pov.merek.tinta, '#F1F5F9');
+
+  const clean = keNaskah(bahan, { nama: 'Maktaba POS', info: 'bakafrawi.com', gaya: 'clean-ui' });
+  assert.equal(clean.merek.latar, '#FAFAFA');
+  assert.equal(clean.merek.tinta, '#0B0B0F');
+});

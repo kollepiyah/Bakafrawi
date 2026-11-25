@@ -77,11 +77,23 @@ export function hitungDurasiSinematik(p: PropsSinematik) {
   if (p.gaya === 'dial-menu') return hitungDurasiDial(p);
   // Mode editorial-scroll = 1 scene tunggal laptop di meja kayu (~9–11 detik total, tanpa penutup terpisah).
   if (p.gaya === 'editorial-scroll') {
-    const jumlah = Math.max(1, Math.min(4, p.segmen.length));
-    const perBagian = Math.round(2.4 * FPS_SINEMATIK); // 2.4 detik per blok scroll → total ~9.6 detik
-    const jadwal = p.segmen.slice(0, 4).map((_, i) => ({ mulai: i * perBagian, durasi: perBagian }));
-    const total = Math.max(FPS_SINEMATIK * 7, jumlah * perBagian);
-    return { jadwal, penutupMulai: total, penutupDurasi: 0, total };
+    const segs = p.segmen.slice(0, 4);
+    const bersuara = segs.some((s) => Boolean(s.suaraBerkas));
+    if (!bersuara) {
+      const jumlah = Math.max(1, segs.length);
+      const perBagian = Math.round(2.4 * FPS_SINEMATIK); // 2.4 detik per blok scroll → total ~9.6 detik
+      const jadwal = segs.map((_, i) => ({ mulai: i * perBagian, durasi: perBagian }));
+      const total = Math.max(FPS_SINEMATIK * 7, jumlah * perBagian);
+      return { jadwal, penutupMulai: total, penutupDurasi: 0, total };
+    }
+    let mulai = 0;
+    const jadwal = segs.map((s) => {
+      const durasi = Math.round(Math.max(2.6, Number(s.durasi) || 3.2) * FPS_SINEMATIK);
+      const item = { mulai, durasi };
+      mulai += durasi;
+      return item;
+    });
+    return { jadwal, penutupMulai: mulai, penutupDurasi: 0, total: Math.max(FPS_SINEMATIK * 7, mulai) };
   }
   let mulai = 0;
   const jadwal = p.segmen.map((s) => {
@@ -295,18 +307,25 @@ const LAYAR_W = 920;
 const LAYAR_H = 575;
 const NAV_H = 54;
 const BLOK_H = LAYAR_H - NAV_H; // 521px per blok scroll di dalam layar laptop
-const SUB_LAPTOP = ['SPECIALTY COFFEE', 'RACIKAN KHAS', 'SEDUHAN SEGAR', 'MAMPIR MALAM INI'];
-const JUDUL_CADANGAN = [
+const SUB_LAPTOP_KAFE = ['SPECIALTY COFFEE', 'RACIKAN KHAS', 'SEDUHAN SEGAR', 'MAMPIR MALAM INI'];
+const JUDUL_CADANGAN_KAFE = [
   'BANGUNKAN AROMA KOPI',
   'NIKMATI SEDUHAN TERBAIK',
   'RACIKAN SEGAR TIAP HARI',
   'WAKTUNYA NGOPI SANTAI',
 ];
+const SUB_LAPTOP_DIGITAL = ['SOLUSI DIGITAL', 'TAMPILAN NYATA', 'FITUR UNGGULAN', 'SIAP DIPAKAI'];
+const JUDUL_CADANGAN_DIGITAL = [
+  'KELOLA BISNIS LEBIH RAPI',
+  'PANTAU LANGSUNG DARI HP',
+  'OTOMATIS TANPA RIBET',
+  'MULAI KONSULTASI GRATIS',
+];
 
 /**
  * 1 SCENE TUNGGAL persis referensi POUR / PLAY:
  * Laptop MacBook elegan di atas meja kayu hangat dengan lampu studio redup — kamera diam (micro-zoom halus),
- * sementara halaman website kopi mewah di dalam layar laptop menggulir mulus vertikal dari atas ke bawah.
+ * sementara halaman website di dalam layar laptop menggulir mulus vertikal dari atas ke bawah.
  */
 const HalamanEditorialScroll: React.FC<{
   props: PropsSinematik;
@@ -316,6 +335,9 @@ const HalamanEditorialScroll: React.FC<{
   const frame = useCurrentFrame();
   const { merek } = props;
   const blok = props.segmen.slice(0, 4);
+  const adalahKafe = /kopi|cafe|kafe/i.test(`${merek.nama} ${merek.sub ?? ''}`);
+  const daftarSubLaptop = adalahKafe ? SUB_LAPTOP_KAFE : SUB_LAPTOP_DIGITAL;
+  const daftarJudulCadangan = adalahKafe ? JUDUL_CADANGAN_KAFE : JUDUL_CADANGAN_DIGITAL;
 
   // Micro-zoom kamera yang sangat halus selama 1 scene penuh (tidak pernah cut/ganti scene!).
   const skalaKamera = interpolate(frame, [0, total], [1.0, 1.045], { extrapolateRight: 'clamp' });
@@ -493,11 +515,13 @@ const HalamanEditorialScroll: React.FC<{
                   const gabungJudul = bagian.length >= 2 && bagian[0].split(/\s+/).length < 2 && bagian[1].length <= 24;
                   const judul = gabungJudul
                     ? `${bagian[0]} ${bagian[1]}`
-                    : (bagian[0] || JUDUL_CADANGAN[i % JUDUL_CADANGAN.length]);
+                    : (bagian[0] || daftarJudulCadangan[i % daftarJudulCadangan.length]);
                   const sub = (!gabungJudul && bagian[1])
                     ? bagian[1]
-                    : (i === blok.length - 1 ? (merek.info || 'Buka tiap hari · Waru, Sidoarjo') : `Nikmati racikan kopi segar khas ${merek.nama}.`);
-                  const subLabel = SUB_LAPTOP[i % SUB_LAPTOP.length];
+                    : (i === blok.length - 1
+                      ? (merek.info || (adalahKafe ? 'Buka tiap hari · Waru, Sidoarjo' : 'Siap pakai & konsultasi gratis'))
+                      : (adalahKafe ? `Nikmati racikan kopi segar khas ${merek.nama}.` : `Solusi praktis dari ${merek.nama}.`));
+                  const subLabel = daftarSubLaptop[i % daftarSubLaptop.length];
 
                   // BLOK 3 (indeks 2): Full-bleed showcase kopi lebar penuh (persis detik 00:05 POUR / PLAY!)
                   if (i === 2 && blok.length >= 3) {
@@ -579,12 +603,16 @@ const HalamanEditorialScroll: React.FC<{
                               textTransform: 'uppercase',
                             }}
                           >
-                            {adalahAkhir ? 'MAMPIR SEKARANG →' : adalahHero ? 'TEMUKAN KOPIMU →' : 'LIHAT MENU →'}
+                            {adalahAkhir
+                              ? (adalahKafe ? 'MAMPIR SEKARANG →' : 'COBA GRATIS →')
+                              : adalahHero
+                              ? (adalahKafe ? 'TEMUKAN KOPIMU →' : 'LIHAT FITUR →')
+                              : (adalahKafe ? 'LIHAT MENU →' : 'PELAJARI →')}
                           </span>
                         </div>
                       </div>
 
-                      {/* Kolom Kanan: Visual Kopi / Video */}
+                      {/* Kolom Kanan: Visual Kopi / Aplikasi */}
                       {renderMediaLayar(s, i, {
                         width: '100%',
                         height: BLOK_H - 64,
@@ -621,13 +649,24 @@ const HalamanEditorialScroll: React.FC<{
                   </span>
                 </div>
                 <div style={{ display: 'flex', gap: 18, fontSize: 11, fontWeight: 600, letterSpacing: 1.6, textTransform: 'uppercase', color: 'rgba(26,19,14,0.62)' }}>
-                  <span>MENU</span>
-                  <span>RACIKAN</span>
-                  <span>SUASANA</span>
-                  <span>WARU</span>
+                  {adalahKafe ? (
+                    <>
+                      <span>MENU</span>
+                      <span>RACIKAN</span>
+                      <span>SUASANA</span>
+                      <span>WARU</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>PRODUK</span>
+                      <span>FITUR</span>
+                      <span>DEMO</span>
+                      <span>KONTAK</span>
+                    </>
+                  )}
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, border: '1px solid rgba(26,19,14,0.35)', borderRadius: 999, padding: '5px 12px', color: '#1A130E' }}>
-                  ORDER
+                  {adalahKafe ? 'ORDER' : 'KONSULTASI'}
                 </span>
               </div>
 
@@ -701,7 +740,16 @@ export const Sinematik: React.FC<PropsSinematik> = (props) => {
       ) : dial ? (
         <DialMenu props={props} />
       ) : editorial ? (
-        <HalamanEditorialScroll props={props} jadwal={jadwal} total={total} />
+        <>
+          <HalamanEditorialScroll props={props} jadwal={jadwal} total={total} />
+          {props.segmen.slice(0, 4).map((s, i) =>
+            s.suaraBerkas ? (
+              <Sequence key={`aud-${i}`} from={jadwal[i].mulai} durationInFrames={jadwal[i].durasi} layout="none">
+                <Audio src={staticFile(s.suaraBerkas)} />
+              </Sequence>
+            ) : null,
+          )}
+        </>
       ) : (
         <>
           {props.segmen.map((s, i) => (

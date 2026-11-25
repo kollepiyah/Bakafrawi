@@ -62,15 +62,16 @@ const FOKUS_LEKKOPI = [
 ];
 
 const PRESET_VIDEO = [
-  { kode: "otomatis", label: "Otomatis (sesuai AI / referensi)" },
-  { kode: "story-drop", label: "Story Drop: Menu Lompat dari IG Story ke Meja (ala Aurelia Cafe)" },
-  { kode: "editorial-scroll", label: "Laptop di Meja Kayu / Scroll Website (ala POUR·PLAY)" },
-  { kode: "dial-menu", label: "Dial Menu: Keypad + Foto Penuh Bernomor (ala Happy Cake)" },
-  { kode: "sinematik-kafe", label: "Sinematik Kafe / Remotion + B-roll AI" },
-  { kode: "clean-ui", label: "Clean Motion UI + Maskot" },
-  { kode: "dark-keynote", label: "Dark Tech / Apple Keynote" },
-  { kode: "pov-chat", label: "POV / Storytelling & Chat WA" },
-  { kode: "split-hook", label: "Split-Screen / Fast Hook" },
+  { kode: "otomatis", label: "Otomatis (Rotasi Gelap / Sinematik / Editorial sesuai referensi)" },
+  { kode: "dark-keynote", label: "Dark Tech Bakafrawi (Latar Gelap #0A0C10 + Aksen Teal)" },
+  { kode: "sinematik-ai", label: "Storytelling Full AI (5 Adegan Sinematik Penuh Tanpa Kotak UI)" },
+  { kode: "editorial-scroll", label: "Laptop / Scroll Website & Aplikasi (ala POUR·PLAY)" },
+  { kode: "split-hook", label: "Bold Editorial Gelap + Pita Hook" },
+  { kode: "pov-chat", label: "POV / Chat Gelap Modern" },
+  { kode: "clean-ui", label: "Clean UI Terang (Latar Putih)" },
+  { kode: "story-drop", label: "Story Drop: Menu Lompat dari IG Story ke Meja (Kafe)" },
+  { kode: "dial-menu", label: "Dial Menu: Keypad + Foto Penuh Bernomor (Kafe)" },
+  { kode: "sinematik-kafe", label: "Sinematik Kafe Full AI (Kafe)" },
 ];
 
 type SuaraFavorit = { id: string; nama: string; catatan?: string };

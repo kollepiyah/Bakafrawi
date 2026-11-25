@@ -1,5 +1,17 @@
 # CHANGELOG — bakafrawi.com
 
+## Perbaikan Penjadwalan Otomatis & Perombakan 5 Gaya Video Bakafrawi (25 Nov)
+
+- **Perbaikan Pemicu Jadwal Tayang Otomatis (`src/lib/studio-server.ts`, `src/lib/agenda-server.ts`):**
+  - Menemukan akar masalah konten terjadwal telat tayang: `studio_picu()` di Supabase mengembalikan `'tanpa token'` karena secret Vault `github_studio_token` kosong, sehingga cron 5 menit hanya menunggu cron cadangan 30 menit GitHub Actions.
+  - Menambahkan `picuStudioJikaAdaKerja()` yang dipanggil setiap 5 menit oleh `detakAgenda()` (Vercel sudah memiliki `GITHUB_STUDIO_TOKEN`), dengan pengaman jeda 8 menit lewat `studio_pengaturan.picu_terakhir`.
+- **Rombak Desain Video Bakafrawi agar Tidak Monoton Putih & Sambung ke `studio_referensi` (`studio/studio.mjs`, `studio/lib/video.mjs`, `studio/lib/naskah.mjs`, `studio/remotion/src/`):**
+  - Menghapus dominasi warna putih (`clean-ui` tidak lagi masuk rotasi otomatis; 75% rotasi sebelumnya selalu berakhir putih dan kartu di scene masih ter-hardcode `#fff`).
+  - Membuka 5 gaya berbeda untuk rotasi & pilihan Bakafrawi: **Dark Tech Bakafrawi** (`dark-keynote` dengan latar `#0A0C10`, aksen teal `#18B4A8`/`#34E0CD`, & kartu gelap transparan di `dasar.tsx`, `Hook.tsx`, `Daftar.tsx`, `Alur.tsx`, `Kasir.tsx`), **Storytelling Full AI 5 Adegan** (`sinematik-ai`), **Laptop Scroll Website/Aplikasi** (`editorial-scroll` di `Sinematik.tsx` adaptif untuk produk digital + audio narasi), **Bold Editorial Gelap** (`split-hook`), serta **POV / Chat Gelap Modern** (`pov-chat`).
+  - Menaikkan transparansi & visibilitas foto suasana AI di `Bingkai.tsx` (`0.36` gelap, `0.26` terang).
+  - Menyambungkan `semuaReferensi()` ke `buatNaskahVideo()`, `buatNaskahVideoFullAi()`, dan penentuan gaya di `studio/studio.mjs`, serta memperbarui `referensi-video.ts`, `studio.tsx`, dan `LayarStudio.kt` agar pembedah referensi memetakan ke preset gelap/sinematik/editorial yang sesuai.
+- Diuji: 21/21 unit test worker (`iklan.test.mjs`), 42/42 unit test web (`npm run uji`), `node --check`, `npx tsc --noEmit`, `eslint` pada file terkait, build Next.js, kompilasi Kotlin Android, dan langsung memicu workflow tayang `studio.yml` untuk konten jadwal jam 09.00 WIB hari ini. **Belum:** inspeksi visual render video Bakafrawi gaya baru secara langsung & build berkas `.apk` rilis ke HP Kyai.
+
 ## Perjelas Prompt 6-Blok Google Flow & Auto-Caption Visual Multi-Bingkai Video (25 Nov)
 
 - **Struktur Prompt Google Flow 6-Blok & Panduan 3 Langkah (`src/lib/google-flow-murni.ts`, `/api/studio/google-flow`, `studio-google-flow.tsx`, `LayarStudio.kt`):**

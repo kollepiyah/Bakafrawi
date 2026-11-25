@@ -161,12 +161,16 @@ export function keNaskah(k, { nama, logo, utama = WARNA.utama, kedua = WARNA.ked
   const isi = adegan.filter((a) => a.jenis !== 'penutup');
   const tutup = adegan.find((a) => a.jenis === 'penutup') ?? { jenis: 'penutup', narasi: `Coba ${nama} sekarang. Hubungi kami lewat link di bio!`, kunci: [nama], durasi: DURASI.penutup, judul: `Coba ${nama} sekarang`, tombol: `Coba ${nama}` };
   const palet = gaya === 'dark-keynote'
-    ? { latar: '#07090F', kisi: 'rgba(255,255,255,0.05)', tinta: '#F8FAFC' }
+    ? { latar: '#0A0C10', kisi: 'rgba(24,180,168,0.08)', tinta: '#F8FAFC' }
+    : gaya === 'split-hook'
+    ? { latar: '#0D1017', kisi: 'rgba(245,184,0,0.07)', tinta: '#F8FAFC' }
     : gaya === 'pov-chat'
-    ? { latar: '#F7F4EE', kisi: '#E7E1D6', tinta: '#141210' }
+    ? { latar: '#0F1419', kisi: 'rgba(255,255,255,0.045)', tinta: '#F1F5F9' }
     : { latar: WARNA.latar, kisi: WARNA.kisi, tinta: WARNA.tinta };
+  const warnaUtama = gaya === 'dark-keynote' && (!utama || utama === WARNA.utama) ? '#18B4A8' : utama;
+  const warnaKedua = gaya === 'dark-keynote' && (!utama || utama === WARNA.utama) ? '#34E0CD' : kedua;
   return {
-    merek: { nama, logo, utama, kedua, ...palet },
+    merek: { nama, logo, utama: warnaUtama, kedua: warnaKedua, ...palet },
     gaya,
     layar,
     adegan: [...isi, { ...tutup, info }],

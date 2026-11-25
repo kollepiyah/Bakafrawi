@@ -18,7 +18,7 @@ import {
 import { rest } from "./db-server";
 import { aksesToken, adaGoogle, GoogleTerputus, kalender } from "./google-server";
 import { ringkasanKunjunganAdmin } from "./kunjungan-server";
-import { bacaPengaturan, pastikanSemuaJadwalRutin, simpanPengaturan } from "./studio-server";
+import { bacaPengaturan, pastikanSemuaJadwalRutin, picuStudioJikaAdaKerja, simpanPengaturan } from "./studio-server";
 import { adaBot, kirim } from "./telegram-server";
 
 // Aksi agenda di sisi server — satu-satunya jalan menulis agenda (layar Studio, APK, bot Telegram),
@@ -185,6 +185,12 @@ export async function detakAgenda(sekarang = new Date()) {
     await pastikanSemuaJadwalRutin();
   } catch (e) {
     laporan.push(`Jadwal rutin gagal: ${e instanceof Error ? e.message : e}`);
+  }
+  try {
+    const r = await picuStudioJikaAdaKerja(sekarang);
+    if (r.dipicu) laporan.push("Studio dipicu untuk konten/jadwal jatuh tempo.");
+  } catch (e) {
+    laporan.push(`Picu studio gagal: ${e instanceof Error ? e.message : e}`);
   }
   try {
     laporan.push(await sinkronGoogle(sekarang));

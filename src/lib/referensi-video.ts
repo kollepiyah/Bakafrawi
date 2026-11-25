@@ -95,7 +95,8 @@ const SKEMA_BLUEPRINT = {
     pacing: { type: "string", description: "Ritme potongan klip, mis. cepat 1.5-2.5 dtk atau sinematik santai 3-4 dtk" },
     presetCocok: {
       type: "string",
-      description: "Pilih satu preset yang paling dekat: story-drop (UI Instagram Story di atas lalu menu melompat mendarat ke meja kafe di bawah), editorial-scroll (laptop di meja menggulir halaman website), dial-menu (keypad telepon berisi foto menu lalu potongan foto penuh bernomor), sinematik-kafe, clean-ui, dark-keynote, pov-chat, atau split-hook",
+      description:
+        "Pilih satu preset yang paling dekat (jangan asal clean-ui putih): sinematik-ai (storytelling visual penuh 5 adegan + foto/suasana AI tanpa UI kotak-kotak), dark-keynote (tampilan gelap modern + highlight warna menyala + mockup UI), editorial-scroll (laptop di meja / scroll website atau landing page), split-hook (tipografi tebal gelap kontras tinggi dengan pita hook), pov-chat (gaya POV/notifikasi chat di HP gelap), story-drop (UI Story IG ke meja kafe), dial-menu (keypad menu kafe), sinematik-kafe (B-roll kafe), atau clean-ui (hanya bila benar-benar dominan putih minimalis)",
     },
     strukturAdegan: {
       type: "array",
@@ -144,7 +145,13 @@ export async function bedahDanSimpanReferensi(opsi: {
   const { data } = await panggilLlmJson<Omit<BlueprintReferensi, "platform" | "thumbnail">>({
     system: `Kamu adalah sutradara kreatif & analis konten viral Instagram Reels dan TikTok Indonesia.
 Tugasmu: menganalisis secara NYATA & PRESISI bingkai video referensi yang diberikan (warna latar, font/tipografi, tata letak, gaya scroll/transisi, sudut kamera, durasi & ritme potongan) lalu menerjemahkannya menjadi Blueprint Gaya agar mesin Studio AI meniru gaya tersebut untuk merek: ${namaMerek}.
-Jangan mengarang elemen yang tidak ada di referensi. Bila referensi bergaya editorial majalah / latar krem / scroll vertikal / mockup web-menu mewah, pilih presetCocok = "editorial-scroll".`,
+Jangan mengarang elemen yang tidak ada di referensi. Aturan memilih presetCocok:
+- Jika referensi gelap/tech/modern kontras tinggi → "dark-keynote"
+- Jika referensi scroll website / laptop / showcase web → "editorial-scroll"
+- Jika referensi full video sinematik / storytelling adegan nyata tanpa UI kotak-kotak → "sinematik-ai" (atau "sinematik-kafe" untuk kedai)
+- Jika referensi POV / storytelling chat → "pov-chat"
+- Jika referensi tipografi tebal besar + hook cepat → "split-hook"
+- Hanya pilih "clean-ui" jika referensinya memang UI serba putih terang minimalis.`,
     gambar: opsi.gambar?.slice(0, 6),
     prompt: [
       adaGambar

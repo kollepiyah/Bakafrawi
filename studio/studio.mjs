@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { drafTiktok, segarkanTiktok } from './lib/bank/sosmed.mjs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { ambilTayang, ambilTugas, bacaKonten, bacaMerek, bacaPengaturan, buatTugasRutin, cariTugasRutinTerjadwal, daftarKredensial, merekBankBasi, perbaruiKredensial, perbaruiProfilMerek, perbaruiTugas, pulihkan, semuaMerek, siapDb, tandaiBankDiindeks, unggah } from './lib/db.mjs';
+import { ambilTayang, ambilTugas, bacaKonten, bacaMerek, bacaPengaturan, buatTugasRutin, cariTugasRutinTerjadwal, daftarKredensial, merekBankBasi, perbaruiKredensial, perbaruiProfilMerek, perbaruiTugas, pulihkan, semuaMerek, semuaReferensi, siapDb, tandaiBankDiindeks, unggah } from './lib/db.mjs';
 import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } from './lib/merek-bank.mjs';
 // Satu modul gambar AI untuk semua merek (versi pindahan Lek Kopi: penyedia berurutan + catatan biaya).
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
@@ -204,20 +204,20 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   };
   const catatan = [];
   const cocokGaya = String(tugas.arahan ?? '').match(/\[Gaya:\s*([a-z0-9-]+)\]/i);
-  const gayaPilihan = cocokGaya ? cocokGaya[1].toLowerCase() : '';
+  const gayaRaw = cocokGaya ? cocokGaya[1].toLowerCase() : '';
+  const gayaPilihan = adalahSoftware && gayaRaw === 'sinematik-kafe' ? 'sinematik-ai' : gayaRaw;
   const pilihanSuara = uraiPilihanSuara(tugas.arahan);
   const arahanNaskah = String(tugas.arahan ?? '').replace(/\[Suara:\s*[A-Za-z0-9_-]+\]\s*/gi, '').trim();
   const pakaiAi = tugas.latar === 'ai' || gayaPilihan === 'photo-floating';
+  const dbAktif = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
 
-  // Video software Bakafrawi: tangkapan layar ASLI aplikasi + animasi UI + latar AI + maskot.
-  // Video non-software (mis. Lek Kopi): Video Storytelling Full AI tanpa tangkapan layar aplikasi.
   const dirMaskot = path.join(ASET_LOKAL, 'maskot'), dirMusik = path.join(ASET_LOKAL, 'musik');
   if (tugas.jenis === 'video') await salinAsetDrive().catch(() => {});
   const daftarSuaraFavorit =
     tugas.jenis === 'video'
       ? merek?.slug === 'bakafrawi'
         ? merek.profil?.suara_elevenlabs
-        : siapDb()
+        : dbAktif
         ? (await bacaMerek('bakafrawi').catch(() => null))?.profil?.suara_elevenlabs
         : []
       : [];
@@ -226,15 +226,48 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     voiceId: pilihanSuara.voiceId ?? undefined,
     daftarVoice: Array.isArray(daftarSuaraFavorit) ? daftarSuaraFavorit : [],
   };
-  const layarApp = tugas.jenis === 'video' && adalahSoftware ? await kumpulkanLayar(produk, situs, peramban, folder, catatan) : [];
-  if (tugas.jenis === 'video' && adalahSoftware && !layarApp.length) {
+
+  const referensiMerek = tugas.jenis === 'video' && dbAktif
+    ? await semuaReferensi(merek?.slug || 'bakafrawi').catch(() => [])
+    : [];
+
+  // Gaya video Bakafrawi (clean-ui putih tidak masuk rotasi otomatis; tersedia jika dipilih manual).
+  const GAYA_SOFTWARE = ['dark-keynote', 'sinematik-ai', 'editorial-scroll', 'split-hook', 'pov-chat'];
+  let gayaVideo = '';
+  if (tugas.jenis === 'video' && adalahSoftware) {
+    if ([...GAYA_SOFTWARE, 'clean-ui'].includes(gayaPilihan)) {
+      gayaVideo = gayaPilihan;
+    } else {
+      const refTerbaru = referensiMerek.find((r) => GAYA_SOFTWARE.includes(String(r?.analisis?.presetCocok ?? '').toLowerCase()));
+      const inginTiru = /tiru|referensi|pola/i.test(arahanNaskah);
+      if (refTerbaru && inginTiru) {
+        gayaVideo = String(refTerbaru.analisis.presetCocok).toLowerCase();
+      } else {
+        const hashGaya = String(tugas.id || Date.now()).split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 0);
+        gayaVideo = GAYA_SOFTWARE[hashGaya % GAYA_SOFTWARE.length];
+      }
+    }
+    catatan.push(`gaya video: ${gayaVideo}`);
+    if (referensiMerek.length) catatan.push(`referensi aktif: ${referensiMerek.length}`);
+  }
+
+  const adalahSinematikSoftware = tugas.jenis === 'video' && adalahSoftware && gayaVideo === 'sinematik-ai';
+  const adalahEditorialSoftware = tugas.jenis === 'video' && adalahSoftware && gayaVideo === 'editorial-scroll';
+  const butuhLayarSoftware = tugas.jenis === 'video' && adalahSoftware && !adalahSinematikSoftware;
+
+  const layarApp = butuhLayarSoftware ? await kumpulkanLayar(produk, situs, peramban, folder, catatan) : [];
+  if (butuhLayarSoftware && !adalahEditorialSoftware && !layarApp.length) {
     throw new Error('Produk ini belum punya layar aplikasi (tautan/skenario demo atau gambar layar HP) untuk video.');
   }
-  const karakter = tugas.jenis === 'video' && adalahSoftware ? kelompokKarakter(await readdir(dirMaskot, { recursive: true }).catch(() => [])) : new Map();
+  const karakter =
+    tugas.jenis === 'video' && adalahSoftware && !adalahSinematikSoftware && !adalahEditorialSoftware
+      ? kelompokKarakter(await readdir(dirMaskot, { recursive: true }).catch(() => []))
+      : new Map();
+
   const naskah = tugas.jenis === 'video'
-    ? (adalahSoftware
-        ? await buatNaskahVideo(produk, situs, arahanNaskah, merek, layarApp, kecilkan, [...karakter.keys()])
-        : await buatNaskahVideoFullAi(produk, situs, arahanNaskah, merek))
+    ? (adalahSoftware && !adalahSinematikSoftware && !adalahEditorialSoftware
+        ? await buatNaskahVideo(produk, situs, arahanNaskah, merek, layarApp, kecilkan, [...karakter.keys()], referensiMerek)
+        : await buatNaskahVideoFullAi(produk, situs, arahanNaskah, merek, referensiMerek))
     : await buatNaskah(produk, situs, arahanNaskah, tugas.jenis, merek);
 
   // Standar caption & hashtag konsisten per merek (anti-duplikat, maks 10 hashtag)
@@ -268,14 +301,19 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       await potret(peramban, { ...UKURAN[rasio], keluar, html: htmlPoster({ ...umum, rasio, foto, gaya: gayaPoster, gambar: gambar && mutlak(gambar, situs), gambarIkon: !layar }) });
       hasil.push({ jenis: 'gambar', rasio, url: await simpan(keluar, 'image/jpeg') });
     }
-  } else if (!adalahSoftware) {
-    // Video Storytelling Full AI untuk merek non-software (seperti Lek Kopi): visual gambar AI + suara TTS variatif + Remotion Sinematik.
-    const logoVideo = logo ? await ambilLokal(logo.startsWith('file:') ? logo : mutlak(logo, situs), berkas('logo-sumber')) : null;
-    const teksNarasi = naskah.adegan.map((a) => a.narasi);
+  } else if (!adalahSoftware || adalahSinematikSoftware || adalahEditorialSoftware) {
+    // Video Full AI (Sinematik 5 adegan untuk Lek Kopi & Bakafrawi) atau Editorial Laptop Scroll (Bakafrawi).
+    const logoVideo = adalahSoftware
+      ? await ambilLokal(produk.logo?.src ? mutlak(produk.logo.src, situs) : logo, berkas('logo-sumber'))
+      : logo
+      ? await ambilLokal(logo.startsWith('file:') ? logo : mutlak(logo, situs), berkas('logo-sumber'))
+      : null;
+    const adeganPakai = adalahEditorialSoftware ? naskah.adegan.slice(0, 4) : naskah.adegan;
+    const teksNarasi = adeganPakai.map((a) => a.narasi);
     const hasilSuara = await suaraAdegan(teksNarasi, folder, opsiSuara);
     if (hasilSuara.catatan) catatan.push(hasilSuara.catatan);
     catatan.push(
-      `mode: video Full AI · suara: ${hasilSuara.jalur}${
+      `mode: ${adalahEditorialSoftware ? 'editorial-scroll' : 'video Full AI'} · suara: ${hasilSuara.jalur}${
         hasilSuara.voiceId ? ` (${hasilSuara.voiceId.slice(0, 8)})` : `/${hasilSuara.profil ?? 'otomatis'}`
       }`,
     );
@@ -283,54 +321,52 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     const segmen = [];
     let gambarTerakhir = null;
     let totalDetik = 0;
-    for (const [i, a] of naskah.adegan.entries()) {
-      const infoSuara = hasilSuara.berkas[i] ? await probe(hasilSuara.berkas[i]).catch(() => ({ durasi: 4.5 })) : { durasi: 4.5 };
-      const durasi = Math.max(3.2, Math.min(9, (Number(infoSuara.durasi) || 4.5) + 0.55));
+    for (const [i, a] of adeganPakai.entries()) {
+      const infoSuara = hasilSuara.berkas[i] ? await probe(hasilSuara.berkas[i]).catch(() => ({ durasi: 3.8 })) : { durasi: 3.8 };
+      const durasi = adalahEditorialSoftware
+        ? Math.max(2.8, Math.min(7.5, (Number(infoSuara.durasi) || 3.4) + 0.4))
+        : Math.max(3.2, Math.min(9, (Number(infoSuara.durasi) || 4.5) + 0.55));
       totalDetik += durasi;
-      let pathGambar = null;
-      try {
-        const g = await buatGambarAi(a.bidikan, '9:16', berkas(`ai-adegan-${i + 1}`));
-        pathGambar = g.berkas;
-        gambarTerakhir = pathGambar;
-      } catch (e) {
-        catatan.push(`gambar AI adegan ${i + 1} gagal: ${String(e.message ?? e).slice(0, 120)}`);
-        pathGambar = gambarTerakhir;
+      let pathGambar = adalahEditorialSoftware && layarApp[i]?.berkas ? layarApp[i].berkas : null;
+      if (!pathGambar) {
+        try {
+          const g = await buatGambarAi(a.bidikan, adalahEditorialSoftware ? '4:3' : '9:16', berkas(`ai-adegan-${i + 1}`));
+          pathGambar = g.berkas;
+        } catch (e) {
+          catatan.push(`gambar AI adegan ${i + 1} gagal: ${String(e.message ?? e).slice(0, 120)}`);
+          pathGambar = (adalahEditorialSoftware && layarApp.length ? layarApp[i % layarApp.length].berkas : null) || gambarTerakhir;
+        }
       }
+      if (pathGambar) gambarTerakhir = pathGambar;
       if (!pathGambar) throw new Error('Semua penyedia gambar AI gagal untuk video Full AI.');
       segmen.push({ adegan: i, sumber: pathGambar, jenis: 'foto', durasi, mulaiKlip: 0 });
     }
     const rencana = {
-      adegan: naskah.adegan.map((a) => ({ teksLayar: a.teksLayar || '', gayaTeks: 'editorial', suara: a.narasi })),
+      adegan: adeganPakai.map((a) => ({ teksLayar: a.teksLayar || '', gayaTeks: 'editorial', suara: a.narasi })),
       segmen,
-      total: totalDetik + 2.2,
+      total: totalDetik + (adalahEditorialSoftware ? 0.5 : 2.2),
     };
     const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
     const musik = process.env.STUDIO_MUSIK || (lagu && path.join(dirMusik, lagu));
     const r = await renderSinematikRemotion({
       rencana,
       merek: {
-        nama: merek?.nama || 'Lek Kopi',
-        sub: tema.situs || 'Panjunan, Waru, Sidoarjo',
-        aksen: tema.aksen,
+        nama: adalahSoftware ? produk.nama : (merek?.nama || 'Lek Kopi'),
+        sub: tema.situs || (adalahSoftware ? 'bakafrawi.com' : 'Panjunan, Waru, Sidoarjo'),
+        aksen: adalahSoftware ? '#18B4A8' : tema.aksen,
         info: kontak.whatsappTampil ? `WA ${kontak.whatsappTampil}` : '',
       },
       logo: logoVideo,
       musik,
       musikVolume: 0.22,
       suara: hasilSuara.berkas,
-      gaya: 'sinematik-kafe',
+      gaya: adalahEditorialSoftware ? 'editorial-scroll' : 'sinematik-kafe',
       folder,
       keluar: berkas('video.mp4'),
     });
     hasil.push({ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') });
     if (r.sampul) hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
   } else {
-    // Rotasi otomatis gaya video bila 'otomatis' agar tidak monoton satu tampilan terus-menerus.
-    const daftarGayaVideo = ['dark-keynote', 'pov-chat', 'split-hook', 'clean-ui'];
-    const hashGaya = String(tugas.id || Date.now()).split('').reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 0);
-    const gayaVideo = daftarGayaVideo.includes(gayaPilihan) ? gayaPilihan : daftarGayaVideo[hashGaya % daftarGayaVideo.length];
-    catatan.push(`gaya video: ${gayaVideo}`);
-
     // Bila latar AI aktif, buat 1 foto suasana cerita manusia (TANPA layar HP/komputer palsu) sebagai latar Ken Burns di balik animasi UI.
     let latarGambarAi = null;
     if (pakaiAi && adaGambarAi()) {

@@ -25,6 +25,7 @@ export type Pengaturan = {
   google_galat: string | null;
   google_disinkron: string | null;
   ringkasan_terakhir: string | null;
+  picu_terakhir?: string | null;
 };
 
 export async function bacaPengaturan(): Promise<Pengaturan> {
@@ -785,6 +786,43 @@ export async function picuStudio(): Promise<boolean> {
     body: JSON.stringify({ ref: "main" }),
   });
   return res.ok;
+}
+
+/**
+ * Dipanggil cron 5 menit (`detakAgenda`) sebagai pemicu utama penjadwalan tayang otomatis.
+ * Mengatasi kasus Vault `github_studio_token` di Supabase belum diisi karena Vercel sudah menyimpan
+ * `GITHUB_STUDIO_TOKEN`. Menjaga jeda minimal 8 menit supaya antrean GitHub Actions tak menumpuk.
+ */
+export async function picuStudioJikaAdaKerja(sekarang = new Date()): Promise<{ dipicu: boolean; alasan: string }> {
+  if (!adaKunciServer() || !process.env.GITHUB_STUDIO_TOKEN) {
+    return { dipicu: false, alasan: "kunci belum siap" };
+  }
+
+  let adaKerja = false;
+  try {
+    const resRpc = await rest("rpc/studio_ada_kerja", { method: "POST", body: "{}" });
+    adaKerja = resRpc === true;
+  } catch {
+    const jatuhTempo = (await rest(
+      `studio_tugas?or=(status.eq.antre,status_tayang.eq.antre,and(status.eq.selesai,status_tayang.eq.dijadwalkan,jadwal_tayang.lte.${encodeURIComponent(sekarang.toISOString())}))&select=id&limit=1`,
+    )) as { id: string }[];
+    adaKerja = Array.isArray(jatuhTempo) && jatuhTempo.length > 0;
+  }
+  if (!adaKerja) return { dipicu: false, alasan: "tak ada kerja" };
+
+  const pengaturan = await bacaPengaturan().catch(() => null);
+  if (pengaturan?.picu_terakhir) {
+    const jedaMs = sekarang.getTime() - new Date(pengaturan.picu_terakhir).getTime();
+    if (Number.isFinite(jedaMs) && jedaMs >= 0 && jedaMs < 8 * 60_000) {
+      return { dipicu: false, alasan: "baru dipicu" };
+    }
+  }
+
+  const dipicu = await picuStudio();
+  if (!dipicu) return { dipicu: false, alasan: "GITHUB_STUDIO_TOKEN gagal/belum diisi" };
+
+  await simpanPengaturan({ picu_terakhir: sekarang.toISOString() }).catch(() => {});
+  return { dipicu: true, alasan: "dipicu" };
 }
 
 export type TugasBot = {
