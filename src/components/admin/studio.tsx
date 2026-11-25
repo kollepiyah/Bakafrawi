@@ -4,16 +4,19 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEve
 import type { Session } from "@supabase/supabase-js";
 import {
   CalendarClock,
+  CalendarDays,
   Check,
   Clock,
   Copy,
   Download,
   ExternalLink,
   Flame,
+  FolderOpen,
   History,
   ImageIcon,
   Lightbulb,
   Link2,
+  List,
   Loader2,
   Palette,
   Play,
@@ -35,7 +38,10 @@ import {
 import { Sambungan } from "./studio-sambungan";
 import { PanelUnggahManual } from "./studio-unggah";
 import { PanelGoogleFlow } from "./studio-google-flow";
+import { KalenderStudio } from "./studio-kalender";
+import { PanelAsetStudio } from "./studio-aset";
 import type { Situs } from "@/content/skema";
+import type { EvaluasiMingguan } from "@/lib/evaluasi-mingguan-murni";
 import { jalurGudang, muatKonten, supabase } from "@/lib/gudang-admin";
 import {
   DAFTAR_SASARAN_GAMBAR,
@@ -185,6 +191,7 @@ type Tugas = {
   status_tayang: "belum" | "antre" | "dijadwalkan" | "proses" | "tayang" | "gagal" | "ditolak";
   jadwal_tayang: string | null;
   tayang: {
+    waktu?: string;
     sasaran?: SasaranTayang;
     rutin?: boolean;
     instagram?: {
@@ -217,7 +224,18 @@ const LABEL_STATUS: Record<Tugas["status"], { teks: string; kelas: string }> = {
 
 export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNode }) {
   const [situs, setSitus] = useState<Situs>(situsBawaan);
-  const [merek, setMerek] = useState<{ slug: string; nama: string; aktif: boolean; profil: { bahan?: string[]; suara_elevenlabs?: SuaraFavorit[] } }[]>([]);
+  const [merek, setMerek] = useState<
+    {
+      slug: string;
+      nama: string;
+      aktif: boolean;
+      profil: {
+        bahan?: string[];
+        suara_elevenlabs?: SuaraFavorit[];
+        aset_studio?: { kategori?: string; karakter?: string }[];
+      };
+    }[]
+  >([]);
   const [pilihMerek, setPilihMerek] = useState("bakafrawi");
   const [pilihProduk, setPilihProduk] = useState("maktaba-pos");
   const [pilihJenis, setPilihJenis] = useState<"gambar" | "video">("gambar");
@@ -232,11 +250,22 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [galatUsulan, setGalatUsulan] = useState("");
   const kolomArahan = useRef<HTMLTextAreaElement>(null);
 
-  // Navigasi sub-menu Studio (seragam antara Web/PWA dan APK Android)
-  type TabStudio = "unggah" | "rutin" | "buat" | "flow" | "riwayat" | "riset" | "sambungan";
+  // Navigasi sub-menu Studio
+  type TabStudio = "unggah" | "rutin" | "buat" | "flow" | "riwayat" | "aset" | "riset" | "sambungan";
   const [tabStudio, setTabStudio] = useState<TabStudio>("unggah");
   const [topikFlowAwal, setTopikFlowAwal] = useState("");
   const [filterRiwayat, setFilterRiwayat] = useState<"semua" | "terjadwal" | "cek" | "tayang">("semua");
+  const [modeRiwayat, setModeRiwayat] = useState<"daftar" | "kalender">("daftar");
+  const [realtimeAktif, setRealtimeAktif] = useState(false);
+
+  // Evaluasi mingguan otomatis (Weekly Feedback Loop)
+  const [evaluasiMingguan, setEvaluasiMingguan] = useState<{
+    bakafrawi: EvaluasiMingguan | null;
+    lekkopi: EvaluasiMingguan | null;
+  }>({ bakafrawi: null, lekkopi: null });
+  const [mengevaluasi, setMengevaluasi] = useState(false);
+  const [galatEvaluasi, setGalatEvaluasi] = useState("");
+  const [pesanEvaluasi, setPesanEvaluasi] = useState("");
 
   // Riset Reels Viral & Jam Tayang
   const [konsepViral, setKonsepViral] = useState<KonsepReelsViral[]>([]);
@@ -273,7 +302,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const [sasaranBuat, setSasaranBuat] = useState<SasaranTayang>("otomatis");
 
   const muat = useCallback(async () => {
-    const { data, error } = await supabase().from("studio_tugas").select("*").order("dibuat", { ascending: false }).limit(30);
+    const { data, error } = await supabase().from("studio_tugas").select("*").order("dibuat", { ascending: false }).limit(60);
     if (error) setPesan(`Gagal memuat tugas: ${error.message}`);
     else setDaftar(data as Tugas[]);
   }, []);
@@ -293,13 +322,38 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     return () => clearTimeout(t);
   }, [muat, muatMerek]);
 
-  // Selama ada tugas yang belum selesai, perbarui daftar tiap 10 detik.
+  // Langganan Supabase Realtime agar perubahan status render/tayang muncul otomatis tanpa reload.
+  useEffect(() => {
+    if (jalurGudang !== "supabase") return;
+    const saluran = supabase()
+      .channel("studio-tugas-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "studio_tugas" }, (payload) => {
+        if (payload.eventType === "INSERT" && payload.new) {
+          const baru = payload.new as Tugas;
+          setDaftar((prev) => [baru, ...prev.filter((x) => x.id !== baru.id)].slice(0, 60));
+        } else if (payload.eventType === "UPDATE" && payload.new) {
+          const ubah = payload.new as Tugas;
+          setDaftar((prev) => prev.map((x) => (x.id === ubah.id ? ubah : x)));
+        } else if (payload.eventType === "DELETE" && payload.old) {
+          const lamaId = String((payload.old as { id?: string }).id ?? "");
+          if (lamaId) setDaftar((prev) => prev.filter((x) => x.id !== lamaId));
+        }
+      })
+      .subscribe((status) => {
+        setRealtimeAktif(status === "SUBSCRIBED");
+      });
+    return () => {
+      void supabase().removeChannel(saluran);
+    };
+  }, []);
+
+  // Cadangan bila koneksi Realtime belum aktif sementara ada tugas berjalan.
   const masihJalan = daftar.some((t) => (t.status === "naskah" && !t.naskah) || t.status === "antre" || t.status === "proses" || t.status_tayang === "antre" || t.status_tayang === "proses");
   useEffect(() => {
-    if (!masihJalan) return;
+    if (!masihJalan || realtimeAktif) return;
     const t = setInterval(muat, 10000);
     return () => clearInterval(t);
-  }, [masihJalan, muat]);
+  }, [masihJalan, realtimeAktif, muat]);
 
   // Muat status jadwal tayang optimal saat halaman dibuka
   useEffect(() => {
@@ -338,6 +392,43 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     const t = setTimeout(muatReferensi, 0);
     return () => clearTimeout(t);
   }, [muatReferensi]);
+
+  const muatEvaluasi = useCallback(async () => {
+    const tok = await tokenSegar();
+    if (!tok) return;
+    const res = await fetch("/api/studio/evaluasi", {
+      headers: { Authorization: `Bearer ${tok}` },
+    }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    if (j.ok && j.evaluasi) {
+      setEvaluasiMingguan(j.evaluasi);
+    }
+  }, [tokenSegar]);
+
+  useEffect(() => {
+    const t = setTimeout(muatEvaluasi, 0);
+    return () => clearTimeout(t);
+  }, [muatEvaluasi]);
+
+  async function jalankanEvaluasiSekarang() {
+    setMengevaluasi(true);
+    setGalatEvaluasi("");
+    setPesanEvaluasi("");
+    const tok = await tokenSegar();
+    const res = await fetch("/api/studio/evaluasi", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ merek: "semua" }),
+    }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    setMengevaluasi(false);
+    if (!res?.ok || !j.ok) {
+      return setGalatEvaluasi(j.pesan ?? "Gagal menjalankan evaluasi mingguan.");
+    }
+    if (j.evaluasi) setEvaluasiMingguan(j.evaluasi);
+    if (Array.isArray(j.catatan)) setPesanEvaluasi(j.catatan.join(" · "));
+    void muatMerek();
+  }
 
   // Muat konfigurasi jadwal otomatis jam buka (Story Opening)
   const muatJadwalRutin = useCallback(async () => {
@@ -814,6 +905,22 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     }
     return hasil;
   })();
+  const daftarKarakterPilih = (() => {
+    const mentah = merek.find((m) => m.slug === "bakafrawi")?.profil?.aset_studio;
+    const hasil = [...PILIHAN_KARAKTER];
+    const bawaan = new Set(["otomatis", "wanita", "pria", "tanpa", "ibu-hijab", "bapak-kopiah"]);
+    const sudah = new Set<string>();
+    if (Array.isArray(mentah)) {
+      for (const item of mentah) {
+        if (item?.kategori !== "maskot") continue;
+        const slug = String(item.karakter ?? "").trim().toLowerCase();
+        if (!slug || bawaan.has(slug) || sudah.has(slug)) continue;
+        sudah.add(slug);
+        hasil.push({ kode: slug, label: `Custom: ${slug}` });
+      }
+    }
+    return hasil;
+  })();
   const namaMerek = (slug: string) => (merekAktif.length > 1 || slug !== "bakafrawi" ? `${merek.find((m) => m.slug === slug)?.nama ?? slug} · ` : "");
 
   const jumlahTerjadwal = daftar.filter((t) => t.status_tayang === "dijadwalkan" || t.status_tayang === "antre").length;
@@ -845,6 +952,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       ikon: <History className="size-3.5 shrink-0" />,
       lencana: jumlahPerluCek > 0 ? jumlahPerluCek : jumlahTerjadwal > 0 ? jumlahTerjadwal : daftar.length || null,
     },
+    { id: "aset", label: "Aset & Karakter", ikon: <FolderOpen className="size-3.5 shrink-0" /> },
     { id: "riset", label: "Riset & Gaya", ikon: <Flame className="size-3.5 shrink-0" /> },
     { id: "sambungan", label: "Sambungan", ikon: <Plug className="size-3.5 shrink-0" /> },
   ];
@@ -1653,7 +1761,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                         onChange={(e) => setPilihKarakter(e.target.value)}
                         className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
                       >
-                        {PILIHAN_KARAKTER.map((k) => (
+                        {daftarKarakterPilih.map((k) => (
                           <option key={k.kode} value={k.kode} className="bg-card">{k.label}</option>
                         ))}
                       </select>
@@ -1819,41 +1927,94 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
               />
             )}
 
-            {/* ══════════ TAB 4: RIWAYAT & ANTREAN TAYANG ══════════ */}
+            {/* ══════════ TAB 4: RIWAYAT, KALENDER & ANTREAN TAYANG ══════════ */}
             {tabStudio === "riwayat" && (
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    {[
-                      { id: "semua" as const, label: `Semua (${daftar.length})` },
-                      { id: "terjadwal" as const, label: `Terjadwal (${jumlahTerjadwal})` },
-                      { id: "cek" as const, label: `Perlu Cek (${jumlahPerluCek})` },
-                      { id: "tayang" as const, label: `Tayang (${daftar.filter((t) => t.status_tayang === "tayang").length})` },
-                    ].map((f) => (
+                    {modeRiwayat === "daftar" &&
+                      [
+                        { id: "semua" as const, label: `Semua (${daftar.length})` },
+                        { id: "terjadwal" as const, label: `Terjadwal (${jumlahTerjadwal})` },
+                        { id: "cek" as const, label: `Perlu Cek (${jumlahPerluCek})` },
+                        { id: "tayang" as const, label: `Tayang (${daftar.filter((t) => t.status_tayang === "tayang").length})` },
+                      ].map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setFilterRiwayat(f.id)}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                            filterRiwayat === f.id
+                              ? "border-emas bg-emas/15 text-emas"
+                              : "border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/25 hover:text-foreground"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {realtimeAktif && (
+                      <span
+                        className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300"
+                        title="Status diperbarui otomatis lewat Supabase Realtime"
+                      >
+                        <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Live
+                      </span>
+                    )}
+                    <div className="inline-flex rounded-full border border-white/10 bg-white/[0.02] p-0.5 text-xs">
                       <button
-                        key={f.id}
                         type="button"
-                        onClick={() => setFilterRiwayat(f.id)}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                          filterRiwayat === f.id
-                            ? "border-emas bg-emas/15 text-emas"
-                            : "border-white/10 bg-white/[0.02] text-muted-foreground hover:border-white/25 hover:text-foreground"
+                        onClick={() => setModeRiwayat("daftar")}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium transition ${
+                          modeRiwayat === "daftar" ? "bg-emas text-background" : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
-                        {f.label}
+                        <List className="size-3" /> Daftar
                       </button>
-                    ))}
+                      <button
+                        type="button"
+                        onClick={() => setModeRiwayat("kalender")}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-medium transition ${
+                          modeRiwayat === "kalender" ? "bg-emas text-background" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <CalendarDays className="size-3" /> Kalender
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void muat()}
+                      className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 text-xs text-muted-foreground hover:border-emas hover:text-emas"
+                    >
+                      <RefreshCw className="size-3" /> Segarkan
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void muat()}
-                    className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1 text-xs text-muted-foreground hover:border-emas hover:text-emas"
-                  >
-                    <RefreshCw className="size-3" /> Segarkan
-                  </button>
                 </div>
 
-                {daftarTersaring.length === 0 ? (
+                {modeRiwayat === "kalender" ? (
+                  <KalenderStudio
+                    daftar={daftar}
+                    namaMerek={namaMerek}
+                    namaProduk={namaProduk}
+                    onTayangSekarang={(id) => {
+                      const t = daftar.find((x) => x.id === id);
+                      if (t) void tayang(t, "sekarang");
+                    }}
+                    onHapus={(id) => {
+                      const t = daftar.find((x) => x.id === id);
+                      if (t) void hapus(t);
+                    }}
+                    onPilihDetail={(id) => {
+                      setFilterRiwayat("semua");
+                      setModeRiwayat("daftar");
+                      setTimeout(() => {
+                        document.getElementById(`tugas-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }, 60);
+                    }}
+                  />
+                ) : daftarTersaring.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-border bg-card/40 py-10 text-center text-xs text-muted-foreground">
                     Belum ada konten pada filter ini.
                   </div>
@@ -1881,6 +2042,11 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   </div>
                 )}
               </div>
+            )}
+
+            {/* ══════════ TAB 4b: PUSTAKA ASET & KARAKTER ══════════ */}
+            {tabStudio === "aset" && (
+              <PanelAsetStudio tokenSegar={tokenSegar} onAsetBerubah={muatMerek} />
             )}
 
             {/* ══════════ TAB 5: RISET TREN, JAM OPTIMAL & REFERENSI VIDEO ══════════ */}
@@ -2160,6 +2326,102 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     </div>
                   )}
                 </section>
+
+                {/* 5d. Evaluasi & Penyesuaian Gaya Mingguan Otomatis */}
+                <section className="space-y-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <h2 className="flex items-center gap-2 font-heading text-base font-semibold text-foreground">
+                        <CalendarClock className="size-4 text-emerald-400" /> Evaluasi &amp; Penyesuaian Gaya Mingguan
+                      </h2>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Jalan otomatis setiap <b>Senin pukul 06.00 WIB</b> dari cache Insight IG untuk memprioritaskan
+                        gaya video dengan performa terbaik minggu berikutnya.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void jalankanEvaluasiSekarang()}
+                      disabled={mengevaluasi}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                    >
+                      {mengevaluasi ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                      Jalankan Evaluasi Sekarang
+                    </button>
+                  </div>
+
+                  {pesanEvaluasi && (
+                    <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">{pesanEvaluasi}</p>
+                  )}
+                  {galatEvaluasi && (
+                    <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">{galatEvaluasi}</p>
+                  )}
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {(["bakafrawi", "lekkopi"] as const).map((slug) => {
+                      const ev = evaluasiMingguan[slug];
+                      return (
+                        <div
+                          key={slug}
+                          className="space-y-2.5 rounded-xl border border-border/80 bg-white/[0.02] p-3.5 text-xs"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold uppercase tracking-wide text-foreground">
+                              {slug === "bakafrawi" ? "Bakafrawi" : "Lek Kopi"}
+                            </span>
+                            {ev ? (
+                              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-muted-foreground">
+                                Minggu {ev.minggu} · rata {ev.rataViews} views
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground">Belum ada evaluasi</span>
+                            )}
+                          </div>
+
+                          {ev ? (
+                            <>
+                              <p className="text-zinc-300">{ev.ringkasan}</p>
+                              {ev.wawasan.length > 0 && (
+                                <ul className="list-disc space-y-1 pl-4 text-[11px] text-zinc-400">
+                                  {ev.wawasan.map((w, idx) => (
+                                    <li key={idx}>{w}</li>
+                                  ))}
+                                </ul>
+                              )}
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                {ev.gayaPrioritas.map((g) => (
+                                  <span
+                                    key={g}
+                                    className="rounded-full border border-emerald-500/35 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300"
+                                  >
+                                    Prioritas: {g}
+                                  </span>
+                                ))}
+                                {ev.gayaKurangi.map((g) => (
+                                  <span
+                                    key={g}
+                                    className="rounded-full border border-amber-500/35 bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-300"
+                                  >
+                                    Kurangi: {g}
+                                  </span>
+                                ))}
+                              </div>
+                              {ev.saranHook && (
+                                <p className="rounded-lg border border-white/10 bg-black/20 p-2 text-[11px] text-zinc-300">
+                                  <b>Saran Hook:</b> {ev.saranHook}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground">
+                              Pastikan cache Insight Instagram sudah ditarik sekali di tab Insight agar evaluasi bisa menganalisis data performa.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
               </div>
             )}
 
@@ -2206,7 +2468,7 @@ function KartuTugas({
   }
 
   return (
-    <article className="rounded-2xl border border-border bg-card p-5">
+    <article id={`tugas-${t.id}`} className="rounded-2xl border border-border bg-card p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm">
           {t.jenis === "video" ? <Video className="size-4 text-emas" /> : <ImageIcon className="size-4 text-emas" />}

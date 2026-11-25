@@ -16,6 +16,7 @@ import {
   type MasukanAcara,
 } from "./agenda-murni";
 import { rest } from "./db-server";
+import { jalankanEvaluasiMingguanJikaWaktunya } from "./evaluasi-mingguan-server";
 import { aksesToken, adaGoogle, GoogleTerputus, kalender } from "./google-server";
 import { ringkasanKunjunganAdmin } from "./kunjungan-server";
 import { bacaPengaturan, pastikanSemuaJadwalRutin, picuStudioJikaAdaKerja, simpanPengaturan } from "./studio-server";
@@ -191,6 +192,12 @@ export async function detakAgenda(sekarang = new Date()) {
     if (r.dipicu) laporan.push("Studio dipicu untuk konten/jadwal jatuh tempo.");
   } catch (e) {
     laporan.push(`Picu studio gagal: ${e instanceof Error ? e.message : e}`);
+  }
+  try {
+    const ev = await jalankanEvaluasiMingguanJikaWaktunya(sekarang);
+    if (ev.dijalankan) laporan.push("Evaluasi mingguan Studio selesai & disimpan.");
+  } catch (e) {
+    laporan.push(`Evaluasi mingguan gagal: ${e instanceof Error ? e.message : e}`);
   }
   try {
     laporan.push(await sinkronGoogle(sekarang));

@@ -34,6 +34,66 @@ export async function salinAsetDrive({ jalan = (a) => jalankan(process.env.STUDI
   }
 }
 
+/** Nama berkas maskot yang disalin dari Supabase agar pose (`kaget.png`) atau polos (`<id>.png`) terbaca. Murni. */
+export function namaBerkasAsetMaskot(item) {
+  const ekstMentah = String(item?.ekstensi || path.extname(String(item?.url || '')) || '.png').toLowerCase();
+  const ekst = ekstMentah.startsWith('.') ? ekstMentah : `.${ekstMentah}`;
+  const pose = String(item?.pose ?? '').trim().toLowerCase();
+  if (POSE.includes(pose)) return `${pose}${ekst}`;
+  const dasar = String(item?.id ?? 'aset').toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g, '') || 'aset';
+  const aman = POSE.some((p) => dasar === p || dasar.endsWith(`-${p}`)) ? `${dasar}-utama` : dasar;
+  return `${aman}${ekst}`;
+}
+
+/** Unduh aset maskot & musik yang diunggah lewat `/admin` (Supabase) melengkapi aset Google Drive. */
+export async function salinAsetSupabase(daftarAset = [], { dasar = ASET_LOKAL, ambil = fetch, log = console.log } = {}) {
+  if (!Array.isArray(daftarAset) || !daftarAset.length) return 0;
+  let tersalin = 0;
+  for (const item of daftarAset) {
+    const url = String(item?.url ?? '').trim();
+    if (!/^https?:\/\//i.test(url)) continue;
+    const adalahMusik = item?.kategori === 'musik';
+    const ekstMentah = String(item?.ekstensi || path.extname(url) || (adalahMusik ? '.mp3' : '.png')).toLowerCase();
+    const ekst = ekstMentah.startsWith('.') ? ekstMentah : `.${ekstMentah}`;
+
+    let tujuan;
+    if (adalahMusik) {
+      const slugId = String(item?.id ?? 'musik').toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g, '') || 'musik';
+      tujuan = path.join(dasar, 'musik', `${slugId}${ekst}`);
+    } else {
+      const slugKarakter = String(item?.karakter ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g, '');
+      if (!slugKarakter) continue;
+      tujuan = path.join(dasar, 'maskot', slugKarakter, namaBerkasAsetMaskot(item));
+    }
+    if (existsSync(tujuan)) continue;
+    try {
+      const res = await ambil(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await mkdir(path.dirname(tujuan), { recursive: true });
+      await writeFile(tujuan, Buffer.from(await res.arrayBuffer()));
+      tersalin++;
+    } catch (e) {
+      log(`Aset Supabase ${item?.nama ?? url} dilewati: ${String(e?.message ?? e).slice(0, 120)}`);
+    }
+  }
+  return tersalin;
+}
+
+/** Saring kolam gaya berdasarkan evaluasi mingguan (prioritas gaya menang, atau sisihkan gaya lemah). Murni. */
+export function pilihKolamGayaDenganEvaluasi(kolamDasar, evaluasi = null) {
+  if (!Array.isArray(kolamDasar) || !kolamDasar.length || !evaluasi) return kolamDasar;
+  const prioritas = (Array.isArray(evaluasi.gayaPrioritas) ? evaluasi.gayaPrioritas : [])
+    .map((g) => String(g).trim().toLowerCase())
+    .filter((g) => kolamDasar.includes(g));
+  if (prioritas.length) return [...new Set(prioritas)];
+
+  const kurangi = new Set(
+    (Array.isArray(evaluasi.gayaKurangi) ? evaluasi.gayaKurangi : []).map((g) => String(g).trim().toLowerCase()),
+  );
+  const sisa = kolamDasar.filter((g) => !kurangi.has(g));
+  return sisa.length ? sisa : kolamDasar;
+}
+
 /** Musik latar: satu lagu acak dari aset/musik supaya tiap video tak terdengar sama. Murni. */
 export function pilihMusik(berkasAda, acak = Math.random) {
   const lagu = berkasAda.filter((b) => /\.(mp3|m4a|wav|aac|ogg)$/i.test(b)).sort();

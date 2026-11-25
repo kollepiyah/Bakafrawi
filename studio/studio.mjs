@@ -13,7 +13,7 @@ import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } fr
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { ffmpeg, probe } from './lib/bank/alat.mjs';
-import { ASET_LOKAL, deteksiGenderKarakter, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihMusik, renderIklan, renderSinematikRemotion, salinAsetDrive, SUARA, suaraKarakter, uraiPilihanKarakter, WARNA } from './lib/video.mjs';
+import { ASET_LOKAL, deteksiGenderKarakter, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihKolamGayaDenganEvaluasi, pilihMusik, renderIklan, renderSinematikRemotion, salinAsetDrive, salinAsetSupabase, SUARA, suaraKarakter, uraiPilihanKarakter, WARNA } from './lib/video.mjs';
 import { buatNaskah, buatNaskahVideo, buatNaskahVideoFullAi } from './lib/naskah.mjs';
 import { suaraAdegan, uraiPilihanSuara } from './lib/bank/suara.mjs';
 import { renderOpeningAI } from './lib/opening-ai.mjs';
@@ -213,15 +213,17 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   const dbAktif = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
 
   const dirMaskot = path.join(ASET_LOKAL, 'maskot'), dirMusik = path.join(ASET_LOKAL, 'musik');
-  if (tugas.jenis === 'video') await salinAsetDrive().catch(() => {});
-  const daftarSuaraFavorit =
-    tugas.jenis === 'video'
-      ? merek?.slug === 'bakafrawi'
-        ? merek.profil?.suara_elevenlabs
-        : dbAktif
-        ? (await bacaMerek('bakafrawi').catch(() => null))?.profil?.suara_elevenlabs
-        : []
-      : [];
+  const merekBakafrawi =
+    merek?.slug === 'bakafrawi'
+      ? merek
+      : dbAktif
+      ? await bacaMerek('bakafrawi').catch(() => null)
+      : null;
+  if (tugas.jenis === 'video') {
+    await salinAsetDrive().catch(() => {});
+    await salinAsetSupabase(merekBakafrawi?.profil?.aset_studio ?? []).catch(() => {});
+  }
+  const daftarSuaraFavorit = tugas.jenis === 'video' ? merekBakafrawi?.profil?.suara_elevenlabs : [];
   const daftarVoiceFavorit = Array.isArray(daftarSuaraFavorit) ? daftarSuaraFavorit : [];
   const suaraTerpilihObj = pilihanSuara.voiceId
     ? daftarVoiceFavorit.find((v) => String(v?.id ?? '').trim() === pilihanSuara.voiceId)
@@ -231,7 +233,9 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   const mintaKarakter =
     kebutuhanKarakter === 'wanita' ||
     kebutuhanKarakter === 'pria' ||
-    (kebutuhanKarakter !== 'tanpa' && /\b(karakter|maskot)\b/i.test(arahanNaskah));
+    (kebutuhanKarakter !== 'tanpa' &&
+      (/\b(karakter|maskot)\b/i.test(arahanNaskah) ||
+        Boolean(pilihanKarakter.karakter && pilihanKarakter.karakter !== 'otomatis')));
   const opsiSuara = {
     profilSuara: pilihanSuara.profilSuara ?? undefined,
     voiceId: pilihanSuara.voiceId ?? undefined,
@@ -243,6 +247,8 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     ? await semuaReferensi(merek?.slug || 'bakafrawi').catch(() => [])
     : [];
 
+  const evalMerek = merek?.profil?.evaluasi_mingguan ?? null;
+
   // Gaya video Bakafrawi: editorial-scroll & clean-ui tidak masuk rotasi otomatis; bila karakter/suara bergender diminta, pilih gaya bermaskot.
   const GAYA_SOFTWARE_KARAKTER = ['dark-keynote', 'split-hook', 'pov-chat'];
   const GAYA_SOFTWARE_AUTO = ['dark-keynote', 'split-hook', 'pov-chat', 'sinematik-ai'];
@@ -252,7 +258,11 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     if (GAYA_SOFTWARE_MANUAL.includes(gayaPilihan)) {
       gayaVideo = gayaPilihan;
     } else {
-      const kolamGaya = mintaKarakter ? GAYA_SOFTWARE_KARAKTER : GAYA_SOFTWARE_AUTO;
+      const kolamDasar = mintaKarakter ? GAYA_SOFTWARE_KARAKTER : GAYA_SOFTWARE_AUTO;
+      const kolamGaya = pilihKolamGayaDenganEvaluasi(kolamDasar, evalMerek);
+      if (evalMerek?.minggu && kolamGaya.length < kolamDasar.length) {
+        catatan.push(`evaluasi ${evalMerek.minggu}: prioritas ${kolamGaya.join(',')}`);
+      }
       const refTerbaru = referensiMerek.find((r) => kolamGaya.includes(String(r?.analisis?.presetCocok ?? '').toLowerCase()));
       const inginTiru = /tiru|referensi|pola/i.test(arahanNaskah);
       if (refTerbaru && inginTiru) {
@@ -279,17 +289,21 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
       ? kelompokKarakter(await readdir(dirMaskot, { recursive: true }).catch(() => []))
       : new Map();
 
+  const arahanDenganHook = evalMerek?.saranHook
+    ? `${arahanNaskah}${arahanNaskah ? '\n' : ''}(Saran hook minggu ini: ${String(evalMerek.saranHook).slice(0, 140)})`
+    : arahanNaskah;
+
   const arahanUntukAi =
     kebutuhanKarakter === 'wanita'
-      ? `${arahanNaskah}${arahanNaskah ? '\n' : ''}(Gunakan karakter pembawa acara wanita dari daftar karakter)`
+      ? `${arahanDenganHook}${arahanDenganHook ? '\n' : ''}(Gunakan karakter pembawa acara wanita dari daftar karakter)`
       : kebutuhanKarakter === 'pria'
-      ? `${arahanNaskah}${arahanNaskah ? '\n' : ''}(Gunakan karakter pembawa acara pria dari daftar karakter)`
-      : arahanNaskah;
+      ? `${arahanDenganHook}${arahanDenganHook ? '\n' : ''}(Gunakan karakter pembawa acara pria dari daftar karakter)`
+      : arahanDenganHook;
 
   const naskah = tugas.jenis === 'video'
     ? (adalahSoftware && !adalahSinematikSoftware && !adalahEditorialSoftware
         ? await buatNaskahVideo(produk, situs, arahanUntukAi, merek, layarApp, kecilkan, [...karakter.keys()], referensiMerek)
-        : await buatNaskahVideoFullAi(produk, situs, arahanNaskah, merek, referensiMerek))
+        : await buatNaskahVideoFullAi(produk, situs, arahanDenganHook, merek, referensiMerek))
     : await buatNaskah(produk, situs, arahanNaskah, tugas.jenis, merek);
 
   // Standar caption & hashtag konsisten per merek (anti-duplikat, maks 10 hashtag)

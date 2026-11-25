@@ -358,3 +358,49 @@ test('pilihVoiceElevenLabs dengan gender: menyaring daftarVoice sesuai wanita/pr
   assert.equal(pilihVoiceElevenLabs({ daftarVoice: daftar, gender: 'wanita', benih: 'uji', envNilai: '' }), 'id_indah_11');
   assert.equal(pilihVoiceElevenLabs({ daftarVoice: daftar, gender: 'pria', benih: 'uji', envNilai: '' }), 'id_jowo_22');
 });
+
+test('namaBerkasAsetMaskot: pose sah jadi <pose>.<ext>, tanpa pose jadi <id>.<ext>', async () => {
+  const { namaBerkasAsetMaskot } = await import('./video.mjs');
+  assert.equal(
+    namaBerkasAsetMaskot({ id: 'aset-123', pose: 'kaget', ekstensi: '.png', url: 'https://x.test/a.png' }),
+    'kaget.png',
+  );
+  assert.equal(
+    namaBerkasAsetMaskot({ id: 'aset-456', pose: '', ekstensi: '.webm', url: 'https://x.test/b.webm' }),
+    'aset-456.webm',
+  );
+  assert.equal(
+    namaBerkasAsetMaskot({ id: 'hero-kaget', pose: '', ekstensi: '.png', url: 'https://x.test/c.png' }),
+    'hero-kaget-utama.png',
+  );
+});
+
+test('pilihKolamGayaDenganEvaluasi: utamakan gayaPrioritas di dalam kolamDasar & buang gayaKurangi tanpa mengosongkan', async () => {
+  const { pilihKolamGayaDenganEvaluasi } = await import('./video.mjs');
+  const dasarKarakter = ['dark-keynote', 'split-hook', 'pov-chat'];
+
+  assert.deepEqual(
+    pilihKolamGayaDenganEvaluasi(dasarKarakter, {
+      gayaPrioritas: ['sinematik-ai', 'pov-chat', 'dark-keynote'],
+      gayaKurangi: ['split-hook'],
+    }),
+    ['pov-chat', 'dark-keynote'],
+  );
+
+  assert.deepEqual(
+    pilihKolamGayaDenganEvaluasi(dasarKarakter, {
+      gayaPrioritas: ['sinematik-ai'], // tak ada di dasarKarakter
+      gayaKurangi: ['split-hook'],
+    }),
+    ['dark-keynote', 'pov-chat'],
+  );
+
+  // Bila semua gaya masuk daftar kurangi, tetap pertahankan kolam dasar agar tak kosong
+  assert.deepEqual(
+    pilihKolamGayaDenganEvaluasi(['dark-keynote'], {
+      gayaPrioritas: [],
+      gayaKurangi: ['dark-keynote'],
+    }),
+    ['dark-keynote'],
+  );
+});

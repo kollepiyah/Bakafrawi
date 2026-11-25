@@ -1,5 +1,17 @@
 # CHANGELOG — bakafrawi.com
 
+## Kalender Konten Realtime, Pustaka Aset Admin & Evaluasi Gaya Mingguan Otomatis (25 Nov)
+
+- **Tampilan Kalender Konten + Update Status Realtime (`supabase/migrations/20261125133000_studio_realtime.sql`, `src/lib/kalender-studio-murni.ts`, `src/components/admin/studio-kalender.tsx`, `src/components/admin/studio.tsx`):**
+  - Mengaktifkan publikasi **Supabase Realtime** untuk tabel `studio_tugas` dan memasang langganan perubahan baris langsung di panel Studio (`/admin`), dilengkapi lencana status **Live** agar progres render maupun jadwal tayang muncul otomatis tanpa reload halaman.
+  - Menambahkan mode tampilan **Kalender** di samping **Daftar** pada tab **Riwayat**, lengkap dengan navigasi bulan, indikator status per tanggal (`Tayang`, `Terjadwal`, `Perlu Cek`, `Proses`, `Gagal`), panel pratinjau harian, serta aksi cepat Tayangkan / Hapus / Buka Detail.
+- **Pustaka Aset & Karakter Maskot langsung di `/admin` (`src/app/api/studio/aset/route.ts`, `src/components/admin/studio-aset.tsx`, `src/lib/studio-server.ts`, `studio/lib/video.mjs`, `studio/studio.mjs`):**
+  - Menambahkan sub-tab **Aset & Karakter** untuk mengunggah gambar/video karakter maskot (`ibu-hijab`, `bapak-kopiah`, maupun karakter custom baru per pose) dan musik latar langsung ke bucket Storage `studio`, tersimpan di `studio_merek.profil.aset_studio`.
+  - Worker `studio.mjs` otomatis menarik aset Supabase lewat `salinAsetSupabase()` (melengkapi aset Google Drive), dan dropdown **Karakter Maskot** di tab Buat AI menampilkan karakter custom tambahan secara dinamis.
+- **Evaluasi & Penyesuaian Gaya Mingguan Otomatis (`src/lib/evaluasi-mingguan-murni.ts`, `src/lib/evaluasi-mingguan-server.ts`, `src/app/api/studio/evaluasi/route.ts`, `src/lib/agenda-server.ts`, `studio/lib/video.mjs`, `studio/studio.mjs`):**
+  - Menambahkan *weekly feedback loop* yang berjalan otomatis setiap **Senin pukul 06.00 WIB** lewat cron `detakAgenda()` (serta bisa dijalankan manual lewat tombol di tab **Riset & Gaya**) menggunakan data cache Insight IG + distribusi gaya dari `studio_tugas` tanpa memakan kuota ekstra Meta Graph API.
+  - Hasil evaluasi (`gayaPrioritas`, `gayaKurangi`, `saranHook`) tersimpan di `studio_merek.profil.evaluasi_mingguan`, dikirim ke Telegram bila terhubung, dan dipakai worker lewat `pilihKolamGayaDenganEvaluasi()` untuk memprioritaskan gaya video pemenang minggu berikutnya.
+
 ## Perbaikan Penguncian Karakter Wanita/Pria, Penyelarasan Suara & Rotasi Gaya Bakafrawi (25 Nov)
 
 - **Kunci Karakter Maskot & Penyelarasan Suara (`studio/lib/video.mjs`, `studio/lib/bank/suara.mjs`, `studio/studio.mjs`):**
