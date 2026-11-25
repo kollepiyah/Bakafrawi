@@ -19,6 +19,7 @@ import {
   type MenuRingkasSerial,
   type MoodSerial,
   type NaskahDrafSerial,
+  type PanjangSerial,
 } from "./serial-kartun-murni";
 import { ambilMenuLekKopi } from "./naskah-bank";
 
@@ -1003,6 +1004,8 @@ export async function buatTugasSerialKartun(opsi: {
   ide?: string;
   mood?: MoodSerial;
   formatSuara?: FormatSuaraSerial;
+  panjangNaskah?: PanjangSerial;
+  bersambung?: boolean;
   modeJadwal?: "persetujuan" | "prime19" | "custom";
   jadwal?: string | null;
   sasaran?: SasaranTayang | string | null;
@@ -1021,7 +1024,10 @@ export async function buatTugasSerialKartun(opsi: {
   const nomorEpisode = episodeBerikutnya(serial);
   const mood: MoodSerial = opsi.mood ?? serial.moodBawaan ?? "komedi_ceria";
   const formatSuara: FormatSuaraSerial = opsi.formatSuara ?? serial.formatSuara ?? "dialog";
-  const ideBersih = String(opsi.ide ?? "").trim().slice(0, 500);
+  const panjangNaskah: PanjangSerial =
+    opsi.panjangNaskah === "ringkas" || opsi.panjangNaskah === "panjang" ? opsi.panjangNaskah : "sedang";
+  const bersambung = Boolean(opsi.bersambung);
+  const ideBersih = String(opsi.ide ?? "").trim().slice(0, 4000);
   const naskahJadi = opsi.naskahJadi && opsi.naskahJadi.adegan?.length > 0 ? opsi.naskahJadi : null;
 
   let jadwalIso: string | null = null;
@@ -1036,8 +1042,8 @@ export async function buatTugasSerialKartun(opsi: {
   const sasaran = opsi.sasaran ? normalisasiSasaran(opsi.sasaran) : undefined;
   const judulSementara = naskahJadi?.judulEpisode?.trim() || `${serial.judul} — Episode ${nomorEpisode}`;
   const arahan = [
-    `[Serial: ${serial.id} · Ep ${nomorEpisode} · ${mood} · ${formatSuara}]`,
-    ideBersih || `Lanjutkan kisah hangat dan lucu "${serial.judul}" episode ${nomorEpisode} di Lek Kopi.`,
+    `[Serial: ${serial.id} · Ep ${nomorEpisode} · ${mood} · ${formatSuara} · ${panjangNaskah}${bersambung ? " · bersambung" : ""}]`,
+    ideBersih ? ideBersih.slice(0, 280) : `Lanjutkan kisah hangat dan lucu "${serial.judul}" episode ${nomorEpisode} di Lek Kopi.`,
   ].join(" ");
 
   const baris: Record<string, unknown> = {
@@ -1056,6 +1062,8 @@ export async function buatTugasSerialKartun(opsi: {
         nomorEpisode,
         mood,
         formatSuara,
+        panjangNaskah,
+        bersambung,
         ide: ideBersih,
         suaraTokoh: serial.suaraTokoh ?? {},
         ...(daftarMenu.length ? { daftarMenu } : {}),

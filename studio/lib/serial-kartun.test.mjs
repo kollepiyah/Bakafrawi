@@ -73,6 +73,31 @@ test('siapkanPropsSerialKartun menormalisasi adegan, tokoh, latar & durasi', () 
   assert.equal(props.adegan[1].pembicara, 'kiri');
 });
 
+test('siapkanPropsSerialKartun mendukung hingga 16 adegan dan audio panjang hingga >16 detik tanpa terpotong', () => {
+  const adegan = Array.from({ length: 12 }, (_, i) => ({
+    nomor: i + 1,
+    latarKode: 'outdoor',
+    kamera: 'zoom_masuk',
+    tokohKiri: { id: 'pak_tetangga', ekspresi: 'senyum', properti: 'kopi_panas', efek: 'tanpa' },
+    tokohKanan: null,
+    pembicara: 'narator',
+    namaPembicara: 'Narator',
+    dialog: 'Narasi sinematik panjang tentang kisah penemuan kopi oleh Syekh Abul Hasan Asy-Syadzili di lembah sunyi yang dingin pada malam hari.',
+    sfx: 'tanpa',
+  }));
+  const suaraHasil = adegan.map((_, i) => ({ berkas: `/tmp/narasi_${i}.mp3`, kata: [] }));
+  const durasiSuara = adegan.map((_, i) => (i === 0 ? 16 : 6.5));
+
+  const props = siapkanPropsSerialKartun(
+    { judulEpisode: 'Biji Merah dari Lembah Sunyi', adegan },
+    { judulSerial: 'Kisah Kopi', nomorEpisode: 1, suaraHasil, durasiSuara },
+  );
+
+  assert.equal(props.adegan.length, 12);
+  assert.equal(props.adegan[0].durasi, 16.5);
+  assert.equal(props.adegan[1].durasi, 7);
+});
+
 test('pilihVoicePerTokoh memberi suara berbeda antar tokoh & sesuai gender', () => {
   const daftarVoice = [
     { id: 'VoicePriaSatu111', nama: 'Mas Jowo' },
@@ -170,10 +195,11 @@ test('gabungRiwayatEpisode menyimpan episode secara urut & anti-duplikat', () =>
     undefined,
     'cerita-lek-kopi',
     { nomor: 1, judul: 'Ep 1 Perdana', ringkasan: 'Pembuka', mood: 'komedi_ceria', tugasId: 't0' },
-    { judulSerial: 'Cerita di Lek Kopi', mood: 'komedi_ceria', formatSuara: 'dialog' },
+    { judulSerial: 'Cerita di Lek Kopi', mood: 'komedi_ceria', formatSuara: 'campuran' },
   );
   assert.equal(dariKosong.serial.length, 1);
   assert.equal(dariKosong.serial[0].id, 'cerita-lek-kopi');
+  assert.equal(dariKosong.serial[0].formatSuara, 'campuran');
   assert.equal(dariKosong.serial[0].episode.length, 1);
   assert.equal(dariKosong.serial[0].episode[0].judul, 'Ep 1 Perdana');
 });

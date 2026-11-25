@@ -1,5 +1,15 @@
 # CHANGELOG — bakafrawi.com
 
+## Dukungan Dialog Panjang, Narator + Dialog & Episode Bersambung Serial Kartun (25 Nov)
+
+- **Cerita Naratif Panjang, Campuran Narator + Dialog Tokoh & Mode Bersambung (`src/lib/serial-kartun-murni.ts`, `src/app/api/studio/serial/route.ts`, `src/lib/studio-server.ts`, `studio/lib/serial-kartun.mjs`):**
+  - Menambahkan pilihan **Panjang Cerita & Kedalaman Dialog** (`ringkas`: 45–60 dtk, `sedang`: 1–1,5 mnt, `panjang`: 1,5–2,5 mnt; hingga 14–16 adegan dan 22–48 kata per adegan) agar narasi dan dialog terasa bernyawa, tidak pendek kaku.
+  - Menambahkan mode **Narator + Dialog Tokoh** (`formatSuara: "campuran"`) dan opsi **Cerita panjang / bersambung** (`bersambung`) sehingga materi cerita besar (mis. kisah sejarah kopi atau dongeng edukatif) dapat diolah mendalam dan diteruskan ke episode berikutnya lewat memori `ringkasanEpisode` (diperluas ke 450 karakter) dan bahan ide hingga 4.000 karakter.
+  - Menaikkan batas normalisasi draf & props worker (`maks. 16 adegan`, `dialog 650 karakter`, batas audio per adegan dari `9,5` detik ke `28` detik agar narasi panjang tidak terpotong).
+- **Subtitle Rolling Window & Kontrol Editor Draf (`studio/remotion/src/SerialKartun.tsx`, `src/components/admin/studio-serial.tsx`):**
+  - Menambahkan jendela gulir subtitle maks 12 kata per tampilan pada `AdeganPanggung` (baik mode timestamp ElevenLabs maupun fallback teks) agar narasi panjang tetap rapi di zona aman tanpa menabrak karakter.
+  - Memperluas textarea bahan cerita (`rows={4}`), menambahkan pemilih panjang cerita, toggle bersambung, estimasi durasi & jumlah kata realtime di Editor Draf, ubah peran pembicara (`Narator`/`Kiri`/`Kanan`/`Tanpa`), serta tombol tambah/hapus adegan.
+
 ## Asisten Saran Cerita & Editor Draf Serial Kartun + Pemangkasan Biaya Claude Studio (25 Nov)
 
 - **Asisten Kata Kunci, Saran Cerita & Editor Draf Naskah Serial Kartun (`src/lib/serial-kartun-murni.ts`, `src/app/api/studio/serial/route.ts`, `src/lib/studio-server.ts`, `src/components/admin/studio-serial.tsx`, `studio/lib/serial-kartun.mjs`):**

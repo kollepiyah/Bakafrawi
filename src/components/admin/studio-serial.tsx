@@ -22,13 +22,16 @@ import {
 import { DAFTAR_SASARAN_VIDEO, daftarSlotCepatWIB, type SasaranTayang } from "@/lib/jadwal-tayang-murni";
 import {
   bersihkanKodeLokasi,
+  buatAdeganKosongSerial,
   DAFTAR_TOKOH_LEKKOPI,
   episodeBerikutnya,
+  estimasiDurasiNaskahSerial,
   IDE_CEPAT_SERIAL,
   konfigSerialBawaan,
   OPSI_GAYA_KARTUN_LATAR,
   OPSI_LOKASI_LEKKOPI,
   OPSI_MOOD_SERIAL,
+  OPSI_PANJANG_SERIAL,
   type AdeganDrafSerial,
   type FormatSuaraSerial,
   type GayaKartunLatar,
@@ -36,6 +39,7 @@ import {
   type KonfigSuaraTokoh,
   type MoodSerial,
   type NaskahDrafSerial,
+  type PanjangSerial,
   type SaranCeritaSerial,
   type TokohSuaraId,
 } from "@/lib/serial-kartun-murni";
@@ -189,6 +193,8 @@ export function PanelSerialKartun({
   const [ide, setIde] = useState("");
   const [mood, setMood] = useState<MoodSerial>("komedi_ceria");
   const [formatSuara, setFormatSuara] = useState<FormatSuaraSerial>("dialog");
+  const [panjangNaskah, setPanjangNaskah] = useState<PanjangSerial>("sedang");
+  const [bersambung, setBersambung] = useState(false);
   const [sedangBuatDraf, setSedangBuatDraf] = useState(false);
   const [drafNaskah, setDrafNaskah] = useState<NaskahDrafSerial | null>(null);
   const [infoPenyediaDraf, setInfoPenyediaDraf] = useState("");
@@ -284,6 +290,7 @@ export function PanelSerialKartun({
           serialId: serialAktif.id,
           kataKunci: kataKunci.trim(),
           mood,
+          panjangNaskah,
         }),
       });
       const j = await res.json().catch(() => ({}));
@@ -320,6 +327,8 @@ export function PanelSerialKartun({
           kataKunci: kataKunci.trim(),
           mood: moodKirim,
           formatSuara,
+          panjangNaskah,
+          bersambung,
         }),
       });
       const j = await res.json().catch(() => ({}));
@@ -338,12 +347,31 @@ export function PanelSerialKartun({
 
   function ubahAdeganDraf(
     indeks: number,
-    perubahan: Partial<Pick<AdeganDrafSerial, "namaPembicara" | "latarKode" | "dialog">>,
+    perubahan: Partial<Pick<AdeganDrafSerial, "namaPembicara" | "latarKode" | "dialog" | "pembicara">>,
   ) {
     setDrafNaskah((prev) => {
       if (!prev) return prev;
       const adeganBaru = prev.adegan.map((a, idx) => (idx === indeks ? { ...a, ...perubahan } : a));
       return { ...prev, adegan: adeganBaru };
+    });
+  }
+
+  function tambahAdeganDraf() {
+    setDrafNaskah((prev) => {
+      if (!prev || prev.adegan.length >= 16) return prev;
+      const kodeDefault = prev.adegan[prev.adegan.length - 1]?.latarKode || konfig.latar[0]?.kode || "outdoor";
+      const baru = buatAdeganKosongSerial(prev.adegan.length + 1, kodeDefault);
+      return { ...prev, adegan: [...prev.adegan, baru] };
+    });
+  }
+
+  function hapusAdeganDraf(indeks: number) {
+    setDrafNaskah((prev) => {
+      if (!prev || prev.adegan.length <= 1) return prev;
+      const sisa = prev.adegan
+        .filter((_, idx) => idx !== indeks)
+        .map((a, idx) => ({ ...a, nomor: idx + 1 }));
+      return { ...prev, adegan: sisa };
     });
   }
 
@@ -365,6 +393,8 @@ export function PanelSerialKartun({
           ide: ide.trim(),
           mood,
           formatSuara,
+          panjangNaskah,
+          bersambung,
           modeJadwal,
           jadwal: modeJadwal === "custom" ? waktuJadwal : null,
           sasaran,
@@ -723,14 +753,14 @@ export function PanelSerialKartun({
 
         <label className="grid gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">
-            Ide Cerita Episode {nomorBerikutnya} (opsional — kosongkan agar AI lanjutkan cerita otomatis)
+            Ide / Bahan Cerita Episode {nomorBerikutnya} (bisa ide singkat atau tempel narasi cerita panjang)
           </span>
           <textarea
-            rows={2}
+            rows={4}
             value={ide}
             onChange={(e) => setIde(e.target.value)}
-            placeholder="Mis. Mas Danu sok pesan espresso double shot paling pahit, ujung-ujungnya minta tambah susu…"
-            className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm"
+            placeholder="Tulis ide singkat atau tempel langsung contoh cerita / narasi panjang (mis. kisah Syekh Asy-Syadzili dan kopi pertama) agar AI merangkai dialog & narasi panjang atau memecahnya ke beberapa episode…"
+            className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm leading-relaxed"
           />
         </label>
 
@@ -761,6 +791,7 @@ export function PanelSerialKartun({
             <div className="flex flex-wrap gap-1.5">
               {[
                 { kode: "dialog" as const, label: "Dialog Karakter (Tektokan)" },
+                { kode: "campuran" as const, label: "Narator + Dialog Tokoh" },
                 { kode: "narator" as const, label: "1 Narator Bercerita" },
               ].map((f) => (
                 <button
@@ -778,6 +809,48 @@ export function PanelSerialKartun({
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Panjang Cerita & Mode Bersambung */}
+        <div className="grid gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="space-y-1.5">
+            <span className="block text-xs font-medium text-muted-foreground">Panjang Cerita &amp; Kedalaman Dialog</span>
+            <div className="flex flex-wrap gap-1.5">
+              {OPSI_PANJANG_SERIAL.map((p) => (
+                <button
+                  key={p.kode}
+                  type="button"
+                  onClick={() => setPanjangNaskah(p.kode)}
+                  title={p.ket}
+                  className={`rounded-xl border px-3 py-1.5 text-left text-xs transition ${
+                    panjangNaskah === p.kode
+                      ? "border-teal-400/70 bg-teal-500/15 font-semibold text-teal-200"
+                      : "border-white/10 text-muted-foreground hover:border-white/25"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {OPSI_PANJANG_SERIAL.find((p) => p.kode === panjangNaskah)?.ket}
+            </p>
+          </div>
+
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-white/10 bg-background/50 px-3 py-2.5 text-xs sm:max-w-[260px]">
+            <input
+              type="checkbox"
+              checked={bersambung}
+              onChange={(e) => setBersambung(e.target.checked)}
+              className="mt-0.5 size-4 accent-amber-400"
+            />
+            <span>
+              <b className="block text-foreground">Cerita panjang / bersambung</b>
+              <span className="text-[11px] text-muted-foreground">
+                Garap bagian awal dengan utuh &amp; siapkan jembatan lanjut ke Episode {nomorBerikutnya + 1}.
+              </span>
+            </span>
+          </label>
         </div>
 
         {/* Sasaran & Jadwal */}
@@ -914,9 +987,26 @@ export function PanelSerialKartun({
             </div>
 
             <div className="space-y-2.5">
-              <span className="block text-[11px] font-medium text-muted-foreground">
-                Daftar Adegan ({drafNaskah.adegan.length} adegan)
-              </span>
+              {(() => {
+                const est = estimasiDurasiNaskahSerial(drafNaskah.adegan);
+                return (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-medium text-muted-foreground">
+                      Daftar Adegan (<b>{drafNaskah.adegan.length}</b> adegan · ~<b>{est.totalKata}</b> kata · estimasi{" "}
+                      <b>{Math.round(est.totalDetik)} detik</b>)
+                    </span>
+                    {drafNaskah.adegan.length < 16 && (
+                      <button
+                        type="button"
+                        onClick={tambahAdeganDraf}
+                        className="inline-flex items-center gap-1 rounded-full border border-emas/40 bg-emas/10 px-2.5 py-1 text-[11px] font-medium text-emas-muda hover:bg-emas/20"
+                      >
+                        <Plus className="size-3" /> Tambah Adegan
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
               {drafNaskah.adegan.map((a, idx) => {
                 const adaDiOpsi = opsiLatarDraf.some((o) => o.kode === a.latarKode);
                 return (
@@ -932,16 +1022,49 @@ export function PanelSerialKartun({
                         {a.kartuWaktu && (
                           <span className="rounded bg-white/10 px-2 py-0.5 text-zinc-300">{a.kartuWaktu}</span>
                         )}
-                        <span className="text-muted-foreground">
-                          Posisi suara: <b>{a.pembicara}</b>
-                        </span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">
-                        {a.dialog.trim() ? `${a.dialog.trim().split(/\s+/).length} kata` : "Tanpa dialog"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground">
+                          {a.dialog.trim() ? `${a.dialog.trim().split(/\s+/).length} kata` : "Tanpa dialog"}
+                        </span>
+                        {drafNaskah.adegan.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => hapusAdeganDraf(idx)}
+                            className="rounded p-0.5 text-muted-foreground hover:text-red-400"
+                            title="Hapus adegan ini"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <label className="grid gap-1">
+                        <span className="text-[10px] text-muted-foreground">Posisi Suara / Peran</span>
+                        <select
+                          value={a.pembicara}
+                          onChange={(e) => {
+                            const p = e.target.value as AdeganDrafSerial["pembicara"];
+                            let namaSaran = a.namaPembicara;
+                            if (p === "narator") {
+                              namaSaran = "Narator";
+                            } else if (p === "kiri" && a.tokohKiri) {
+                              namaSaran = DAFTAR_TOKOH_LEKKOPI.find((t) => t.id === a.tokohKiri?.id)?.nama ?? a.namaPembicara;
+                            } else if (p === "kanan" && a.tokohKanan) {
+                              namaSaran = DAFTAR_TOKOH_LEKKOPI.find((t) => t.id === a.tokohKanan?.id)?.nama ?? a.namaPembicara;
+                            }
+                            ubahAdeganDraf(idx, { pembicara: p, namaPembicara: namaSaran });
+                          }}
+                          className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
+                        >
+                          <option value="narator" className="bg-card">Narator (VO)</option>
+                          <option value="kiri" className="bg-card">Tokoh Kiri</option>
+                          <option value="kanan" className="bg-card">Tokoh Kanan</option>
+                          <option value="tanpa" className="bg-card">Tanpa Suara</option>
+                        </select>
+                      </label>
                       <label className="grid gap-1">
                         <span className="text-[10px] text-muted-foreground">Nama Pembicara</span>
                         <input
@@ -971,7 +1094,7 @@ export function PanelSerialKartun({
                     <label className="grid gap-1">
                       <span className="text-[10px] text-muted-foreground">Dialog / Narasi (diucapkan ElevenLabs)</span>
                       <textarea
-                        rows={2}
+                        rows={3}
                         value={a.dialog}
                         onChange={(e) => ubahAdeganDraf(idx, { dialog: e.target.value })}
                         className="w-full rounded-lg border border-input bg-background/70 px-2.5 py-1.5 text-xs leading-relaxed"
@@ -1341,10 +1464,14 @@ export function PanelSerialKartun({
             <span className="text-muted-foreground">Format Suara Bawaan</span>
             <select
               value={editFormatSuara}
-              onChange={(e) => setEditFormatSuara(e.target.value === "narator" ? "narator" : "dialog")}
+              onChange={(e) => {
+                const v = e.target.value;
+                setEditFormatSuara(v === "narator" || v === "campuran" ? v : "dialog");
+              }}
               className="h-9 rounded-lg border border-input bg-transparent px-3 text-xs"
             >
               <option value="dialog" className="bg-card">Dialog Karakter (Tektokan)</option>
+              <option value="campuran" className="bg-card">Narator + Dialog Tokoh</option>
               <option value="narator" className="bg-card">1 Narator Bercerita</option>
             </select>
           </label>

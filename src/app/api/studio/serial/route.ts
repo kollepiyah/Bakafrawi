@@ -17,6 +17,7 @@ import {
   type LatarKartun,
   type MoodSerial,
   type NaskahDrafSerial,
+  type PanjangSerial,
   type SerialKartun,
 } from "@/lib/serial-kartun-murni";
 import {
@@ -84,6 +85,8 @@ export async function POST(req: Request) {
     kataKunci?: string;
     ide?: string;
     mood?: MoodSerial;
+    panjangNaskah?: PanjangSerial;
+    bersambung?: boolean;
     modeJadwal?: "persetujuan" | "prime19" | "custom";
     jadwal?: string | null;
     sasaran?: SasaranTayang | string | null;
@@ -158,7 +161,8 @@ export async function POST(req: Request) {
         judul,
         tagline: String(isi.tagline ?? "").trim().slice(0, 140),
         moodBawaan: isi.moodBawaan ?? sudahAda?.moodBawaan ?? "komedi_ceria",
-        formatSuara: isi.formatSuara === "narator" ? "narator" : "dialog",
+        formatSuara:
+          isi.formatSuara === "narator" || isi.formatSuara === "campuran" ? isi.formatSuara : "dialog",
         suaraTokoh: isi.suaraTokoh ?? sudahAda?.suaraTokoh ?? {},
         episode: sudahAda?.episode ?? [],
         dibuat: sudahAda?.dibuat ?? new Date().toISOString(),
@@ -196,11 +200,14 @@ export async function POST(req: Request) {
         konfig.serial[0];
       const nomorEpisode = episodeBerikutnya(serial);
       const mood: MoodSerial = isi.mood ?? serial?.moodBawaan ?? "komedi_ceria";
+      const panjangNaskah: PanjangSerial =
+        isi.panjangNaskah === "ringkas" || isi.panjangNaskah === "panjang" ? isi.panjangNaskah : "sedang";
       const { system, prompt } = buatPromptSaranCeritaSerial({
         judulSerial: serial?.judul,
         nomorEpisode,
         kataKunci: isi.kataKunci,
         mood,
+        panjangNaskah,
         riwayatEpisode: serial?.episode ?? [],
         daftarMenu,
       });
@@ -210,7 +217,7 @@ export async function POST(req: Request) {
           prompt,
           skema: SKEMA_SARAN_CERITA_SERIAL,
           suhu: 0.75,
-          maksToken: 1400,
+          maksToken: 1800,
           valid: (d) => normalisasiSaranCeritaSerial(d, mood).length > 0,
         },
         "saran-cerita-serial",
@@ -237,11 +244,15 @@ export async function POST(req: Request) {
       const nomorEpisode = episodeBerikutnya(serial);
       const mood: MoodSerial = isi.mood ?? serial?.moodBawaan ?? "komedi_ceria";
       const formatSuara: FormatSuaraSerial = isi.formatSuara ?? serial?.formatSuara ?? "dialog";
+      const panjangNaskah: PanjangSerial =
+        isi.panjangNaskah === "ringkas" || isi.panjangNaskah === "panjang" ? isi.panjangNaskah : "sedang";
       const { system, prompt } = buatPromptNaskahDrafSerial({
         judulSerial: serial?.judul,
         nomorEpisode,
         mood,
         formatSuara,
+        panjangNaskah,
+        bersambung: Boolean(isi.bersambung),
         ide: isi.ide,
         kataKunci: isi.kataKunci,
         riwayatEpisode: serial?.episode ?? [],
@@ -254,7 +265,7 @@ export async function POST(req: Request) {
           prompt,
           skema: SKEMA_NASKAH_DRAF_SERIAL,
           suhu: 0.7,
-          maksToken: 2800,
+          maksToken: 5200,
           valid: (d) => normalisasiNaskahDrafSerial(d, nomorEpisode).adegan.length >= 3,
         },
         "draf-naskah-serial",
@@ -274,11 +285,15 @@ export async function POST(req: Request) {
         isi.naskahJadi && Array.isArray(isi.naskahJadi.adegan) && isi.naskahJadi.adegan.length > 0
           ? normalisasiNaskahDrafSerial(isi.naskahJadi)
           : null;
+      const panjangNaskah: PanjangSerial =
+        isi.panjangNaskah === "ringkas" || isi.panjangNaskah === "panjang" ? isi.panjangNaskah : "sedang";
       const r = await buatTugasSerialKartun({
         serialId: isi.serialId,
         ide: isi.ide,
         mood: isi.mood,
         formatSuara: isi.formatSuara,
+        panjangNaskah,
+        bersambung: Boolean(isi.bersambung),
         modeJadwal: isi.modeJadwal,
         jadwal: isi.jadwal,
         sasaran: isi.sasaran,

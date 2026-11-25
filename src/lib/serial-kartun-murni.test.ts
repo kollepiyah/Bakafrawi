@@ -3,10 +3,12 @@ import test from "node:test";
 import {
   bangunPromptKartunkanFoto,
   bersihkanKodeLokasi,
+  buatAdeganKosongSerial,
   buatPromptNaskahDrafSerial,
   buatPromptSaranCeritaSerial,
   catatEpisodeSelesai,
   episodeBerikutnya,
+  estimasiDurasiNaskahSerial,
   konfigSerialBawaan,
   normalisasiKonfigSerial,
   normalisasiNaskahDrafSerial,
@@ -172,4 +174,65 @@ test("buatPromptNaskahDrafSerial & normalisasiNaskahDrafSerial menormalisasi ade
   assert.equal(draf.adegan[0].tokohKiri?.id, "mas_barista");
   assert.equal(draf.adegan[0].pembicara, "kiri");
   assert.deepEqual(draf.hashtag, ["gajian", "lekkopi"]);
+});
+
+test("buatPromptNaskahDrafSerial mendukung cerita naratif panjang, campuran narator+dialog, dan mode bersambung", () => {
+  const ceritaPanjang =
+    "Setiap pagi, miliaran orang di dunia memulai harinya dengan satu tegukan kopi. ".repeat(16) +
+    "AKHIR_CERITA_SYEKH_SYADZILI";
+  assert.ok(ceritaPanjang.length > 1000);
+
+  const { prompt } = buatPromptNaskahDrafSerial({
+    judulSerial: "Kisah Kopi Pertama",
+    nomorEpisode: 1,
+    mood: "cerita_kopi",
+    formatSuara: "campuran",
+    panjangNaskah: "panjang",
+    bersambung: true,
+    ide: ceritaPanjang,
+  });
+
+  assert.match(prompt, /9 sampai 14 adegan/);
+  assert.match(prompt, /22–48 kata per adegan/);
+  assert.match(prompt, /Narator \+ Dialog Tokoh/);
+  assert.match(prompt, /MODE BERSAMBUNG/);
+  assert.match(prompt, /Bersambung ke Episode 2/);
+  assert.match(prompt, /AKHIR_CERITA_SYEKH_SYADZILI/);
+
+  const konfigCampuran = normalisasiKonfigSerial({
+    serial: [{ id: "kisah-kopi", judul: "Kisah Kopi", formatSuara: "campuran" }],
+    serialAktifId: "kisah-kopi",
+  });
+  assert.equal(konfigCampuran.serial[0].formatSuara, "campuran");
+});
+
+test("normalisasiNaskahDrafSerial mendukung hingga 16 adegan & dialog panjang, plus estimasiDurasiNaskahSerial", () => {
+  const dialogPanjang =
+    "Ratusan tahun lalu, seorang ulama besar bernama Syekh Abul Hasan Asy-Syadzili sedang mengembara untuk bertafakur di tengah lembah sunyi. Beliau ingin menghabiskan malamnya dengan beribadah, namun perjalanan panjang membuat tubuhnya sangat lelah sehingga ia berdoa memohon kekuatan kepada Allah.";
+  assert.ok(dialogPanjang.length > 260);
+
+  const adeganBanyak = Array.from({ length: 17 }, (_, i) => ({
+    nomor: i + 1,
+    latarKode: "outdoor",
+    kamera: "zoom_masuk",
+    tokohKiri: { id: "pak_tetangga", ekspresi: "senyum", properti: "kopi_panas", efek: "tanpa" },
+    tokohKanan: null,
+    pembicara: "narator",
+    namaPembicara: "Narator",
+    dialog: i === 0 ? dialogPanjang : "Narasi lanjutan episode cerita kopi hangat yang mengalir tenang.",
+    sfx: "tanpa",
+  }));
+
+  const draf = normalisasiNaskahDrafSerial({ judulEpisode: "Biji Merah", adegan: adeganBanyak }, 1);
+  assert.equal(draf.adegan.length, 16);
+  assert.equal(draf.adegan[0].dialog, dialogPanjang);
+
+  const est = estimasiDurasiNaskahSerial([{ dialog: "satu dua tiga empat lima enam tujuh delapan sembilan sepuluh" }]);
+  assert.equal(est.totalKata, 10);
+  assert.equal(est.totalDetik, 10.4);
+
+  const adeganBaru = buatAdeganKosongSerial(7, "Meja Bar!");
+  assert.equal(adeganBaru.nomor, 7);
+  assert.equal(adeganBaru.latarKode, "meja-bar");
+  assert.equal(adeganBaru.pembicara, "narator");
 });

@@ -39,28 +39,28 @@ const TokohPanggungSkema = z.object({
 });
 
 export const SkemaNaskahSerial = z.object({
-  judulEpisode: z.string().describe('Judul episode singkat 3-6 kata yang lucu/hangat'),
-  ringkasanEpisode: z.string().describe('Ringkasan alur episode ini dalam 1-2 kalimat untuk memori episode berikutnya'),
+  judulEpisode: z.string().describe('Judul episode menarik & hangat/lucu'),
+  ringkasanEpisode: z.string().describe('Ringkasan alur & titik akhir episode ini dalam 1-2 kalimat untuk memori episode berikutnya'),
   tema: z.string().describe('Tema singkat 2-4 kata'),
   adegan: z
     .array(
       z.object({
         nomor: z.number().int(),
         latarKode: z.string().describe('Kode lokasi latar: pilih salah satu dari daftar latar yang tersedia, atau bar/outdoor/meja/depan'),
-        kartuWaktu: z.string().describe('Kartu waktu/bab opsional sangat singkat, mis. "SORE DI PANJUNAN · 16.30" (kosongkan jika tidak perlu)'),
+        kartuWaktu: z.string().describe('Kartu waktu/bab opsional singkat, mis. "ADEGAN 1 · LEMBAH SUNYI" (kosongkan jika tidak perlu)'),
         kamera: z.enum(KAMERA_SAH),
         tokohKiri: TokohPanggungSkema.nullable().optional(),
         tokohKanan: TokohPanggungSkema.nullable().optional(),
         pembicara: z.enum(['kiri', 'kanan', 'narator', 'tanpa']),
-        namaPembicara: z.string().describe('Nama tokoh yang bicara, mis. "Mas Lek", "Mas Danu", "Mbak Rara", "Pak Budi", atau "Cerita Lek Kopi"'),
-        dialog: z.string().describe('Kalimat dialog/narasi lisan santai Indonesia/Jatim tipis (6-16 kata, pas 3-5 detik bicara)'),
+        namaPembicara: z.string().describe('Nama tokoh/narator yang bicara, mis. "Narator", "Mas Lek", "Mas Danu", "Mbak Rara", "Pak Budi", atau "Cerita Lek Kopi"'),
+        dialog: z.string().describe('Kalimat dialog/narasi lisan natural Indonesia (12–48 kata sesuai target panjang episode, boleh 2–3 kalimat utuh)'),
         sfx: z.enum(['pop', 'whoosh', 'tanpa']),
       }),
     )
     .min(5)
-    .max(8),
-  pertanyaanPenutup: z.string().describe('1 pertanyaan seru pemicu komentar di penutup video (maks 12 kata)'),
-  caption: z.string().describe('Caption Instagram hangat & ringan 2-3 kalimat tanpa hashtag & tanpa alamat/jam buka'),
+    .max(16),
+  pertanyaanPenutup: z.string().describe('1 pertanyaan seru pemicu komentar atau ajakan tunggu episode berikutnya di penutup video (maks 20 kata)'),
+  caption: z.string().describe('Caption Instagram hangat & ringan 2-4 kalimat tanpa hashtag & tanpa alamat/jam buka'),
   hashtag: z.array(z.string()).describe('3-5 hashtag relevan tanpa tanda #'),
 });
 
@@ -152,12 +152,35 @@ function naskahTemplatSerial({ judulSerial = 'Cerita di Lek Kopi', nomorEpisode 
   };
 }
 
+const PANJANG_WORKER = {
+  ringkas: {
+    durasiLabel: '45–60 detik',
+    rentangAdegan: '6 sampai 8 adegan',
+    kataPerAdegan: '12–22 kata per adegan (1–2 kalimat utuh)',
+    durasiAdegan: '4–8 detik per adegan',
+  },
+  sedang: {
+    durasiLabel: '1–1,5 menit',
+    rentangAdegan: '7 sampai 10 adegan',
+    kataPerAdegan: '18–34 kata per adegan (2–3 kalimat utuh yang mengalir natural)',
+    durasiAdegan: '6–12 detik per adegan',
+  },
+  panjang: {
+    durasiLabel: '1,5–2,5 menit',
+    rentangAdegan: '9 sampai 14 adegan',
+    kataPerAdegan: '22–48 kata per adegan (2–4 kalimat naratif kaya, tidak terburu-buru)',
+    durasiAdegan: '8–18 detik per adegan',
+  },
+};
+
 /** Tulis naskah 1 episode Serial Kartun 2D Lek Kopi memakai router hemat + memori episode sebelumnya. */
 export async function buatNaskahSerialKartun({
   judulSerial = 'Cerita di Lek Kopi',
   nomorEpisode = 1,
   mood = 'komedi_ceria',
   formatSuara = 'dialog',
+  panjangNaskah = 'sedang',
+  bersambung = false,
   ide = '',
   riwayatEpisode = [],
   daftarLatar = [],
@@ -167,17 +190,21 @@ export async function buatNaskahSerialKartun({
     return naskahTemplatSerial({ judulSerial, nomorEpisode, mood, ide });
   }
 
+  const spek = PANJANG_WORKER[panjangNaskah] ?? PANJANG_WORKER.sedang;
+
   const arahanMood =
     mood === 'kehidupan_santai'
-      ? 'Nuansa: cerita kehidupan sehari-hari yang hangat, santai, menenangkan hati, dekat dengan realita pekerja/mahasiswa/warga Sidoarjo.'
+      ? 'Nuansa: cerita kehidupan sehari-hari yang hangat, santai, reflektif, dan menenangkan hati, dekat dengan realita pekerja/mahasiswa/warga Sidoarjo.'
       : mood === 'cerita_kopi'
-      ? 'Nuansa: cerita ringan tentang kopi, racikan, dan minuman resmi Lek Kopi (lihat daftar menu resmi), dikemas asyik dan tidak menggurui.'
-      : 'Nuansa: komedi ceria slice-of-life! Ada setup lucu, salah paham kocak atau celetukan jujur, dan punchline hangat yang bikin penonton senyum.';
+      ? 'Nuansa: cerita naratif yang kaya — bisa berupa kisah sejarah/inspirasi kopi dunia maupun kisah racikan & minuman resmi Lek Kopi; bila menyebut menu kedai, tetap wajib pakai menu resmi Lek Kopi dari daftar.'
+      : 'Nuansa: komedi ceria slice-of-life! Ada setup cerita yang kuat, tektokan hidup, dan punchline hangat yang bikin penonton senyum.';
 
   const arahanFormat =
     formatSuara === 'narator'
-      ? 'Format suara: Mode 1 Narator yang bercerita hangat (isi `pembicara: "narator"`, `namaPembicara: "Cerita Lek Kopi"`), sambil tetap menampilkan 1-2 tokoh berakting ekspresif di panggung.'
-      : 'Format suara: Mode Dialog Antar Tokoh! Tektokan aktif antara tokoh kiri dan kanan (`pembicara: "kiri"` atau `"kanan"`), sesekali boleh 1 adegan narasi singkat atau reaksi kucing.';
+      ? 'Format suara: Mode 1 Narator yang bercerita hangat (isi `pembicara: "narator"`, `namaPembicara: "Cerita Lek Kopi"` atau `"Narator"`), sambil tetap menampilkan 1-2 tokoh berakting ekspresif di panggung.'
+      : formatSuara === 'campuran'
+      ? 'Format suara: Mode Narator + Dialog Tokoh! Padukan Narator VO (`pembicara: "narator"`, `namaPembicara: "Narator"`) yang bercerita mengalir 2–3 kalimat sinematik hangat DENGAN Dialog Karakter (`pembicara: "kiri"` atau `"kanan"`) pada momen kunci, emosional, atau celetukan lucu.'
+      : 'Format suara: Mode Dialog Antar Tokoh! Tektokan hidup dan berisi antara tokoh kiri dan kanan (`pembicara: "kiri"` atau `"kanan"`), sesekali boleh 1 adegan narasi atau reaksi kucing.';
 
   const teksLatar = daftarLatar.length
     ? daftarLatar.map((l) => `- "${l.kode}": ${l.nama}${l.deskripsi ? ` (${l.deskripsi})` : ''}`).join('\n')
@@ -202,37 +229,47 @@ export async function buatNaskahSerialKartun({
       ].join('\n');
 
   const teksRiwayat = riwayatEpisode.length
-    ? `MEMORI EPISODE SEBELUMNYA (lanjutkan nuansa dunia kedai ini secara natural, JANGAN mengulang punchline/konflik yang sama persis):\n${riwayatEpisode
+    ? `MEMORI EPISODE SEBELUMNYA (lanjutkan nuansa/alur cerita dari titik akhir ini, JANGAN mengulang punchline/konflik yang sama persis):\n${riwayatEpisode
         .slice(-6)
         .map((e) => `- Episode ${e.nomor} "${e.judul}": ${e.ringkasan}`)
         .join('\n')}`
-    : 'Ini Episode 1: perkenalkan suasana akrab Lek Kopi secara langsung lewat cerita seru tanpa perkenalan kaku.';
+    : 'Ini Episode 1: perkenalkan suasana akrab dan bangun cerita dengan hook kuat sejak detik pertama.';
+
+  const arahanBersambung = bersambung
+    ? `\nMODE BERSAMBUNG: Materi cerita dari pemilik boleh dipecah menjadi beberapa episode. Untuk Episode ${nomorEpisode} ini, garap porsinya secara mendalam dan utuh, tutup adegan terakhir atau pertanyaanPenutup dengan jembatan "Bersambung ke Episode ${nomorEpisode + 1}", serta tuliskan ringkasanEpisode mencatat titik akhir cerita agar Episode berikutnya langsung menyambung.`
+    : '';
+
+  const ideBersih = String(ide ?? '').trim().slice(0, 4000);
 
   const system =
-    'Kamu penulis naskah animasi kartun 2D pendek (Instagram Reels 9:16) untuk kedai kopi "Lek Kopi" (@lekkopi.id) di Panjunan, Waru, Sidoarjo (buka Senin–Sabtu 14.00–23.00 WIB). ' +
-    'Gaya cerita WAJIB ceria, hangat, santai, atau komedi ringan (DILARANG keras cerita horor, seram, atau gelap). ' +
-    'Gunakan Bahasa Indonesia sehari-hari yang luwes dengan sentuhan ramah Jawa Timur tipis ("lho", "rek", "cak", "sih", "nih") yang tetap dipahami seluruh Indonesia. ' +
-    'Tokoh tetap: `mas_barista` (Mas Lek, barista ramah), `mas_pelanggan` (Mas Danu, pelanggan polos), `mbak_pelanggan` (Mbak Rara, suka Matcha Latte & Butterscoth Latte), `pak_tetangga` (Pak Budi, bapak berkopiah bijak & kocak), `kucing_kedai` (Cimol si kucing oren — kucing tidak berbicara panjang, cukup ekspresi/efek atau disapa tokoh lain).';
+    'Kamu penulis naskah animasi kartun 2D & storytelling sinematik (Instagram Reels 9:16) untuk kedai kopi "Lek Kopi" (@lekkopi.id) di Panjunan, Waru, Sidoarjo (buka Senin–Sabtu 14.00–23.00 WIB). ' +
+    'Gaya cerita WAJIB ceria, hangat, inspiratif, santai, atau komedi ringan (DILARANG keras cerita horor, seram, atau gelap). ' +
+    'Gunakan Bahasa Indonesia lisan yang hidup dan mengalir enak didengar, dengan sentuhan ramah Jawa Timur tipis jika pas suasana kedai. ' +
+    'Tokoh visual tetap: `mas_barista` (Mas Lek, barista ramah), `mas_pelanggan` (Mas Danu, pelanggan polos), `mbak_pelanggan` (Mbak Rara, suka Matcha Latte & Butterscoth Latte), `pak_tetangga` (Pak Budi, bapak berkopiah bijak & kocak), `kucing_kedai` (Cimol si kucing oren — kucing tidak berbicara panjang, cukup ekspresi/efek atau disapa tokoh lain). ' +
+    'Bila cerita sejarah/inspiratif memakai tokoh luar, gunakan tokoh visual yang paling cocok di panggung sambil mengisi `namaPembicara` yang sesuai atau memakai `pembicara: "narator"`.';
 
   const prompt = [
-    `Buat naskah untuk "${judulSerial}" — EPISODE ${nomorEpisode} (6 sampai 7 adegan, total durasi ±30–42 detik).`,
+    `Buat naskah untuk "${judulSerial}" — EPISODE ${nomorEpisode} (${spek.rentangAdegan}, total durasi ${spek.durasiLabel}).`,
     arahanMood,
     arahanFormat,
     `Latar yang tersedia (pilih kode di kolom \`latarKode\`):\n${teksLatar}`,
-    `MENU RESMI LEK KOPI (lek-kopi.web.app):\n${teksMenu}\nBila menyebut menu atau harga, WAJIB pakai HANYA menu resmi Lek Kopi dari daftar ini / https://lek-kopi.web.app; DILARANG mengarang menu yang tidak ada.`,
+    `MENU RESMI LEK KOPI (lek-kopi.web.app):\n${teksMenu}\nBila menyebut menu atau harga kedai, WAJIB pakai HANYA menu resmi Lek Kopi dari daftar ini / https://lek-kopi.web.app; DILARANG mengarang menu yang tidak ada.`,
     teksRiwayat,
-    ide ? `Ide/topik spesifik dari Kyai: ${ide}` : 'Topik bebas — pilihkan konflik/cerita paling relatable dan lucu untuk pengunjung kedai kopi.',
+    ideBersih ? `Bahan cerita / ide / contoh naskah dari Kyai:\n${ideBersih}` : 'Topik bebas — pilihkan cerita paling relatable, mendalam, dan hangat.',
+    arahanBersambung,
     'Aturan wajib:',
-    '- Adegan 1 langsung hook lucu/menarik dalam 2 detik pertama + boleh pakai `kartuWaktu` singkat.',
-    '- Tiap dialog 6–16 kata saja agar pas 3–5 detik bicara dan enak dibaca subtitle.',
+    '- Adegan 1 langsung hook kuat yang memancing rasa ingin tahu + boleh pakai `kartuWaktu` singkat.',
+    `- Panjang tiap dialog/narasi: ${spek.kataPerAdegan} (${spek.durasiAdegan})! Jangan tulis dialog terlalu pendek (<12 kata) kecuali sahutan cepat; berikan kalimat utuh dan bernyawa.`,
     '- Ganti-ganti ekspresi, properti (`es_kopi`, `matcha_latte`, `kopi_panas`, `hp`, `uang`, `jempol`, `tunjuk`), efek reaksi komik, dan sudut kamera (`zoom_masuk`, `goyang_kaget`, dll.) supaya visual terasa hidup.',
-  ].join('\n\n');
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
   try {
     const r = await panggilRouterWorkerJson({
       system,
       prompt,
-      maksToken: 4096,
+      maksToken: 6000,
       suhu: 0.78,
       skemaZod: SkemaNaskahSerial,
       petunjukJson: PETUNJUK_JSON_SERIAL,
@@ -275,7 +312,7 @@ export function siapkanPropsSerialKartun(naskah, konteks = {}) {
   const daftarSuara = Array.isArray(konteks.suaraHasil) ? konteks.suaraHasil : [];
   const durasiSuara = Array.isArray(konteks.durasiSuara) ? konteks.durasiSuara : [];
 
-  const adegan = (naskah?.adegan ?? []).slice(0, 8).map((a, idx) => {
+  const adegan = (naskah?.adegan ?? []).slice(0, 16).map((a, idx) => {
     const kodeMentah = String(a?.latarKode ?? 'outdoor').trim().toLowerCase();
     const kode = ['bar', 'outdoor', 'meja', 'depan'].includes(kodeMentah) || petaLatar[kodeMentah]
       ? kodeMentah
@@ -301,15 +338,16 @@ export function siapkanPropsSerialKartun(naskah, konteks = {}) {
     const itemSuara = daftarSuara[idx] ?? {};
     const detikAudio = Number(durasiSuara[idx]) || 0;
     const teksDialog = String(a?.dialog ?? '').trim();
-    const perkiraanBaca = Math.max(2.6, Math.min(6.5, teksDialog.split(/\s+/).filter(Boolean).length * 0.42 + 0.9));
-    const durasi = detikAudio > 0 ? Math.max(2.4, Math.min(9.5, detikAudio + 0.5)) : perkiraanBaca;
+    const jumlahKata = teksDialog.split(/\s+/).filter(Boolean).length;
+    const perkiraanBaca = Math.max(2.8, Math.min(22.0, jumlahKata * 0.44 + 1.0));
+    const durasi = detikAudio > 0 ? Math.max(2.4, Math.min(28.0, detikAudio + 0.5)) : perkiraanBaca;
 
     return {
       nomor: Number(a?.nomor) || idx + 1,
       durasi,
       latarKode: kode,
       ...(latarBerkas ? { latarBerkas } : {}),
-      ...(a?.kartuWaktu ? { kartuWaktu: String(a.kartuWaktu).trim().slice(0, 42) } : {}),
+      ...(a?.kartuWaktu ? { kartuWaktu: String(a.kartuWaktu).trim().slice(0, 48) } : {}),
       kamera: KAMERA_SAH.includes(a?.kamera) ? a.kamera : 'zoom_masuk',
       tokohKiri,
       tokohKanan,
@@ -328,10 +366,10 @@ export function siapkanPropsSerialKartun(naskah, konteks = {}) {
   return {
     judulSerial: String(konteks.judulSerial || 'Cerita di Lek Kopi').slice(0, 60),
     nomorEpisode: Math.max(1, Math.round(Number(konteks.nomorEpisode) || 1)),
-    judulEpisode: String(naskah?.judulEpisode || `Episode ${konteks.nomorEpisode || 1}`).slice(0, 72),
+    judulEpisode: String(naskah?.judulEpisode || `Episode ${konteks.nomorEpisode || 1}`).slice(0, 88),
     akun: konteks.akun || '@lekkopi.id',
     mood: ['komedi_ceria', 'kehidupan_santai', 'cerita_kopi'].includes(konteks.mood) ? konteks.mood : 'komedi_ceria',
-    pertanyaanPenutup: String(naskah?.pertanyaanPenutup || 'Menurutmu gimana cerita kali ini? Tulis di komentar!').slice(0, 120),
+    pertanyaanPenutup: String(naskah?.pertanyaanPenutup || 'Menurutmu gimana cerita kali ini? Tulis di komentar!').slice(0, 180),
     infoKedai: konteks.infoKedai || 'Panjunan, Waru, Sidoarjo · Senin–Sabtu 14.00–23.00 WIB',
     ...(latarIntroBerkas ? { latarIntroBerkas } : {}),
     latarIntroKode,
@@ -360,7 +398,10 @@ export function gabungRiwayatEpisode(serialKartunProfil, serialId, episodeBaru, 
       judul: String(metaSerial?.judulSerial || 'Cerita di Lek Kopi').slice(0, 60),
       tagline: '',
       moodBawaan: metaSerial?.mood || episodeBaru?.mood || 'komedi_ceria',
-      formatSuara: metaSerial?.formatSuara === 'narator' ? 'narator' : 'dialog',
+      formatSuara:
+        metaSerial?.formatSuara === 'narator' || metaSerial?.formatSuara === 'campuran'
+          ? metaSerial.formatSuara
+          : 'dialog',
       suaraTokoh: {},
       episode: [],
       dibuat: episodeBaru?.dibuat || new Date().toISOString(),
@@ -376,8 +417,8 @@ export function gabungRiwayatEpisode(serialKartunProfil, serialId, episodeBaru, 
   const bersih = epLama.filter((e) => e && e.nomor !== nomor && (!tugasId || e.tugasId !== tugasId));
   bersih.push({
     nomor,
-    judul: String(episodeBaru?.judul || `Episode ${nomor}`).slice(0, 80),
-    ringkasan: String(episodeBaru?.ringkasan || '').slice(0, 260),
+    judul: String(episodeBaru?.judul || `Episode ${nomor}`).slice(0, 88),
+    ringkasan: String(episodeBaru?.ringkasan || '').slice(0, 450),
     tema: String(episodeBaru?.tema || '').slice(0, 120),
     mood: episodeBaru?.mood || target.moodBawaan || 'komedi_ceria',
     ...(tugasId ? { tugasId } : {}),
@@ -410,6 +451,8 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
   const nomorEpisode = Number(metaTugas.nomorEpisode) || (riwayatEpisode.reduce((m, e) => Math.max(m, Number(e?.nomor) || 0), 0) + 1);
   const mood = metaTugas.mood || serialObj.moodBawaan || 'komedi_ceria';
   const formatSuara = metaTugas.formatSuara || serialObj.formatSuara || 'dialog';
+  const panjangNaskah = metaTugas.panjangNaskah || 'sedang';
+  const bersambung = Boolean(metaTugas.bersambung);
   const suaraTokoh = metaTugas.suaraTokoh || serialObj.suaraTokoh || {};
   const daftarLatar = Array.isArray(konfig.latar) ? konfig.latar : [];
 
@@ -434,6 +477,8 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
         nomorEpisode,
         mood,
         formatSuara,
+        panjangNaskah,
+        bersambung,
         ide: metaTugas.ide || tugas?.arahan || '',
         riwayatEpisode,
         daftarLatar,
@@ -595,6 +640,8 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
         nomorEpisode,
         mood,
         formatSuara,
+        panjangNaskah,
+        bersambung,
       },
       catatan,
       ...(Array.isArray(naskah.pemakaian) ? { pemakaian: naskah.pemakaian } : {}),

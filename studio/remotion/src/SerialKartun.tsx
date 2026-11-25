@@ -319,10 +319,43 @@ const AdeganPanggung: React.FC<{
   const adaKanan = Boolean(adegan.tokohKanan);
   const jumlahTokoh = Number(adaKiri) + Number(adaKanan);
 
-  // Hitung kata aktif untuk highlight subtitle
+  // Hitung kata aktif & jendela halaman (maks 12 kata/layar) agar narasi/dialog panjang tetap rapi di zona aman
+  const KATA_PER_HALAMAN = 12;
   const detik = frame / fps;
   const kataList = adegan.kata ?? [];
   const indeksAktif = kataList.findIndex((k) => detik >= k.mulai - 0.04 && detik <= k.selesai + 0.06);
+
+  let mulaiIdx = 0;
+  let kataTampil = kataList;
+  if (kataList.length > KATA_PER_HALAMAN) {
+    let indeksTunjuk = indeksAktif;
+    if (indeksTunjuk < 0) {
+      const terakhir = kataList[kataList.length - 1];
+      if (terakhir && detik > terakhir.selesai) {
+        indeksTunjuk = kataList.length - 1;
+      } else {
+        const sesudah = kataList.findIndex((k) => detik < k.mulai);
+        indeksTunjuk = sesudah >= 0 ? Math.max(0, sesudah - 1) : 0;
+      }
+    }
+    const halaman = Math.floor(Math.max(0, indeksTunjuk) / KATA_PER_HALAMAN);
+    mulaiIdx = halaman * KATA_PER_HALAMAN;
+    kataTampil = kataList.slice(mulaiIdx, mulaiIdx + KATA_PER_HALAMAN);
+  }
+
+  let teksFallback = adegan.dialog;
+  if (kataList.length === 0 && adegan.dialog) {
+    const semuaKata = adegan.dialog.trim().split(/\s+/).filter(Boolean);
+    if (semuaKata.length > 14) {
+      const jumlahHalaman = Math.ceil(semuaKata.length / KATA_PER_HALAMAN);
+      const halaman = Math.min(jumlahHalaman - 1, Math.floor((frame / Math.max(1, durasi)) * jumlahHalaman));
+      teksFallback = semuaKata.slice(halaman * KATA_PER_HALAMAN, (halaman + 1) * KATA_PER_HALAMAN).join(' ');
+    }
+  }
+
+  const panjangTeksTampil =
+    kataTampil.length > 0 ? kataTampil.map((k) => k.teks).join(' ').length : teksFallback.length;
+  const ukuranFontSubtitle = panjangTeksTampil > 75 ? 35 : 39;
 
   const pegasSubtitle = spring({ frame: frame - 2, fps, config: { damping: 16, stiffness: 150 } });
 
@@ -503,25 +536,33 @@ const AdeganPanggung: React.FC<{
               style={{
                 fontFamily: SANS,
                 fontWeight: 700,
-                fontSize: 39,
+                fontSize: ukuranFontSubtitle,
                 lineHeight: 1.32,
                 color: '#FFFDF7',
               }}
             >
-              {kataList.length > 0
-                ? kataList.map((k, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        color: idx === indeksAktif ? aksen : idx < indeksAktif ? '#FFFDF7' : 'rgba(255,253,247,0.82)',
-                        transition: 'color 80ms linear',
-                      }}
-                    >
-                      {k.teks}
-                      {idx < kataList.length - 1 ? ' ' : ''}
-                    </span>
-                  ))
-                : adegan.dialog}
+              {kataTampil.length > 0
+                ? kataTampil.map((k, idx) => {
+                    const globalIdx = mulaiIdx + idx;
+                    return (
+                      <span
+                        key={globalIdx}
+                        style={{
+                          color:
+                            globalIdx === indeksAktif
+                              ? aksen
+                              : globalIdx < indeksAktif
+                              ? '#FFFDF7'
+                              : 'rgba(255,253,247,0.82)',
+                          transition: 'color 80ms linear',
+                        }}
+                      >
+                        {k.teks}
+                        {idx < kataTampil.length - 1 ? ' ' : ''}
+                      </span>
+                    );
+                  })
+                : teksFallback}
             </div>
           </div>
         </div>
