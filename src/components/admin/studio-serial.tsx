@@ -34,6 +34,7 @@ import {
   OPSI_PANJANG_SERIAL,
   type AdeganDrafSerial,
   type FormatSuaraSerial,
+  type GayaCeritaSerial,
   type GayaKartunLatar,
   type KonfigSerialLekKopi,
   type KonfigSuaraTokoh,
@@ -190,6 +191,11 @@ export function PanelSerialKartun({
   const [sedangMintaSaran, setSedangMintaSaran] = useState(false);
   const [saranCerita, setSaranCerita] = useState<SaranCeritaSerial[]>([]);
   const [infoPenyediaSaran, setInfoPenyediaSaran] = useState("");
+  const [gayaCerita, setGayaCerita] = useState<GayaCeritaSerial>("kedai");
+  const [hasilRiset, setHasilRiset] = useState("");
+  const [risetOtomatisGoogle, setRisetOtomatisGoogle] = useState(true);
+  const [sedangRiset, setSedangRiset] = useState(false);
+  const [infoPenyediaRiset, setInfoPenyediaRiset] = useState("");
   const [ide, setIde] = useState("");
   const [mood, setMood] = useState<MoodSerial>("komedi_ceria");
   const [formatSuara, setFormatSuara] = useState<FormatSuaraSerial>("dialog");
@@ -274,6 +280,54 @@ export function PanelSerialKartun({
     ).entries(),
   ).map(([kode, label]) => ({ kode, label }));
 
+  function pilihGayaCerita(gayaBaru: GayaCeritaSerial) {
+    setGayaCerita(gayaBaru);
+    if (gayaBaru === "dokumenter") {
+      setMood("cerita_kopi");
+      setFormatSuara("narator");
+      setPanjangNaskah("panjang");
+    } else {
+      setMood("komedi_ceria");
+      setFormatSuara("dialog");
+      setPanjangNaskah("sedang");
+    }
+  }
+
+  async function risetCeritaGoogle() {
+    if (!serialAktif) return;
+    const topikRiset = ide.trim() || kataKunci.trim();
+    if (!topikRiset) {
+      setGalat("Isi dulu kata kunci atau ide cerita (mis. kisah Syekh Asy-Syadzili dan sejarah kopi) sebelum riset Google.");
+      return;
+    }
+    setSedangRiset(true);
+    setGalat("");
+    setPesan("");
+    try {
+      const tok = await tokenSegar();
+      if (!tok) throw new Error("Sesi login tidak ditemukan — coba muat ulang.");
+      const res = await fetch("/api/studio/serial", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          aksi: "riset-cerita",
+          topik: topikRiset,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok || !j.teksRiset) {
+        throw new Error(j.pesan ?? "AI belum berhasil meriset fakta di Google.");
+      }
+      setHasilRiset(String(j.teksRiset));
+      setInfoPenyediaRiset(j.penyedia ? `${j.penyedia}${j.model ? ` · ${j.model}` : ""}` : "");
+      setPesan("Riset fakta Google selesai — silakan periksa atau sunting ringkasan fakta sebelum menyusun naskah.");
+    } catch (e) {
+      setGalat(e instanceof Error ? e.message : "Gagal melakukan riset fakta di Google.");
+    } finally {
+      setSedangRiset(false);
+    }
+  }
+
   async function mintaSaranCerita() {
     if (!serialAktif) return;
     setSedangMintaSaran(true);
@@ -291,6 +345,9 @@ export function PanelSerialKartun({
           kataKunci: kataKunci.trim(),
           mood,
           panjangNaskah,
+          gayaCerita,
+          hasilRiset: hasilRiset.trim(),
+          risetGoogle: risetOtomatisGoogle,
         }),
       });
       const j = await res.json().catch(() => ({}));
@@ -299,6 +356,9 @@ export function PanelSerialKartun({
       }
       setSaranCerita(j.saran as SaranCeritaSerial[]);
       setInfoPenyediaSaran(j.penyedia ? `${j.penyedia}${j.model ? ` · ${j.model}` : ""}` : "");
+      if (typeof j.teksRiset === "string" && j.teksRiset.trim()) {
+        setHasilRiset(j.teksRiset);
+      }
       setPesan("3 saran cerita siap dipilih — klik Pakai Ide Ini atau Langsung Buatkan Naskah.");
     } catch (e) {
       setGalat(e instanceof Error ? e.message : "Gagal meminta saran cerita.");
@@ -329,6 +389,9 @@ export function PanelSerialKartun({
           formatSuara,
           panjangNaskah,
           bersambung,
+          gayaCerita,
+          hasilRiset: hasilRiset.trim(),
+          risetGoogle: risetOtomatisGoogle,
         }),
       });
       const j = await res.json().catch(() => ({}));
@@ -337,6 +400,10 @@ export function PanelSerialKartun({
       }
       setDrafNaskah(j.naskah as NaskahDrafSerial);
       setInfoPenyediaDraf(j.penyedia ? `${j.penyedia}${j.model ? ` · ${j.model}` : ""}` : "");
+      if (typeof j.teksRiset === "string" && j.teksRiset.trim()) {
+        setHasilRiset(j.teksRiset);
+        setInfoPenyediaRiset((prev) => prev || "Riset otomatis Google");
+      }
       setPesan("Draf naskah selesai disusun — silakan periksa atau ubah dialog sebelum render video.");
     } catch (e) {
       setGalat(e instanceof Error ? e.message : "Gagal menyusun draf naskah.");
@@ -347,7 +414,7 @@ export function PanelSerialKartun({
 
   function ubahAdeganDraf(
     indeks: number,
-    perubahan: Partial<Pick<AdeganDrafSerial, "namaPembicara" | "latarKode" | "dialog" | "pembicara">>,
+    perubahan: Partial<Pick<AdeganDrafSerial, "namaPembicara" | "latarKode" | "dialog" | "pembicara" | "promptVisual">>,
   ) {
     setDrafNaskah((prev) => {
       if (!prev) return prev;
@@ -360,7 +427,7 @@ export function PanelSerialKartun({
     setDrafNaskah((prev) => {
       if (!prev || prev.adegan.length >= 16) return prev;
       const kodeDefault = prev.adegan[prev.adegan.length - 1]?.latarKode || konfig.latar[0]?.kode || "outdoor";
-      const baru = buatAdeganKosongSerial(prev.adegan.length + 1, kodeDefault);
+      const baru = buatAdeganKosongSerial(prev.adegan.length + 1, kodeDefault, gayaCerita);
       return { ...prev, adegan: [...prev.adegan, baru] };
     });
   }
@@ -395,6 +462,9 @@ export function PanelSerialKartun({
           formatSuara,
           panjangNaskah,
           bersambung,
+          gayaCerita,
+          hasilRiset: hasilRiset.trim(),
+          risetGoogle: risetOtomatisGoogle,
           modeJadwal,
           jadwal: modeJadwal === "custom" ? waktuJadwal : null,
           sasaran,
@@ -639,6 +709,48 @@ export function PanelSerialKartun({
           </div>
         </div>
 
+        {/* Pilihan Gaya Cerita */}
+        <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-zinc-100">Gaya Cerita Episode Ini</span>
+            <span className="text-[11px] text-muted-foreground">
+              {gayaCerita === "dokumenter"
+                ? "Mode Dokumenter Murni · Narator + Riset Google + Ilustrasi AI"
+                : "Mode Cerita Kedai · Tokoh Lek Aril dkk"}
+            </span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => pilihGayaCerita("kedai")}
+              className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                gayaCerita === "kedai"
+                  ? "border-emas bg-emas/15 text-emas-muda"
+                  : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
+              }`}
+            >
+              <div className="text-xs font-semibold">Komedi / Cerita Kedai</div>
+              <div className="mt-0.5 text-[11px] opacity-80">
+                Tokoh kartun Lek Kopi, obrolan santai Panjunan, dan promo kedai.
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => pilihGayaCerita("dokumenter")}
+              className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                gayaCerita === "dokumenter"
+                  ? "border-amber-400/70 bg-amber-400/15 text-amber-200"
+                  : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
+              }`}
+            >
+              <div className="text-xs font-semibold">Dokumenter Murni (Riset Google)</div>
+              <div className="mt-0.5 text-[11px] opacity-80">
+                Fakta sejarah/edukasi dari Google tanpa tokoh kedai + ilustrasi AI per adegan.
+              </div>
+            </button>
+          </div>
+        </div>
+
         {/* Asisten Kata Kunci → 3 Saran Cerita AI */}
         <div className="space-y-2.5 rounded-xl border border-teal-500/25 bg-teal-500/[0.04] p-3 sm:p-3.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -729,27 +841,29 @@ export function PanelSerialKartun({
           )}
         </div>
 
-        {/* Chip ide cepat */}
-        <div className="space-y-1.5">
-          <span className="block text-xs font-medium text-muted-foreground">
-            Ide Cepat Komedi / Kehidupan (klik untuk langsung mengisi)
-          </span>
-          <div className="flex flex-wrap gap-1.5">
-            {IDE_CEPAT_SERIAL.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => {
-                  setIde(item.ide);
-                  setMood(item.mood);
-                }}
-                className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-zinc-200 transition hover:border-emas hover:text-emas-muda"
-              >
-                {item.label}
-              </button>
-            ))}
+        {/* Chip ide cepat (khusus mode cerita kedai) */}
+        {gayaCerita === "kedai" ? (
+          <div className="space-y-1.5">
+            <span className="block text-xs font-medium text-muted-foreground">
+              Ide Cepat Komedi / Kehidupan (klik untuk langsung mengisi)
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {IDE_CEPAT_SERIAL.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => {
+                    setIde(item.ide);
+                    setMood(item.mood);
+                  }}
+                  className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-zinc-200 transition hover:border-emas hover:text-emas-muda"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <label className="grid gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">
@@ -759,10 +873,80 @@ export function PanelSerialKartun({
             rows={4}
             value={ide}
             onChange={(e) => setIde(e.target.value)}
-            placeholder="Tulis ide singkat atau tempel langsung contoh cerita / narasi panjang (mis. kisah Syekh Asy-Syadzili dan kopi pertama) agar AI merangkai dialog & narasi panjang atau memecahnya ke beberapa episode…"
+            placeholder={
+              gayaCerita === "dokumenter"
+                ? "Tulis topik sejarah/edukasi (mis. Kisah Syekh Abul Hasan Asy-Syadzili dan sejarah awal Qahwah di Yaman) atau tempel narasi contoh Anda…"
+                : "Tulis ide singkat atau tempel langsung contoh cerita / narasi panjang (mis. kisah Syekh Asy-Syadzili dan kopi pertama) agar AI merangkai dialog & narasi panjang atau memecahnya ke beberapa episode…"
+            }
             className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm leading-relaxed"
           />
         </label>
+
+        {/* Panel Riset Fakta Google untuk Dokumenter Murni */}
+        {gayaCerita === "dokumenter" ? (
+          <div className="space-y-2.5 rounded-xl border border-amber-400/25 bg-amber-500/[0.05] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-amber-200">Riset Fakta Google</span>
+                {infoPenyediaRiset ? (
+                  <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                    {infoPenyediaRiset}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {hasilRiset.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHasilRiset("");
+                      setInfoPenyediaRiset("");
+                    }}
+                    className="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-white/25"
+                  >
+                    Hapus Riset
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={risetCeritaGoogle}
+                  disabled={sedangRiset || (!ide.trim() && !kataKunci.trim())}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-zinc-950 transition hover:bg-amber-300 disabled:opacity-50"
+                >
+                  {sedangRiset ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  {sedangRiset ? "Meriset di Google…" : "Riset Fakta di Google Dulu"}
+                </button>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-[11px] text-zinc-300">
+              <input
+                type="checkbox"
+                checked={risetOtomatisGoogle}
+                onChange={(e) => setRisetOtomatisGoogle(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-white/20"
+              />
+              <span>Riset Google otomatis saat Buat Naskah jika ringkasan fakta masih kosong</span>
+            </label>
+
+            <label className="grid gap-1">
+              <span className="text-[11px] text-muted-foreground">
+                Hasil Riset Fakta &amp; Sumber (dapat disunting langsung sebelum naskah dibuat)
+              </span>
+              <textarea
+                rows={5}
+                value={hasilRiset}
+                onChange={(e) => setHasilRiset(e.target.value)}
+                placeholder="Isi Kata Kunci atau Ide Cerita di atas lalu klik Riset Fakta di Google Dulu — atau biarkan kosong agar AI meriset otomatis saat membuat saran/naskah."
+                className="w-full rounded-xl border border-input bg-background/60 px-3 py-2 text-xs leading-relaxed"
+              />
+            </label>
+          </div>
+        ) : null}
 
         {/* Mood & Format Suara */}
         <div className="grid gap-3 sm:grid-cols-2">
@@ -1100,6 +1284,21 @@ export function PanelSerialKartun({
                         className="w-full rounded-lg border border-input bg-background/70 px-2.5 py-1.5 text-xs leading-relaxed"
                       />
                     </label>
+
+                    {gayaCerita === "dokumenter" || a.promptVisual ? (
+                      <label className="grid gap-1">
+                        <span className="text-[10px] text-amber-200/80">
+                          Prompt Visual Ilustrasi AI (Inggris — dipakai worker membuat gambar latar 9:16)
+                        </span>
+                        <textarea
+                          rows={2}
+                          value={a.promptVisual ?? ""}
+                          onChange={(e) => ubahAdeganDraf(idx, { promptVisual: e.target.value })}
+                          placeholder="Contoh: Warm stylized 2D animation of 13th-century Yemeni mountain valley at sunrise, red coffee berries on wild shrubs, golden light, clean vertical composition, no text"
+                          className="w-full rounded-lg border border-amber-400/25 bg-background/70 px-2.5 py-1.5 text-xs leading-relaxed"
+                        />
+                      </label>
+                    ) : null}
                   </div>
                 );
               })}

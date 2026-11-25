@@ -57,6 +57,7 @@ export type PropsSerialKartun = {
   judulEpisode: string;
   akun: string;
   mood: 'komedi_ceria' | 'kehidupan_santai' | 'cerita_kopi';
+  gayaCerita?: 'kedai' | 'dokumenter';
   pertanyaanPenutup: string;
   infoKedai: string;
   latarIntroBerkas?: string;

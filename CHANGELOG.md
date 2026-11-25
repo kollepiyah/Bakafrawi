@@ -1,5 +1,12 @@
 # CHANGELOG — bakafrawi.com
 
+## Mode Dokumenter Murni & Riset Google Otomatis Serial Konten (25 Nov)
+- Menambahkan pilihan **Gaya Cerita: Dokumenter Murni (Riset Google)** di panel Admin [studio-serial.tsx](src/components/admin/studio-serial.tsx), terpisah dari mode **Komedi / Cerita Kedai** agar cerita sejarah/edukasi tidak lagi dipaksakan memakai tokoh barista Panjunan, logat gaul, atau daftar harga menu kedai.
+- Menambahkan tombol **Riset Fakta di Google Dulu**, opsi riset Google otomatis sebelum menyusun naskah, kotak sunting **Hasil Riset Fakta & Sumber**, serta kolom **Prompt Visual Ilustrasi AI (Inggris)** per adegan.
+- Memperbaiki router Gemini di `src/lib/llm-router.ts`: saat model utama terkena `503`/`429`/timeout, fallback ke model Gemini berikutnya tetap membawa `google_search` aktif (tidak langsung dimatikan pada percobaan pertama).
+- Menambahkan aksi API `"riset-cerita"` dan integrasi riset otomatis pada `"saran-ide"`, `"buat-naskah"`, dan `"buat-episode"` di `src/app/api/studio/serial/route.ts` serta penyimpanan `gayaCerita` + `hasilRiset` pada antrean tugas di `src/lib/studio-server.ts`.
+- Menyesuaikan worker `studio/lib/serial-kartun.mjs` dan komposisi Remotion `studio/remotion/src/SerialKartun.tsx`: mendukung mode `dokumenter` tanpa panggung tokoh (`tokohKiri: null`, `tokohKanan: null`), aksen emas dokumenter `#E3C989`, dan pembuatan ilustrasi AI 9:16 otomatis per adegan via `buatGambarAi` (maksimal 12 adegan).
+
 ## Perbaikan Ketahanan Router AI & Parser Naskah Serial (25 Nov)
 
 - **Atasi Galat Serentak NVIDIA 410 / Gemini 503 / Cloudflare Timeout / Claude Format (`src/lib/llm-router.ts`, `studio/lib/router-worker.mjs`):**

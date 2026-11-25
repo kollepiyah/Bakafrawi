@@ -5,6 +5,7 @@ export type MoodSerial = "komedi_ceria" | "kehidupan_santai" | "cerita_kopi";
 export type GayaKartunLatar = "ceria_hangat" | "santai_sore";
 export type FormatSuaraSerial = "dialog" | "narator" | "campuran";
 export type PanjangSerial = "ringkas" | "sedang" | "panjang";
+export type GayaCeritaSerial = "kedai" | "dokumenter";
 export type MenuRingkasSerial = { nama: string; harga?: number; kategori?: string };
 export type TokohKartunId =
   | "mas_barista"
@@ -375,6 +376,38 @@ export type TokohDrafSerial = {
   efek: string;
 };
 
+export type RisetCeritaSerial = {
+  topik: string;
+  ringkasanFakta: string;
+  poinKronologi: string[];
+  catatanKritis: string;
+  sumber: string[];
+};
+
+export const SKEMA_RISET_CERITA_SERIAL = {
+  type: "object",
+  additionalProperties: false,
+  required: ["topik", "ringkasanFakta", "poinKronologi", "catatanKritis", "sumber"],
+  properties: {
+    topik: { type: "string", description: "Topik sejarah atau kisah yang diriset" },
+    ringkasanFakta: { type: "string", description: "Ringkasan fakta utama yang terverifikasi (3–5 kalimat)" },
+    poinKronologi: {
+      type: "array",
+      items: { type: "string" },
+      description: "Urutan kronologi sejarah/peristiwa yang terverifikasi (4–8 butir lengkap dengan abad/tempat bila diketahui)",
+    },
+    catatanKritis: {
+      type: "string",
+      description: "Catatan kritis sumber: bedakan catatan sejarah primer vs kisah populer atau tokoh yang sering tertukar bila ada",
+    },
+    sumber: {
+      type: "array",
+      items: { type: "string" },
+      description: "Daftar rujukan kitab, sejarawan, atau sumber tepercaya yang ditemukan",
+    },
+  },
+} as const;
+
 export type AdeganDrafSerial = {
   nomor: number;
   latarKode: string;
@@ -385,6 +418,7 @@ export type AdeganDrafSerial = {
   pembicara: "kiri" | "kanan" | "narator" | "tanpa";
   namaPembicara: string;
   dialog: string;
+  promptVisual?: string;
   sfx: "pop" | "whoosh" | "tanpa";
 };
 
@@ -489,6 +523,7 @@ export const SKEMA_NASKAH_DRAF_SERIAL = {
           pembicara: { type: "string", enum: ["kiri", "kanan", "narator", "tanpa"] },
           namaPembicara: { type: "string" },
           dialog: { type: "string" },
+          promptVisual: { type: "string" },
           sfx: { type: "string", enum: ["pop", "whoosh", "tanpa"] },
         },
       },
@@ -576,18 +611,94 @@ export function estimasiDurasiNaskahSerial(adegan: Pick<AdeganDrafSerial, "dialo
   return { totalDetik, totalKata };
 }
 
+/** Bangun prompt riset fakta Google Search sebelum menyusun naskah sejarah/dokumenter. Murni. */
+export function buatPromptRisetCeritaSerial({
+  topik = "",
+  catatanTambahan = "",
+}: {
+  topik: string;
+  catatanTambahan?: string;
+}) {
+  const topikBersih = String(topik ?? "").trim().slice(0, 1500);
+  const catatanBersih = String(catatanTambahan ?? "").trim().slice(0, 500);
+  return {
+    system:
+      `Kamu peneliti sejarah Islam, budaya kopi, dan penulis dokumenter yang kritis terhadap sumber. ` +
+      `WAJIB gunakan Google Search untuk memverifikasi nama tokoh, abad/tahun, lokasi geografis, serta rujukan sejarah primer sebelum menjawab. ` +
+      `Bedakan tegas antara catatan sejarah/kitab yang kuat (seperti catatan al-Jaziri dalam Umdat ash-Shafwah bila membahas sejarah qahwah) dengan kisah rakyat/populer atau kerancuan tokoh yang namanya mirip tapi berbeda abad (misalnya antara Syekh Abul Hasan Asy-Syadzili abad ke-13 dengan ulama Syadziliyah di Mokha Yaman seperti Syekh Ali bin Umar Asy-Syadzili abad ke-15, bila relevan dengan topik). ` +
+      `DILARANG mengarang fakta, tahun, hadis, atau riwayat palsu — jika suatu detail belum pasti secara historis, sebut jujur sebagai kisah populer atau tradisi lisan.`,
+    prompt:
+      `Riset fakta sejarah & kronologi lengkap untuk topik dokumenter:\n"${topikBersih}"` +
+      (catatanBersih ? `\n\nCatatan tambahan dari pemilik:\n${catatanBersih}` : "") +
+      `\n\nSusun hasil riset menjadi JSON berisi ringkasan fakta terverifikasi, 4–8 poin kronologi yang runtut dan realistis, catatan kritis mengenai akurasi sumber/riwayat, serta daftar sumber atau rujukan yang ditemukan.`,
+  };
+}
+
+/** Rapikan JSON hasil riset cerita AI agar tahan variasi penamaan key. Murni. */
+export function normalisasiRisetCeritaSerial(mentah: unknown, topikFallback = ""): RisetCeritaSerial {
+  const akar = mentah && typeof mentah === "object" && !Array.isArray(mentah) ? (mentah as Record<string, unknown>) : {};
+  const isiBungkus = [akar.riset, akar.data, akar.hasil].find(
+    (v): v is Record<string, unknown> => Boolean(v && typeof v === "object" && !Array.isArray(v)),
+  );
+  const obj = akar.ringkasanFakta || akar.ringkasan ? akar : (isiBungkus ?? akar);
+
+  const calonKronologi = obj.poinKronologi ?? obj.kronologi ?? obj.poin ?? [];
+  const poinKronologi = (Array.isArray(calonKronologi) ? calonKronologi : [])
+    .map((x) => String(x ?? "").trim().slice(0, 320))
+    .filter(Boolean)
+    .slice(0, 10);
+
+  const calonSumber = obj.sumber ?? obj.rujukan ?? obj.sources ?? [];
+  const sumber = (Array.isArray(calonSumber) ? calonSumber : [])
+    .map((x) => String(x ?? "").trim().slice(0, 200))
+    .filter(Boolean)
+    .slice(0, 8);
+
+  return {
+    topik: String(obj.topik ?? topikFallback ?? "").trim().slice(0, 200) || "Topik Sejarah",
+    ringkasanFakta: String(obj.ringkasanFakta ?? obj.ringkasan ?? obj.fakta ?? "").trim().slice(0, 1600),
+    poinKronologi,
+    catatanKritis: String(obj.catatanKritis ?? obj.catatan ?? "").trim().slice(0, 800),
+    sumber,
+  };
+}
+
+/** Format objek hasil riset menjadi teks ringkas terstruktur untuk ditampilkan & disunting di Admin. Murni. */
+export function formatRisetCeritaKeTeks(riset: RisetCeritaSerial): string {
+  const bagian: string[] = [];
+  if (riset.ringkasanFakta) {
+    bagian.push(`RINGKASAN FAKTA:\n${riset.ringkasanFakta}`);
+  }
+  if (riset.poinKronologi.length > 0) {
+    bagian.push(`KRONOLOGI:\n${riset.poinKronologi.map((p, i) => `${i + 1}. ${p}`).join("\n")}`);
+  }
+  if (riset.catatanKritis) {
+    bagian.push(`CATATAN KRITIS SUMBER:\n${riset.catatanKritis}`);
+  }
+  if (riset.sumber.length > 0) {
+    bagian.push(`RUJUKAN:\n${riset.sumber.map((s) => `- ${s}`).join("\n")}`);
+  }
+  return bagian.join("\n\n").trim();
+}
+
 /** Buat satu adegan kosong baru siap disunting di Editor Draf Naskah. Murni. */
-export function buatAdeganKosongSerial(nomor: number, latarKode = "outdoor"): AdeganDrafSerial {
+export function buatAdeganKosongSerial(
+  nomor: number,
+  latarKode = "outdoor",
+  gayaCerita: GayaCeritaSerial = "kedai",
+): AdeganDrafSerial {
+  const dokumenter = gayaCerita === "dokumenter";
   return {
     nomor: Math.max(1, Math.round(Number(nomor) || 1)),
-    latarKode: bersihkanKodeLokasi(latarKode, "outdoor"),
+    latarKode: dokumenter ? "sejarah" : bersihkanKodeLokasi(latarKode, "outdoor"),
     kartuWaktu: "",
     kamera: "zoom_masuk",
-    tokohKiri: { id: "mas_barista", ekspresi: "senyum", properti: "tanpa", efek: "tanpa" },
-    tokohKanan: { id: "mas_pelanggan", ekspresi: "senyum", properti: "tanpa", efek: "tanpa" },
+    tokohKiri: dokumenter ? null : { id: "mas_barista", ekspresi: "senyum", properti: "tanpa", efek: "tanpa" },
+    tokohKanan: dokumenter ? null : { id: "mas_pelanggan", ekspresi: "senyum", properti: "tanpa", efek: "tanpa" },
     pembicara: "narator",
     namaPembicara: "Narator",
     dialog: "",
+    ...(dokumenter ? { promptVisual: "" } : {}),
     sfx: "tanpa",
   };
 }
@@ -599,6 +710,8 @@ export function buatPromptSaranCeritaSerial({
   kataKunci = "",
   mood = "komedi_ceria",
   panjangNaskah = "sedang",
+  gayaCerita = "kedai",
+  hasilRiset = "",
   riwayatEpisode = [],
   daftarMenu = [],
 }: {
@@ -607,17 +720,36 @@ export function buatPromptSaranCeritaSerial({
   kataKunci?: string;
   mood?: MoodSerial;
   panjangNaskah?: PanjangSerial;
+  gayaCerita?: GayaCeritaSerial;
+  hasilRiset?: string;
   riwayatEpisode?: EpisodeSerial[];
   daftarMenu?: MenuRingkasSerial[];
 }) {
   const kw = String(kataKunci ?? "").trim().slice(0, 1200);
   const spek = PANJANG_SPEK[panjangNaskah] ?? PANJANG_SPEK.sedang;
+  const risetBersih = String(hasilRiset ?? "").trim().slice(0, 2500);
   const riwayat = riwayatEpisode.length
     ? `\n\nEPISODE SEBELUMNYA (lanjutkan benang merah, jangan ulang ide/konflik yang sama persis):\n${riwayatEpisode
         .slice(-6)
         .map((e) => `- Ep ${e.nomor} "${e.judul}": ${e.ringkasan}`)
         .join("\n")}`
     : "";
+
+  if (gayaCerita === "dokumenter") {
+    return {
+      system:
+        `Kamu peneliti sejarah dan penulis kreatif dokumenter animasi sinematik (format video vertikal 9:16). ` +
+        `Tulis dalam Bahasa Indonesia baku-hangat yang berwibawa, realistis, dan setia pada fakta sejarah hasil verifikasi. ` +
+        `DILARANG keras memasukkan tokoh fiktif kedai modern, bahasa gaul/Jatim ("lho", "rek", "nih"), maupun daftar menu kafe komersial.`,
+      prompt:
+        `Buatkan TEPAT 3 sudut/ide penyajian episode dokumenter untuk "${judulSerial}" Episode ${nomorEpisode} (target durasi ${spek.durasiLabel}, ${spek.rentangAdegan}).` +
+        `\nNuansa: ${mood.replace(/_/g, " ")}.` +
+        (kw ? `\nTopik / bahan cerita dari pemilik:\n"${kw}"` : "\nTopik: pilih satu kisah sejarah kopi atau hikmah peradaban Islam yang autentik dan menginspirasi.") +
+        (risetBersih ? `\n\nHASIL RISET FAKTA TERVERIFIKASI:\n${risetBersih}` : "") +
+        riwayat +
+        `\nPastikan setiap saran terasa realistis, faktual, memiliki alur kronologi jelas, pesan hikmah yang mengena, dan ideLengkap yang siap dikembangkan menjadi naskah dokumenter ${spek.rentangAdegan}.`,
+    };
+  }
 
   return {
     system:
@@ -671,6 +803,8 @@ export function buatPromptNaskahDrafSerial({
   formatSuara = "dialog",
   panjangNaskah = "sedang",
   bersambung = false,
+  gayaCerita = "kedai",
+  hasilRiset = "",
   ide = "",
   kataKunci = "",
   riwayatEpisode = [],
@@ -683,6 +817,8 @@ export function buatPromptNaskahDrafSerial({
   formatSuara?: FormatSuaraSerial;
   panjangNaskah?: PanjangSerial;
   bersambung?: boolean;
+  gayaCerita?: GayaCeritaSerial;
+  hasilRiset?: string;
   ide?: string;
   kataKunci?: string;
   riwayatEpisode?: EpisodeSerial[];
@@ -690,10 +826,6 @@ export function buatPromptNaskahDrafSerial({
   daftarMenu?: MenuRingkasSerial[];
 }) {
   const spek = PANJANG_SPEK[panjangNaskah] ?? PANJANG_SPEK.sedang;
-  const teksLatar = daftarLatar.length
-    ? daftarLatar.map((l) => `- "${l.kode}": ${l.nama}${l.deskripsi ? ` (${l.deskripsi})` : ""}`).join("\n")
-    : '- "bar": Meja Bar / Kasir Lek Kopi\n- "outdoor": Area Duduk Outdoor Paving\n- "meja": Close-up Meja Kopi\n- "depan": Depan Kedai Lek Kopi';
-
   const teksRiwayat = riwayatEpisode.length
     ? `\n\nMEMORI EPISODE SEBELUMNYA:\n${riwayatEpisode
         .slice(-5)
@@ -701,11 +833,51 @@ export function buatPromptNaskahDrafSerial({
         .join("\n")}`
     : "";
 
+  const arahanBersambung = bersambung
+    ? `\nMODE BERSAMBUNG (EPISODE): Materi cerita dari pemilik boleh dipecah menjadi beberapa episode tanpa memotong emosi cerita. Untuk **Episode ${nomorEpisode}** ini, garap bagian awalnya/porsinya secara mendalam dan utuh, tutup adegan terakhir atau \`pertanyaanPenutup\` dengan jembatan **"Bersambung ke Episode ${nomorEpisode + 1}"**, serta tuliskan \`ringkasanEpisode\` secara jelas mencatat titik akhir cerita Episode ${nomorEpisode} agar Episode ${nomorEpisode + 1} otomatis melanjutkan tepat dari bagian berikutnya.`
+    : "";
+
+  const ideBersih = String(ide ?? "").trim().slice(0, 4000);
+  const kwBersih = String(kataKunci ?? "").trim().slice(0, 300);
+  const topik = [ideBersih, kwBersih].filter(Boolean).join("\nKata kunci tambahan: ");
+  const risetBersih = String(hasilRiset ?? "").trim().slice(0, 2800);
+
+  if (gayaCerita === "dokumenter") {
+    return {
+      system:
+        `Kamu penulis naskah film dokumenter & kisah sejarah sinematik (Reels 9:16) yang mengutamakan akurasi fakta dan adab keilmuan. ` +
+        `Bahasa Indonesia baku-hangat yang puitis namun tetap jelas, berwibawa, dan enak didengar sebagai voice-over dokumenter. ` +
+        `ATURAN KETAT DOKUMENTER MURNI:\n` +
+        `1) Set \`tokohKiri: null\` dan \`tokohKanan: null\` di SELURUH adegan (tidak boleh memunculkan tokoh barista/pelanggan komedi kedai).\n` +
+        `2) DILARANG KERAS memakai kata gaul/logat daerah ("lho", "rek", "cak", "nih", "sih"), DILARANG menyebut kasir, mesin espresso modern, atau daftar harga menu kafe.\n` +
+        `3) Gunakan \`pembicara: "narator"\` (boleh isi \`namaPembicara: "Narator"\` atau nama tokoh saat menukil doa/perkataan singkat yang terverifikasi, sementara narator tetap membacakannya).\n` +
+        `4) WAJIB isi \`promptVisual\` berbahasa Inggris pada setiap adegan untuk menghasilkan ilustrasi AI 9:16 yang realistis & selaras zaman (mis. "warm cinematic stylized historical animation illustration, painterly lighting, Middle Eastern rocky valley at dawn, vertical 9:16, no text, no watermark").`,
+      prompt:
+        `Susun draf naskah DOKUMENTER MURNI untuk "${judulSerial}" EPISODE ${nomorEpisode} berisi **${spek.rentangAdegan}** (target durasi **${spek.durasiLabel}**).\n` +
+        `Gunakan \`latarKode: "sejarah"\` atau kode deskriptif singkat per adegan (mis. "gua", "lembah", "majelis", "mokha").` +
+        (risetBersih
+          ? `\n\nHASIL RISET FAKTA TERVERIFIKASI (WAJIB JADI ACUAN UTAMA — DILARANG MENGARANG DI LUAR FAKTA INI):\n${risetBersih}`
+          : `\n\nVerifikasi fakta tokoh, era/abad, dan kronologi secara cermat terlebih dahulu; bedakan dengan jelas mana fakta sejarah dan mana kisah populer bila diperlukan.`) +
+        teksRiwayat +
+        `\n\n${topik ? `Topik / bahan cerita dari pemilik:\n${topik}` : "Topik: sejarah perjalanan kopi & nilai ketekunan dalam peradaban Islam."}` +
+        arahanBersambung +
+        `\n\nAturan narasi & visual per adegan:` +
+        `\n- Panjang narasi per adegan: **${spek.kataPerAdegan}** (${spek.durasiAdegan}) — kalimat utuh, runtut secara kronologis, dan terasa hidup sebagai film dokumenter.` +
+        `\n- Adegan 1 dibuka dengan hook sinematik yang kuat.` +
+        `\n- Isi \`kartuWaktu\` singkat saat berganti era, tempat, atau babak cerita (mis. "YAMAN · ABAD KE-15", "MAJELIS QAHWAH · MOKHA").` +
+        `\n- Isi \`promptVisual\` (Bahasa Inggris, 15–35 kata) pada SETIAP adegan dengan adegan visual konkret (bukan abstrak) + wajib akhiri dengan gaya hangat sinematik tanpa teks ("warm cinematic stylized historical illustration, painterly lighting, vertical 9:16, no text, no watermark").`,
+    };
+  }
+
+  const teksLatar = daftarLatar.length
+    ? daftarLatar.map((l) => `- "${l.kode}": ${l.nama}${l.deskripsi ? ` (${l.deskripsi})` : ""}`).join("\n")
+    : '- "bar": Meja Bar / Kasir Lek Kopi\n- "outdoor": Area Duduk Outdoor Paving\n- "meja": Close-up Meja Kopi\n- "depan": Depan Kedai Lek Kopi';
+
   const arahanMood =
     mood === "kehidupan_santai"
       ? "Nuansa: cerita kehidupan sehari-hari yang hangat, santai, reflektif, dan menenangkan hati."
       : mood === "cerita_kopi"
-      ? "Nuansa: cerita naratif yang kaya — bisa berupa kisah sejarah/inspirasi kopi dunia (seperti Syekh Asy-Syadzili atau perjalanan kopi) maupun cerita racikan minuman khas; bila menyebut menu kedai, tetap wajib pakai menu resmi Lek Kopi dari daftar."
+      ? "Nuansa: cerita naratif yang kaya — bisa berupa kisah sejarah/inspirasi kopi dunia maupun cerita racikan minuman khas; bila menyebut menu kedai, tetap wajib pakai menu resmi Lek Kopi dari daftar."
       : "Nuansa: komedi ceria slice-of-life dengan setup cerita yang kuat, tektokan hidup, dan punchline hangat.";
 
   const arahanSuara =
@@ -715,20 +887,11 @@ export function buatPromptNaskahDrafSerial({
       ? 'Format suara: Mode Narator + Dialog Tokoh! Padukan **Narator VO** (`pembicara: "narator"`, `namaPembicara: "Narator"`) yang bercerita mengalir 2–3 kalimat sinematik hangat DENGAN **Dialog Karakter** (`pembicara: "kiri"` atau `"kanan"`) pada momen kunci, emosional, atau celetukan lucu.'
       : 'Format suara: Mode Dialog Antar Tokoh (`pembicara: "kiri"` atau `"kanan"` secara bergantian, jangan pendek-pendek kaku — buat percakapan terasa natural dan berisi).';
 
-  const arahanBersambung = bersambung
-    ? `\nMODE BERSAMBUNG (EPISODE): Materi cerita dari pemilik boleh dipecah menjadi beberapa episode tanpa memotong emosi cerita. Untuk **Episode ${nomorEpisode}** ini, garap bagian awalnya/porsinya secara mendalam dan utuh, tutup adegan terakhir atau \`pertanyaanPenutup\` dengan jembatan **"Bersambung ke Episode ${nomorEpisode + 1}"**, serta tuliskan \`ringkasanEpisode\` secara jelas mencatat titik akhir cerita Episode ${nomorEpisode} agar Episode ${nomorEpisode + 1} otomatis melanjutkan tepat dari bagian berikutnya.`
-    : "";
-
-  const ideBersih = String(ide ?? "").trim().slice(0, 4000);
-  const kwBersih = String(kataKunci ?? "").trim().slice(0, 300);
-  const topik = [ideBersih, kwBersih].filter(Boolean).join("\nKata kunci tambahan: ");
-
   return {
     system:
       `Kamu penulis naskah animasi kartun 2D & storytelling sinematik (Reels 9:16) untuk kedai Lek Kopi (@lekkopi.id), Panjunan, Waru, Sidoarjo. ` +
       `WAJIB ceria, hangat, inspiratif, atau santai (DILARANG horor/seram). Bahasa Indonesia lisan yang hidup, mengalir enak didengar, dengan sentuhan ramah Jawa Timur tipis bila cocok nuansa kedai. ` +
-      `Tokoh visual panggung yang sah hanya: mas_barista (Mas Lek), mas_pelanggan (Mas Danu), mbak_pelanggan (Mbak Rara), pak_tetangga (Pak Budi), kucing_kedai (Cimol). ` +
-      `Jika tokoh cerita sejarah/luar tidak ada di 5 tokoh visual tersebut (mis. tokoh ulama/musafir), tetap pasang tokoh visual paling pas di panggung (mis. pak_tetangga untuk sosok sepuh bijak atau mas_barista sebagai pencerita) sambil mengisi \`namaPembicara\` sesuai tokoh ceritanya atau memakai \`pembicara: "narator"\`.`,
+      `Tokoh visual panggung yang sah hanya: mas_barista (Mas Lek), mas_pelanggan (Mas Danu), mbak_pelanggan (Mbak Rara), pak_tetangga (Pak Budi), kucing_kedai (Cimol).`,
     prompt:
       `Susun draf naskah lengkap "${judulSerial}" EPISODE ${nomorEpisode} berisi **${spek.rentangAdegan}** (target durasi **${spek.durasiLabel}**).\n` +
       `${arahanMood}\n${arahanSuara}\n` +
@@ -761,7 +924,12 @@ function normalisasiTokohDraf(mentah: unknown): TokohDrafSerial | null {
 }
 
 /** Rapikan draf naskah episode hasil AI agar siap diedit di UI maupun langsung dirender Remotion. */
-export function normalisasiNaskahDrafSerial(mentah: unknown, nomorEpisode = 1): NaskahDrafSerial {
+export function normalisasiNaskahDrafSerial(
+  mentah: unknown,
+  nomorEpisode = 1,
+  opsi?: { gayaCerita?: GayaCeritaSerial },
+): NaskahDrafSerial {
+  const adalahDokumenter = opsi?.gayaCerita === "dokumenter";
   const akar = mentah && typeof mentah === "object" && !Array.isArray(mentah) ? (mentah as Record<string, unknown>) : {};
   const isiBungkus = [akar.naskah, akar.episode, akar.data].find(
     (v): v is Record<string, unknown> => Boolean(v && typeof v === "object" && !Array.isArray(v)),
@@ -770,32 +938,41 @@ export function normalisasiNaskahDrafSerial(mentah: unknown, nomorEpisode = 1): 
   const daftarAdegan = Array.isArray(obj.adegan) ? obj.adegan : Array.isArray(obj.scenes) ? obj.scenes : [];
   const adegan: AdeganDrafSerial[] = daftarAdegan.slice(0, 16).map((item, idx) => {
     const a = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
-    let tokohKiri = normalisasiTokohDraf(a.tokohKiri);
-    const tokohKanan = normalisasiTokohDraf(a.tokohKanan);
-    if (!tokohKiri && !tokohKanan) {
+    let tokohKiri = adalahDokumenter ? null : normalisasiTokohDraf(a.tokohKiri);
+    const tokohKanan = adalahDokumenter ? null : normalisasiTokohDraf(a.tokohKanan);
+    if (!adalahDokumenter && !tokohKiri && !tokohKanan) {
       tokohKiri = { id: "mas_barista", ekspresi: "senyum", properti: "kopi_panas", efek: "tanpa" };
     }
-    const pemMentah = String(a.pembicara ?? "kiri").trim();
-    let pembicara: AdeganDrafSerial["pembicara"] =
-      pemMentah === "kiri" || pemMentah === "kanan" || pemMentah === "narator" || pemMentah === "tanpa"
-        ? pemMentah
-        : "narator";
-    if (pembicara === "kiri" && !tokohKiri) pembicara = tokohKanan ? "kanan" : "narator";
-    if (pembicara === "kanan" && !tokohKanan) pembicara = tokohKiri ? "kiri" : "narator";
+    const pemMentah = String(a.pembicara ?? (adalahDokumenter ? "narator" : "kiri")).trim();
+    let pembicara: AdeganDrafSerial["pembicara"] = adalahDokumenter
+      ? pemMentah === "tanpa"
+        ? "tanpa"
+        : "narator"
+      : pemMentah === "kiri" || pemMentah === "kanan" || pemMentah === "narator" || pemMentah === "tanpa"
+      ? pemMentah
+      : "narator";
+    if (!adalahDokumenter) {
+      if (pembicara === "kiri" && !tokohKiri) pembicara = tokohKanan ? "kanan" : "narator";
+      if (pembicara === "kanan" && !tokohKanan) pembicara = tokohKiri ? "kiri" : "narator";
+    }
     const idPembicara = pembicara === "kiri" ? tokohKiri?.id : pembicara === "kanan" ? tokohKanan?.id : "narator";
     const kamera = String(a.kamera ?? "zoom_masuk").trim();
     const sfxMentah = String(a.sfx ?? "tanpa").trim();
+    const promptVisual = String(a.promptVisual ?? a.visual ?? "").trim().slice(0, 420);
 
     return {
       nomor: Number(a.nomor) || idx + 1,
-      latarKode: bersihkanKodeLokasi(String(a.latarKode ?? "outdoor"), "outdoor"),
+      latarKode: bersihkanKodeLokasi(String(a.latarKode ?? (adalahDokumenter ? "sejarah" : "outdoor")), adalahDokumenter ? "sejarah" : "outdoor"),
       kartuWaktu: String(a.kartuWaktu ?? "").trim().slice(0, 48),
       kamera: KAMERA_SAH.has(kamera) ? kamera : "zoom_masuk",
       tokohKiri,
       tokohKanan,
       pembicara,
-      namaPembicara: String(a.namaPembicara ?? "").trim().slice(0, 48) || NAMA_TOKOH_PETA[idPembicara ?? "narator"] || "Lek Kopi",
+      namaPembicara:
+        String(a.namaPembicara ?? "").trim().slice(0, 48) ||
+        (adalahDokumenter ? "Narator" : NAMA_TOKOH_PETA[idPembicara ?? "narator"] || "Lek Kopi"),
       dialog: String(a.dialog ?? a.narasi ?? a.teks ?? "").trim().slice(0, 650),
+      ...(promptVisual ? { promptVisual } : {}),
       sfx: sfxMentah === "pop" || sfxMentah === "whoosh" ? sfxMentah : "tanpa",
     };
   });
@@ -808,7 +985,7 @@ export function normalisasiNaskahDrafSerial(mentah: unknown, nomorEpisode = 1): 
   return {
     judulEpisode: String(obj.judulEpisode ?? "").trim().slice(0, 88) || `Episode ${nomorEpisode}`,
     ringkasanEpisode: String(obj.ringkasanEpisode ?? "").trim().slice(0, 450),
-    tema: String(obj.tema ?? "").trim().slice(0, 80) || "Cerita Kedai",
+    tema: String(obj.tema ?? "").trim().slice(0, 80) || (adalahDokumenter ? "Dokumenter Sejarah" : "Cerita Kedai"),
     adegan,
     pertanyaanPenutup: String(obj.pertanyaanPenutup ?? "").trim().slice(0, 180) || "Menurutmu gimana cerita kali ini? Komen ya!",
     caption: String(obj.caption ?? "").trim().slice(0, 1000),

@@ -5,19 +5,25 @@ import { panggilLlmJson } from "@/lib/llm-router";
 import {
   bersihkanKodeLokasi,
   buatPromptNaskahDrafSerial,
+  buatPromptRisetCeritaSerial,
   buatPromptSaranCeritaSerial,
   episodeBerikutnya,
+  formatRisetCeritaKeTeks,
   normalisasiNaskahDrafSerial,
+  normalisasiRisetCeritaSerial,
   normalisasiSaranCeritaSerial,
   SKEMA_NASKAH_DRAF_SERIAL,
+  SKEMA_RISET_CERITA_SERIAL,
   SKEMA_SARAN_CERITA_SERIAL,
   type FormatSuaraSerial,
+  type GayaCeritaSerial,
   type GayaKartunLatar,
   type KonfigSuaraTokoh,
   type LatarKartun,
   type MoodSerial,
   type NaskahDrafSerial,
   type PanjangSerial,
+  type RisetCeritaSerial,
   type SerialKartun,
 } from "@/lib/serial-kartun-murni";
 import {
@@ -64,6 +70,7 @@ export async function POST(req: Request) {
       | "pilih-serial"
       | "hapus-episode"
       | "saran-ide"
+      | "riset-cerita"
       | "buat-naskah"
       | "buat-episode";
     id?: string;
@@ -83,10 +90,14 @@ export async function POST(req: Request) {
     suaraTokoh?: KonfigSuaraTokoh;
     nomorEpisode?: number;
     kataKunci?: string;
+    topik?: string;
     ide?: string;
     mood?: MoodSerial;
     panjangNaskah?: PanjangSerial;
     bersambung?: boolean;
+    gayaCerita?: GayaCeritaSerial;
+    hasilRiset?: string;
+    risetGoogle?: boolean;
     modeJadwal?: "persetujuan" | "prime19" | "custom";
     jadwal?: string | null;
     sasaran?: SasaranTayang | string | null;
@@ -189,6 +200,37 @@ export async function POST(req: Request) {
       return Response.json({ ok: true, konfig: tersimpan, pesan: `Riwayat Episode ${nomor} dihapus.` });
     }
 
+    if (isi.aksi === "riset-cerita") {
+      const topik = String(isi.topik || isi.ide || isi.kataKunci || "").trim();
+      if (!topik) {
+        return Response.json(
+          { ok: false, pesan: "Isi topik atau bahan cerita yang ingin diriset terlebih dahulu." },
+          { status: 400 },
+        );
+      }
+      const { system, prompt } = buatPromptRisetCeritaSerial({ topik });
+      const hasil = await panggilLlmJson<Record<string, unknown>>(
+        {
+          system,
+          prompt,
+          skema: SKEMA_RISET_CERITA_SERIAL,
+          suhu: 0.3,
+          maksToken: 2400,
+          pakaiSearch: true,
+          valid: (d) => Boolean(normalisasiRisetCeritaSerial(d, topik).ringkasanFakta),
+        },
+        "riset-cerita-serial",
+      );
+      const riset = normalisasiRisetCeritaSerial(hasil.data, topik);
+      return Response.json({
+        ok: true,
+        riset,
+        teksRiset: formatRisetCeritaKeTeks(riset),
+        penyedia: hasil.pemakaian.penyedia,
+        model: hasil.pemakaian.model,
+      });
+    }
+
     if (isi.aksi === "saran-ide") {
       const [konfig, daftarMenu] = await Promise.all([
         bacaKonfigSerialLekKopi(),
@@ -202,12 +244,15 @@ export async function POST(req: Request) {
       const mood: MoodSerial = isi.mood ?? serial?.moodBawaan ?? "komedi_ceria";
       const panjangNaskah: PanjangSerial =
         isi.panjangNaskah === "ringkas" || isi.panjangNaskah === "panjang" ? isi.panjangNaskah : "sedang";
+      const gayaCerita: GayaCeritaSerial = isi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
       const { system, prompt } = buatPromptSaranCeritaSerial({
         judulSerial: serial?.judul,
         nomorEpisode,
         kataKunci: isi.kataKunci,
         mood,
         panjangNaskah,
+        gayaCerita,
+        hasilRiset: isi.hasilRiset,
         riwayatEpisode: serial?.episode ?? [],
         daftarMenu,
       });
@@ -216,8 +261,9 @@ export async function POST(req: Request) {
           system,
           prompt,
           skema: SKEMA_SARAN_CERITA_SERIAL,
-          suhu: 0.75,
+          suhu: gayaCerita === "dokumenter" ? 0.55 : 0.75,
           maksToken: 1800,
+          pakaiSearch: gayaCerita === "dokumenter" || Boolean(isi.risetGoogle),
           valid: (d) => normalisasiSaranCeritaSerial(d, mood).length > 0,
         },
         "saran-cerita-serial",
@@ -246,6 +292,35 @@ export async function POST(req: Request) {
       const formatSuara: FormatSuaraSerial = isi.formatSuara ?? serial?.formatSuara ?? "dialog";
       const panjangNaskah: PanjangSerial =
         isi.panjangNaskah === "ringkas" || isi.panjangNaskah === "panjang" ? isi.panjangNaskah : "sedang";
+      const gayaCerita: GayaCeritaSerial = isi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
+
+      let teksRisetFinal = String(isi.hasilRiset ?? "").trim();
+      let risetOtomatis: RisetCeritaSerial | null = null;
+      if (gayaCerita === "dokumenter" && !teksRisetFinal && isi.risetGoogle !== false) {
+        const bahanTopik = String(isi.ide || isi.kataKunci || "").trim();
+        if (bahanTopik) {
+          try {
+            const pRiset = buatPromptRisetCeritaSerial({ topik: bahanTopik });
+            const resRiset = await panggilLlmJson<Record<string, unknown>>(
+              {
+                system: pRiset.system,
+                prompt: pRiset.prompt,
+                skema: SKEMA_RISET_CERITA_SERIAL,
+                suhu: 0.3,
+                maksToken: 2000,
+                pakaiSearch: true,
+                valid: (d) => Boolean(normalisasiRisetCeritaSerial(d, bahanTopik).ringkasanFakta),
+              },
+              "riset-otomatis-serial",
+            );
+            risetOtomatis = normalisasiRisetCeritaSerial(resRiset.data, bahanTopik);
+            teksRisetFinal = formatRisetCeritaKeTeks(risetOtomatis);
+          } catch {
+            // Bila riset awal gagal/timeout, lanjut menyusun naskah dengan Google Search langsung.
+          }
+        }
+      }
+
       const { system, prompt } = buatPromptNaskahDrafSerial({
         judulSerial: serial?.judul,
         nomorEpisode,
@@ -253,6 +328,8 @@ export async function POST(req: Request) {
         formatSuara,
         panjangNaskah,
         bersambung: Boolean(isi.bersambung),
+        gayaCerita,
+        hasilRiset: teksRisetFinal,
         ide: isi.ide,
         kataKunci: isi.kataKunci,
         riwayatEpisode: serial?.episode ?? [],
@@ -264,26 +341,30 @@ export async function POST(req: Request) {
           system,
           prompt,
           skema: SKEMA_NASKAH_DRAF_SERIAL,
-          suhu: 0.7,
+          suhu: gayaCerita === "dokumenter" ? 0.5 : 0.7,
           maksToken: 5200,
-          valid: (d) => normalisasiNaskahDrafSerial(d, nomorEpisode).adegan.length >= 3,
+          pakaiSearch: gayaCerita === "dokumenter" && !teksRisetFinal,
+          valid: (d) => normalisasiNaskahDrafSerial(d, nomorEpisode, { gayaCerita }).adegan.length >= 3,
         },
         "draf-naskah-serial",
       );
-      const naskah = normalisasiNaskahDrafSerial(hasil.data, nomorEpisode);
+      const naskah = normalisasiNaskahDrafSerial(hasil.data, nomorEpisode, { gayaCerita });
       return Response.json({
         ok: true,
         naskah,
         nomorEpisode,
         penyedia: hasil.pemakaian.penyedia,
         model: hasil.pemakaian.model,
+        ...(teksRisetFinal ? { teksRiset: teksRisetFinal } : {}),
+        ...(risetOtomatis ? { riset: risetOtomatis } : {}),
       });
     }
 
     if (isi.aksi === "buat-episode") {
+      const gayaCerita: GayaCeritaSerial = isi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
       const naskahBersih =
         isi.naskahJadi && Array.isArray(isi.naskahJadi.adegan) && isi.naskahJadi.adegan.length > 0
-          ? normalisasiNaskahDrafSerial(isi.naskahJadi)
+          ? normalisasiNaskahDrafSerial(isi.naskahJadi, undefined, { gayaCerita })
           : null;
       const panjangNaskah: PanjangSerial =
         isi.panjangNaskah === "ringkas" || isi.panjangNaskah === "panjang" ? isi.panjangNaskah : "sedang";
@@ -294,6 +375,8 @@ export async function POST(req: Request) {
         formatSuara: isi.formatSuara,
         panjangNaskah,
         bersambung: Boolean(isi.bersambung),
+        gayaCerita,
+        hasilRiset: isi.hasilRiset,
         modeJadwal: isi.modeJadwal,
         jadwal: isi.jadwal,
         sasaran: isi.sasaran,

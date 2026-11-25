@@ -134,7 +134,7 @@ const KartuIntro: React.FC<{ props: PropsSerialKartun; durasi: number }> = ({ pr
   const { fps } = useVideoConfig();
   const pegas = spring({ frame, fps, config: { damping: 14, stiffness: 130, mass: 0.85 } });
   const keluar = interpolate(frame, [durasi - 10, durasi], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const aksen = props.mood === 'komedi_ceria' ? '#18B4A8' : '#D9A441';
+  const aksen = props.gayaCerita === 'dokumenter' ? '#E3C989' : props.mood === 'komedi_ceria' ? '#18B4A8' : '#D9A441';
 
   return (
     <AbsoluteFill style={{ opacity: keluar }}>
@@ -244,7 +244,7 @@ const KartuPenutup: React.FC<{ props: PropsSerialKartun; durasi: number }> = ({ 
   const { fps } = useVideoConfig();
   const pegas = spring({ frame, fps, config: { damping: 15, stiffness: 120 } });
   const keluar = interpolate(frame, [durasi - 8, durasi], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const aksen = props.mood === 'komedi_ceria' ? '#34E0CD' : '#F3D58D';
+  const aksen = props.gayaCerita === 'dokumenter' ? '#E3C989' : props.mood === 'komedi_ceria' ? '#34E0CD' : '#F3D58D';
 
   return (
     <AbsoluteFill
@@ -313,7 +313,7 @@ const AdeganPanggung: React.FC<{
   const { fps } = useVideoConfig();
   const masuk = interpolate(frame, [0, 7], [0, 1], { extrapolateRight: 'clamp' });
   const keluar = interpolate(frame, [durasi - 6, durasi], [1, 0.2], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const aksen = props.mood === 'komedi_ceria' ? '#34E0CD' : '#F3D58D';
+  const aksen = props.gayaCerita === 'dokumenter' ? '#E3C989' : props.mood === 'komedi_ceria' ? '#34E0CD' : '#F3D58D';
 
   const adaKiri = Boolean(adegan.tokohKiri);
   const adaKanan = Boolean(adegan.tokohKanan);
@@ -424,65 +424,67 @@ const AdeganPanggung: React.FC<{
         </div>
       ) : null}
 
-      {/* 4. Panggung Tokoh Kartun 2D */}
-      <div
-        style={{
-          position: 'absolute',
-          left: 24,
-          right: 24,
-          bottom: 430,
-          height: 540,
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: jumlahTokoh === 2 ? 'space-between' : 'center',
-          padding: jumlahTokoh === 2 ? '0 10px' : '0',
-        }}
-      >
-        {adegan.tokohKiri && (
-          <div
-            style={{
-              transform: `translateY(${adegan.pembicara === 'kiri' ? -10 : 12}px)`,
-              filter:
-                adegan.pembicara === 'kanan' && jumlahTokoh === 2
-                  ? 'brightness(0.88)'
-                  : 'drop-shadow(0 16px 24px rgba(0,0,0,0.38))',
-            }}
-          >
-            <KarakterKartun
-              tokoh={adegan.tokohKiri.id}
-              ekspresi={adegan.tokohKiri.ekspresi}
-              properti={adegan.tokohKiri.properti}
-              efek={adegan.tokohKiri.efek}
-              sedangBicara={adegan.pembicara === 'kiri'}
-              kata={adegan.pembicara === 'kiri' ? adegan.kata : undefined}
-              hadap={jumlahTokoh === 2 ? 'kanan' : 'kanan'}
-              ukuran={jumlahTokoh === 2 ? 430 : 490}
-            />
-          </div>
-        )}
-        {adegan.tokohKanan && (
-          <div
-            style={{
-              transform: `translateY(${adegan.pembicara === 'kanan' ? -10 : 12}px)`,
-              filter:
-                adegan.pembicara === 'kiri' && jumlahTokoh === 2
-                  ? 'brightness(0.88)'
-                  : 'drop-shadow(0 16px 24px rgba(0,0,0,0.38))',
-            }}
-          >
-            <KarakterKartun
-              tokoh={adegan.tokohKanan.id}
-              ekspresi={adegan.tokohKanan.ekspresi}
-              properti={adegan.tokohKanan.properti}
-              efek={adegan.tokohKanan.efek}
-              sedangBicara={adegan.pembicara === 'kanan'}
-              kata={adegan.pembicara === 'kanan' ? adegan.kata : undefined}
-              hadap={jumlahTokoh === 2 ? 'kiri' : 'kanan'}
-              ukuran={jumlahTokoh === 2 ? 430 : 490}
-            />
-          </div>
-        )}
-      </div>
+      {/* 4. Panggung Tokoh Kartun 2D (disembunyikan penuh pada mode Dokumenter Murni) */}
+      {jumlahTokoh > 0 ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: 24,
+            right: 24,
+            bottom: 430,
+            height: 540,
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: jumlahTokoh === 2 ? 'space-between' : 'center',
+            padding: jumlahTokoh === 2 ? '0 10px' : '0',
+          }}
+        >
+          {adegan.tokohKiri && (
+            <div
+              style={{
+                transform: `translateY(${adegan.pembicara === 'kiri' ? -10 : 12}px)`,
+                filter:
+                  adegan.pembicara === 'kanan' && jumlahTokoh === 2
+                    ? 'brightness(0.88)'
+                    : 'drop-shadow(0 16px 24px rgba(0,0,0,0.38))',
+              }}
+            >
+              <KarakterKartun
+                tokoh={adegan.tokohKiri.id}
+                ekspresi={adegan.tokohKiri.ekspresi}
+                properti={adegan.tokohKiri.properti}
+                efek={adegan.tokohKiri.efek}
+                sedangBicara={adegan.pembicara === 'kiri'}
+                kata={adegan.pembicara === 'kiri' ? adegan.kata : undefined}
+                hadap={jumlahTokoh === 2 ? 'kanan' : 'kanan'}
+                ukuran={jumlahTokoh === 2 ? 430 : 490}
+              />
+            </div>
+          )}
+          {adegan.tokohKanan && (
+            <div
+              style={{
+                transform: `translateY(${adegan.pembicara === 'kanan' ? -10 : 12}px)`,
+                filter:
+                  adegan.pembicara === 'kiri' && jumlahTokoh === 2
+                    ? 'brightness(0.88)'
+                    : 'drop-shadow(0 16px 24px rgba(0,0,0,0.38))',
+              }}
+            >
+              <KarakterKartun
+                tokoh={adegan.tokohKanan.id}
+                ekspresi={adegan.tokohKanan.ekspresi}
+                properti={adegan.tokohKanan.properti}
+                efek={adegan.tokohKanan.efek}
+                sedangBicara={adegan.pembicara === 'kanan'}
+                kata={adegan.pembicara === 'kanan' ? adegan.kata : undefined}
+                hadap={jumlahTokoh === 2 ? 'kiri' : 'kanan'}
+                ukuran={jumlahTokoh === 2 ? 430 : 490}
+              />
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* 5. Balon Subtitle & Nama Pembicara (Zona aman bawah IG) */}
       {adegan.dialog ? (

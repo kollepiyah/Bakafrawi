@@ -5,13 +5,16 @@ import {
   bersihkanKodeLokasi,
   buatAdeganKosongSerial,
   buatPromptNaskahDrafSerial,
+  buatPromptRisetCeritaSerial,
   buatPromptSaranCeritaSerial,
   catatEpisodeSelesai,
   episodeBerikutnya,
   estimasiDurasiNaskahSerial,
+  formatRisetCeritaKeTeks,
   konfigSerialBawaan,
   normalisasiKonfigSerial,
   normalisasiNaskahDrafSerial,
+  normalisasiRisetCeritaSerial,
   normalisasiSaranCeritaSerial,
 } from "./serial-kartun-murni.ts";
 
@@ -270,4 +273,85 @@ test("normalisasiSaranCeritaSerial, normalisasiNaskahDrafSerial & kataKunci panj
   assert.equal(drafBungkus.judulEpisode, "Qahwah Pertama");
   assert.equal(drafBungkus.adegan.length, 1);
   assert.match(drafBungkus.adegan[0].dialog, /secangkir kopi/);
+});
+
+test("buatPromptRisetCeritaSerial, normalisasiRisetCeritaSerial, dan formatRisetCeritaKeTeks bekerja rapi", () => {
+  const { system, prompt } = buatPromptRisetCeritaSerial({
+    topik: "Sejarah Kopi Syekh Asy-Syadzili",
+    catatanTambahan: "Fokus abad dan rujukan kitab",
+  });
+  assert.match(system, /Google Search/);
+  assert.match(prompt, /Sejarah Kopi Syekh Asy-Syadzili/);
+  assert.match(prompt, /Fokus abad dan rujukan kitab/);
+
+  const riset = normalisasiRisetCeritaSerial(
+    {
+      data: {
+        ringkasan: "Qahwah populer di kalangan ahli ibadah Yaman.",
+        kronologi: ["Abad ke-15 di pelabuhan Mokha, Yaman"],
+        catatan: "Bedakan Syekh Abul Hasan Asy-Syadzili dengan Syekh Ali bin Umar Asy-Syadzili.",
+        rujukan: ["Umdat ash-Shafwah fi Hill al-Qahwah"],
+      },
+    },
+    "Topik Cadangan",
+  );
+  assert.equal(riset.topik, "Topik Cadangan");
+  assert.equal(riset.ringkasanFakta, "Qahwah populer di kalangan ahli ibadah Yaman.");
+  assert.deepEqual(riset.poinKronologi, ["Abad ke-15 di pelabuhan Mokha, Yaman"]);
+  assert.deepEqual(riset.sumber, ["Umdat ash-Shafwah fi Hill al-Qahwah"]);
+
+  const teks = formatRisetCeritaKeTeks(riset);
+  assert.match(teks, /RINGKASAN FAKTA:/);
+  assert.match(teks, /1\. Abad ke-15 di pelabuhan Mokha, Yaman/);
+  assert.match(teks, /CATATAN KRITIS SUMBER:/);
+  assert.match(teks, /- Umdat ash-Shafwah fi Hill al-Qahwah/);
+});
+
+test("buatPromptNaskahDrafSerial mode dokumenter memakai hasil riset tanpa tokoh kedai dan daftar harga", () => {
+  const { system, prompt } = buatPromptNaskahDrafSerial({
+    judulSerial: "Jejak Qahwah",
+    nomorEpisode: 1,
+    gayaCerita: "dokumenter",
+    hasilRiset: "Catatan al-Jaziri abad ke-15 tentang tradisi qahwah di Yaman.",
+    daftarMenu: [{ nama: "Kopi Lek", harga: 14000, kategori: "kopi" }],
+  });
+  assert.match(system, /tokohKiri: null/);
+  assert.match(system, /tokohKanan: null/);
+  assert.match(system, /promptVisual/);
+  assert.match(prompt, /DOKUMENTER MURNI/);
+  assert.match(prompt, /Catatan al-Jaziri abad ke-15/);
+  assert.equal(prompt.includes("14000"), false);
+  assert.equal(prompt.includes("Kopi Lek"), false);
+});
+
+test("normalisasiNaskahDrafSerial mode dokumenter dan buatAdeganKosongSerial mengosongkan tokoh serta menyimpan promptVisual", () => {
+  const kosong = buatAdeganKosongSerial(3, "outdoor", "dokumenter");
+  assert.equal(kosong.latarKode, "sejarah");
+  assert.equal(kosong.tokohKiri, null);
+  assert.equal(kosong.tokohKanan, null);
+  assert.equal(kosong.pembicara, "narator");
+
+  const draf = normalisasiNaskahDrafSerial(
+    {
+      adegan: [
+        {
+          nomor: 1,
+          latarKode: "gua",
+          tokohKiri: { id: "mas_barista" },
+          pembicara: "kiri",
+          narasi: "Di keheningan malam Yaman, doa dipanjatkan.",
+          visual: "Warm stylized historical scene in Yemeni mountain cave, vertical 9:16, no text",
+        },
+      ],
+    },
+    2,
+    { gayaCerita: "dokumenter" },
+  );
+  assert.equal(draf.tema, "Dokumenter Sejarah");
+  assert.equal(draf.adegan[0].tokohKiri, null);
+  assert.equal(draf.adegan[0].tokohKanan, null);
+  assert.equal(draf.adegan[0].pembicara, "narator");
+  assert.equal(draf.adegan[0].namaPembicara, "Narator");
+  assert.equal(draf.adegan[0].latarKode, "gua");
+  assert.match(draf.adegan[0].promptVisual ?? "", /Yemeni mountain cave/);
 });

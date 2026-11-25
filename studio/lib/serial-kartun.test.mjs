@@ -98,6 +98,54 @@ test('siapkanPropsSerialKartun mendukung hingga 16 adegan dan audio panjang hing
   assert.equal(props.adegan[1].durasi, 7);
 });
 
+test('siapkanPropsSerialKartun mode dokumenter mengosongkan tokoh dan memakai petaVisualAi', () => {
+  const props = siapkanPropsSerialKartun(
+    {
+      judulEpisode: 'Qahwah Pertama',
+      pertanyaanPenutup: 'Dari sejarah ini, pelajaran apa yang paling berkesan?',
+      adegan: [
+        {
+          nomor: 1,
+          latarKode: 'gua',
+          kartuWaktu: 'YAMAN · ABAD KE-15',
+          kamera: 'zoom_masuk',
+          tokohKiri: { id: 'mas_barista', ekspresi: 'senyum', properti: 'kopi_panas', efek: 'tanpa' },
+          pembicara: 'kiri',
+          namaPembicara: '',
+          dialog: 'Kisah awal minuman qahwah di kalangan ahli ibadah.',
+          sfx: 'tanpa',
+        },
+        {
+          nomor: 2,
+          latarKode: 'sejarah',
+          pembicara: 'narator',
+          dialog: 'Catatan al-Jaziri menyebut tradisi ini menyebar dari Yaman.',
+        },
+      ],
+    },
+    {
+      gayaCerita: 'dokumenter',
+      judulSerial: 'Jejak Sejarah Kopi',
+      nomorEpisode: 1,
+      mood: 'cerita_kopi',
+      petaLatar: { outdoor: 'latar_outdoor.png' },
+      petaVisualAi: { 0: 'dok_adegan_01.png' },
+      durasiSuara: [5.0, 4.0],
+    },
+  );
+
+  assert.equal(props.gayaCerita, 'dokumenter');
+  assert.equal(props.adegan[0].tokohKiri, null);
+  assert.equal(props.adegan[0].tokohKanan, null);
+  assert.equal(props.adegan[0].pembicara, 'narator');
+  assert.equal(props.adegan[0].namaPembicara, 'Narator');
+  assert.equal(props.adegan[0].latarBerkas, 'dok_adegan_01.png');
+  assert.equal(props.adegan[0].latarKode, 'gua');
+  assert.equal(props.adegan[0].durasi, 5.5);
+  assert.equal(props.adegan[1].latarBerkas, 'latar_outdoor.png');
+  assert.equal(props.latarIntroBerkas, 'dok_adegan_01.png');
+});
+
 test('pilihVoicePerTokoh memberi suara berbeda antar tokoh & sesuai gender', () => {
   const daftarVoice = [
     { id: 'VoicePriaSatu111', nama: 'Mas Jowo' },

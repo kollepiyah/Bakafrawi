@@ -308,7 +308,8 @@ async function panggilGemini(opsi: OpsiLlm) {
       if (opsi.pakaiSearch) {
         try {
           mentah = await kirim(model, false, true);
-        } catch {
+        } catch (e) {
+          if (!String(e).includes("Gemini 400")) throw e;
           mentah = await kirim(model, true, false).catch(() => kirim(model, false, false));
         }
       } else {
