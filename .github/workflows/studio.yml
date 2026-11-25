@@ -24,10 +24,13 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      # Latar gambar AI (Cloudflare → NVIDIA → Gemini) dan kabar/hasil ke bot Telegram — opsional.
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      STUDIO_TANPA_CLAUDE: ${{ secrets.STUDIO_TANPA_CLAUDE }}
+      STUDIO_AI_PROVIDER: ${{ secrets.STUDIO_AI_PROVIDER }}
       # Suara narasi AI (ElevenLabs prioritas 1 bila diisi → fallback Gemini TTS → Edge TTS).
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
       ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}

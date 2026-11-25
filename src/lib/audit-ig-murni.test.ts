@@ -25,7 +25,7 @@ const CONTOH_POSTS: PostAuditMasukan[] = [
     produk: "lekkopi-menu",
     jenis: "video",
     format: "reels",
-    caption: "Sakura Iced Coffee segar banget!",
+    caption: "Butterscoth Latte segar banget!",
     dibuat: "2026-11-22T10:00:00Z",
     tayangWaktu: "2026-11-22T12:00:00Z",
     likes: 45,

@@ -5,6 +5,12 @@ import { FPS, hitungWaktu, naskahContoh, type Naskah } from './data/script';
 import suaraContoh from './data/suara.json';
 import { contohSinematik, FPS_SINEMATIK, hitungDurasiSinematik, Sinematik } from './Sinematik';
 import { contohOpening, DURASI_OPENING, FPS_OPENING, hitungDurasiOpening, OpeningStory } from './OpeningStory';
+import {
+  contohSerialKartun,
+  FPS_SERIAL,
+  hitungDurasiSerialKartun,
+  SerialKartun,
+} from './SerialKartun';
 
 // Props bawaan = naskah contoh + narasi hasil `npm run siapkan` (bila sudah dibuat). Mesin Studio
 // menimpa seluruhnya lewat --props; durasi selalu dihitung ulang dari naskah + suara.
@@ -41,6 +47,16 @@ export const Root: React.FC = () => (
       durationInFrames={DURASI_OPENING}
       defaultProps={contohOpening}
       calculateMetadata={({ props }) => ({ durationInFrames: hitungDurasiOpening(props) })}
+    />
+    <Composition
+      id="SerialKartun"
+      component={SerialKartun}
+      width={1080}
+      height={1920}
+      fps={FPS_SERIAL}
+      durationInFrames={hitungDurasiSerialKartun(contohSerialKartun).total}
+      defaultProps={contohSerialKartun}
+      calculateMetadata={({ props }) => ({ durationInFrames: hitungDurasiSerialKartun(props).total })}
     />
   </>
 );

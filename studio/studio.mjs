@@ -17,6 +17,7 @@ import { ASET_LOKAL, deteksiGenderKarakter, kelompokKarakter, keNaskah, maskotAd
 import { buatNaskah, buatNaskahVideo, buatNaskahVideoFullAi } from './lib/naskah.mjs';
 import { suaraAdegan, uraiPilihanSuara } from './lib/bank/suara.mjs';
 import { renderOpeningAI } from './lib/opening-ai.mjs';
+import { gabungRiwayatEpisode, renderSerialKartun } from './lib/serial-kartun.mjs';
 import { bukaPeramban, potret, potretLayar } from './lib/peramban.mjs';
 import { adaTelegram, kirimHasil, kirimMediaTayang, kirimTeks } from './lib/telegram.mjs';
 import { htmlPoster, temaMerek, UKURAN } from './lib/templat.mjs';
@@ -890,12 +891,21 @@ async function modeAwan() {
             if (r.sampul) {
               hasilGabung.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
             }
-            hasilKerja = {
+              hasilKerja = {
               naskah: { ...tugas.naskah, sumber: r.konsep.sumber, judul: `Story Jam Buka (${merek?.nama ?? slug})` },
               caption: itemAi.caption || `We are OPEN! ${merek?.nama ?? 'Lek Kopi'} ☕`,
               hasil: hasilGabung,
               namaProduk: `${merek?.nama ?? slug} · Story Jam Buka`,
             };
+          } else if (tugas.produk_slug === 'lekkopi-serial' || Boolean(tugas.naskah?.serialKartun)) {
+            if (!merekCache.has('bakafrawi')) merekCache.set('bakafrawi', await bacaMerek('bakafrawi').catch(() => null));
+            hasilKerja = await renderSerialKartun({
+              tugas,
+              merek,
+              merekBakafrawi: merekCache.get('bakafrawi'),
+              folder,
+              simpan,
+            });
           } else {
             const adalahTugasBankLama =
               pakaiBank(merek) &&
@@ -906,8 +916,19 @@ async function modeAwan() {
               ? await kerjakanBank(tugas, merek, simpan, kabar)
               : await kerjakan(tugas, situs, peramban, folder, simpan, merek);
           }
-          const { naskah, caption, hasil, namaProduk } = hasilKerja;
+          const { naskah, caption, hasil, namaProduk, episodeSelesai } = hasilKerja;
           await perbaruiTugas(tugas.id, { status: 'selesai', selesai: new Date().toISOString(), naskah, caption, hasil, galat: null });
+          if (episodeSelesai && merek) {
+            const serialKartunBaru = gabungRiwayatEpisode(
+              merek.profil?.serial_kartun,
+              episodeSelesai.serialId,
+              episodeSelesai.episode,
+              episodeSelesai,
+            );
+            const profilBaru = { ...(merek.profil ?? {}), serial_kartun: serialKartunBaru };
+            await perbaruiProfilMerek(slug, profilBaru).catch((err) => console.error('Simpan memori episode:', err.message));
+            merekCache.set(slug, { ...merek, profil: profilBaru });
+          }
           console.log(`✔ Selesai: ${hasil.length} berkas`);
           if (chat && adaTelegram()) {
             await kirimHasil(chat, { tugas, namaProduk, hasil, caption }).catch((e) => console.error('Telegram kirim hasil:', e.message));
@@ -934,7 +955,10 @@ async function modeLokal(berkasTugas) {
   await mkdir(folder, { recursive: true });
   const peramban = await bukaPeramban();
   try {
-    const hasil = await kerjakan(tugas, situs, peramban, folder, async (b) => b, merek);
+    const hasil =
+      tugas.produk_slug === 'lekkopi-serial' || Boolean(tugas.naskah?.serialKartun)
+        ? await renderSerialKartun({ tugas, merek, merekBakafrawi: merek, folder, simpan: async (b) => b })
+        : await kerjakan(tugas, situs, peramban, folder, async (b) => b, merek);
     console.log(JSON.stringify(hasil, null, 2));
   } finally {
     await peramban.close();

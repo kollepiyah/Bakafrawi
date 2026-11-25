@@ -538,7 +538,7 @@ export function PanelUnggahManual({
                   type="text"
                   value={judul}
                   onChange={(e) => setJudul(e.target.value)}
-                  placeholder="Mis. Promo Sakura-ne Lek Sore"
+                  placeholder="Mis. Promo Kopi Lek Sore"
                   className="h-9 rounded-lg border border-input bg-transparent px-3 text-xs"
                 />
               </label>

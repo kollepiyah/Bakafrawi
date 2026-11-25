@@ -4,16 +4,17 @@
 //   2. "poster"        → Poster Story 9:16 dirender Playwright (1080×1920 JPEG)
 // Keduanya memakai teks harian dari Claude (jatuh ke templat rotasi harian bila tanpa kunci API)
 // dan latar foto suasana kopi AI (Cloudflare Workers AI gratis, jatuh ke latar grafis bila kuota habis).
-import Anthropic from '@anthropic-ai/sdk';
 import { execFile } from 'node:child_process';
 import { copyFile, mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { z } from 'zod';
 import { ffmpeg } from './bank/alat.mjs';
 import { adaGambarAi, buatGambarAi } from './bank/gambar-ai.mjs';
 import { buatMusikKafe, buatSfxOpening } from './opening-audio.mjs';
 import { bukaPeramban, potret } from './peramban.mjs';
+import { panggilRouterWorkerJson, urutanPenyediaWorker } from './router-worker.mjs';
 
 const jalankan = promisify(execFile);
 const DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -84,12 +85,11 @@ export async function buatKonsepOpeningAI({ merekNama = 'Lek Kopi', jamBuka = '0
       }
     : { ...dasar, fotoAsliUrl: null };
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!urutanPenyediaWorker({ adaGambar: false }).length) {
     return { ...cadangan, gaya, sumber: menuAsli ? 'menu-asli-harian' : 'sapaan-umum' };
   }
 
   try {
-    const client = new Anthropic();
     const daftarTeks = menuValid.length
       ? `WAJIB pilih HANYA dari daftar menu asli kedai ini (DILARANG KERAS mengarang menu atau harga di luar daftar):\n${menuValid.slice(0, 30).map((m) => `- ${m.nama}${m.harga ? ` (${rupiah(m.harga)})` : ''}`).join('\n')}`
       : 'Daftar menu tidak tersedia saat ini: JANGAN mengarang nama menu spesifik atau harga! Isi menuNama dengan judul umum seperti "Racikan Segar Hari Ini" dan menuHarga dengan string kosong "".';
@@ -97,19 +97,33 @@ export async function buatKonsepOpeningAI({ merekNama = 'Lek Kopi', jamBuka = '0
       `Buat 1 konsep Story Instagram "WE ARE OPEN" yang ringkas, modern, & tidak ramai untuk kedai kopi "${merekNama}" di Panjunan, Waru, Sidoarjo pada hari ${hariNama} (jam buka ${jamBuka} WIB).`,
       daftarTeks,
       arahan ? `Arahan khusus pemilik: ${arahan}` : '',
-      'Jawab HANYA dalam format JSON valid tanpa markdown dengan kunci persis:',
-      '{"judul":"2 baris sangat singkat maks 22 huruf total (pakai \\n, mis. WE ARE\\nOPEN.)","sub":"1 kalimat singkat maks 68 huruf","menuNama":"nama menu PERSIS dari daftar (atau umum jika daftar kosong)","menuHarga":"Rp... persis dari daftar (atau kosong jika daftar kosong)","menuKet":"1 kalimat singkat maks 72 huruf","promptLatar":"English visual prompt for minimalist coffee product photography on wooden table, daylight, NO text"}',
     ].filter(Boolean).join('\n');
 
-    const res = await client.messages.create({
-      model: 'claude-haiku-5-5',
-      max_tokens: 450,
-      messages: [{ role: 'user', content: prompt }],
+    const petunjukJson =
+      '\n\nJawab HANYA dengan JSON valid tanpa markdown:\n' +
+      '{"judul":"2 baris sangat singkat maks 22 huruf total (pakai \\n, mis. WE ARE\\nOPEN.)","sub":"1 kalimat singkat maks 68 huruf","menuNama":"nama menu PERSIS dari daftar (atau umum jika daftar kosong)","menuHarga":"Rp... persis dari daftar (atau kosong jika daftar kosong)","menuKet":"1 kalimat singkat maks 72 huruf","promptLatar":"English visual prompt for minimalist coffee product photography on wooden table, daylight, NO text"}';
+
+    const skemaOpening = z.object({
+      judul: z.string(),
+      sub: z.string(),
+      menuNama: z.string(),
+      menuHarga: z.string().optional().default(''),
+      menuKet: z.string(),
+      promptLatar: z.string(),
     });
-    const teks = res.content.find((b) => b.type === 'text')?.text ?? '';
-    const cocok = teks.match(/\{[\s\S]*\}/);
-    if (!cocok) throw new Error('JSON tidak ditemukan');
-    const j = JSON.parse(cocok[0]);
+
+    const r = await panggilRouterWorkerJson({
+      system: `Kamu direktur kreatif untuk kedai kopi ${merekNama}. Tulis dalam Bahasa Indonesia yang santai & hangat.`,
+      prompt,
+      maksToken: 700,
+      suhu: 0.7,
+      skemaZod: skemaOpening,
+      petunjukJson,
+      namaTahap: 'konsep opening ai',
+      effortClaude: 'low',
+    });
+
+    const j = r.data;
     const namaDipilih = String(j.menuNama || cadangan.menuNama).trim().slice(0, 50);
     // Kunci ketat: bila daftarMenu tersedia, menuNama & menuHarga WAJIB persis dari database Lek Kopi (tidak boleh dikarang AI).
     const cocokAsli = menuValid.find((m) => m.nama.toLowerCase() === namaDipilih.toLowerCase()) ?? menuAsli;
@@ -122,7 +136,7 @@ export async function buatKonsepOpeningAI({ merekNama = 'Lek Kopi', jamBuka = '0
       fotoAsliUrl: cocokAsli?.foto || cadangan.fotoAsliUrl || null,
       promptLatar: String(j.promptLatar || cadangan.promptLatar).trim().slice(0, 320),
       gaya,
-      sumber: 'claude-haiku-5-5',
+      sumber: r.sumber,
     };
   } catch (e) {
     console.log(`⚠️ Konsep Opening AI memakai cadangan (${e.message})`);

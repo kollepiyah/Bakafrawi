@@ -1,5 +1,6 @@
 import { permintaanDariAdmin } from "@/lib/admin-server";
 import { kenaliTokenInstagram } from "@/lib/instagram-server";
+import { statusPenyediaLlm } from "@/lib/llm-router";
 import {
   adaKunciServer,
   aturAktifMerek,
@@ -34,7 +35,15 @@ export async function GET(req: Request) {
     }),
   );
   const suaraFavorit = normalisasiSuaraFavorit(merek.find((m) => m.slug === "bakafrawi")?.profil?.suara_elevenlabs);
-  return Response.json({ ok: true, siap: true, instagram, tiktokSiap: adaTiktok(), suaraFavorit, telegram: { bot: adaBot(), terdaftar: Boolean(p.telegram_chat_id), webhook } });
+  return Response.json({
+    ok: true,
+    siap: true,
+    instagram,
+    tiktokSiap: adaTiktok(),
+    suaraFavorit,
+    penyediaAi: statusPenyediaLlm(),
+    telegram: { bot: adaBot(), terdaftar: Boolean(p.telegram_chat_id), webhook },
+  });
 }
 
 export async function POST(req: Request) {

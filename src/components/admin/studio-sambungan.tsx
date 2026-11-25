@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { Loader2, Send, Trash2, Volume2 } from "lucide-react";
+import { Cpu, Loader2, Send, Trash2, Volume2 } from "lucide-react";
 import { IkonSosial } from "@/components/situs/ikon-sosial";
 
 type AkunMerek = {
@@ -17,12 +17,17 @@ type SuaraFavorit = {
   nama: string;
   catatan?: string;
 };
+type StatusPenyediaAi = {
+  claudeDimatikan: boolean;
+  daftar: { nama: string; aktif: boolean; gratis: boolean; peran: string }[];
+};
 type Status = {
   siap: boolean;
   pesan?: string;
   instagram: AkunMerek[];
   tiktokSiap: boolean;
   suaraFavorit?: SuaraFavorit[];
+  penyediaAi?: StatusPenyediaAi;
   telegram: { bot: boolean; terdaftar: boolean; webhook: { url: string; galat?: string } | null };
 };
 
@@ -225,6 +230,69 @@ export function Sambungan({ sesi, onSuaraBerubah }: { sesi: Session | null; onSu
               </button>
             </div>
           </section>
+
+          {status.penyediaAi && (
+            <section className="grid gap-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="flex items-center gap-2 font-semibold">
+                  <Cpu className="size-4 text-emas" /> Urutan Penyedia AI Naskah (Hemat Biaya)
+                </h3>
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${
+                    status.penyediaAi.claudeDimatikan
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : "bg-amber-500/15 text-amber-300"
+                  }`}
+                >
+                  {status.penyediaAi.claudeDimatikan
+                    ? "Claude Studio Nonaktif (STUDIO_TANPA_CLAUDE=1)"
+                    : "Claude sebagai cadangan terakhir (Haiku)"}
+                </span>
+              </div>
+              <p className="text-xs text-redup">
+                Studio mencoba AI gratis lebih dulu secara berurutan (<code>Groq → NVIDIA → Gemini → OpenRouter → Cloudflare → Claude</code>).
+                Untuk hemat 100% saldo Claude di Studio, isi <code>GROQ_API_KEY</code> atau <code>OPENROUTER_API_KEY</code> dan set{" "}
+                <code>STUDIO_TANPA_CLAUDE=1</code> di Vercel &amp; GitHub Secrets.
+              </p>
+              <ul className="grid gap-1.5 sm:grid-cols-2">
+                {status.penyediaAi.daftar.map((item, idx) => (
+                  <li
+                    key={item.nama}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-semibold uppercase text-foreground">
+                          {idx + 1}. {item.nama}
+                        </span>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] ${
+                            item.gratis ? "bg-teal-500/15 text-teal-300" : "bg-white/10 text-zinc-300"
+                          }`}
+                        >
+                          {item.gratis ? "Gratis" : "Berbayar"}
+                        </span>
+                      </div>
+                      <p className="truncate text-[11px] text-muted-foreground">{item.peran}</p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        item.aktif
+                          ? "bg-emerald-500/15 text-emerald-300"
+                          : "bg-white/5 text-muted-foreground"
+                      }`}
+                    >
+                      {item.aktif
+                        ? "Siap"
+                        : item.nama === "claude" && status.penyediaAi?.claudeDimatikan
+                        ? "Dimatikan"
+                        : "Belum diisi"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {pesan && <p className="text-sm text-emas-muda">{pesan}</p>}
         </div>
       )}

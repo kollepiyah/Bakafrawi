@@ -140,7 +140,7 @@ export function buatPromptGoogleFlow({
 
   const deskripsiMerek =
     m === "lekkopi"
-      ? "Lek Kopi (@lekkopi.id): kedai kopi outdoor hangat di Panjunan, Waru, Sidoarjo, menu andalan kopi susu, espresso, matcha, Sakura Iced Coffee, suasana nongkrong sore-malam yang ramah."
+      ? "Lek Kopi (@lekkopi.id): kedai kopi outdoor hangat di Panjunan, Waru, Sidoarjo, menu resmi dari https://lek-kopi.web.app (Kopi Lek, Americano, Arum Dalu, Butterscoth Latte, Kopasus, Komandan, Matcha Latte, Tubruk — dilarang mengarang menu di luar daftar resmi), suasana nongkrong sore-malam yang ramah."
       : `Bakafrawi Project (@bakafrawi.project): studio software & desain di Sidoarjo. Produk yang dipromosikan: ${infoProduk?.label} — ${infoProduk?.info}.`;
 
   const arahanFormat =

@@ -11,6 +11,15 @@ import {
   type JadwalRutin,
   type SasaranTayang,
 } from "./jadwal-tayang-murni";
+import {
+  episodeBerikutnya,
+  normalisasiKonfigSerial,
+  type FormatSuaraSerial,
+  type KonfigSerialLekKopi,
+  type MenuRingkasSerial,
+  type MoodSerial,
+  type NaskahDrafSerial,
+} from "./serial-kartun-murni";
 import { ambilMenuLekKopi } from "./naskah-bank";
 
 // Aksi Studio di sisi server, dipakai bersama oleh panel admin (/api/studio/*) dan bot Telegram
@@ -941,4 +950,128 @@ export async function simpanRiwayatBot(riwayat: unknown[]) {
 export async function bacaRiwayatBot(): Promise<{ peran: "user" | "assistant"; teks: string }[]> {
   const [p] = (await rest("studio_pengaturan?id=eq.1&select=bot_riwayat")) as { bot_riwayat: { peran: "user" | "assistant"; teks: string }[] }[];
   return p?.bot_riwayat ?? [];
+}
+
+// ------------------------------------------------------------ serial kartun 2D Lek Kopi
+
+/** Ambil daftar menu asli Lek Kopi dari pintu-bakafrawi (cadangan cache profil.menu_asli) untuk prompt Serial Kartun. */
+export async function ambilMenuLekKopiUntukPrompt(): Promise<MenuRingkasSerial[]> {
+  const langsung = await ambilMenuLekKopi().catch(() => []);
+  let mentah: unknown[] = langsung;
+  if (!mentah.length) {
+    const daftar = await daftarMerek().catch(() => []);
+    const lek = daftar.find((m) => m.slug === "lekkopi");
+    if (Array.isArray(lek?.profil?.menu_asli)) mentah = lek.profil.menu_asli as unknown[];
+  }
+  return mentah
+    .filter((x): x is Record<string, unknown> => Boolean(x && typeof x === "object" && (x as { nama?: unknown }).nama))
+    .slice(0, 35)
+    .map((m) => ({
+      nama: String(m.nama).trim(),
+      ...(Number(m.harga) > 0 ? { harga: Number(m.harga) } : {}),
+      ...(m.kategori ? { kategori: String(m.kategori).trim() } : {}),
+    }));
+}
+
+/** Baca konfigurasi latar & serial kartun milik Lek Kopi dari `studio_merek.profil.serial_kartun`. */
+export async function bacaKonfigSerialLekKopi(): Promise<KonfigSerialLekKopi> {
+  const daftar = await daftarMerek();
+  const lek = daftar.find((m) => m.slug === "lekkopi");
+  return normalisasiKonfigSerial(lek?.profil?.serial_kartun);
+}
+
+/** Simpan konfigurasi serial kartun Lek Kopi tanpa menimpa key profil merek lain. */
+export async function simpanKonfigSerialLekKopi(konfig: KonfigSerialLekKopi): Promise<KonfigSerialLekKopi> {
+  const bersih = normalisasiKonfigSerial(konfig);
+  const daftar = await daftarMerek();
+  const lek = daftar.find((m) => m.slug === "lekkopi");
+  if (!lek) throw new Error("Profil merek Lek Kopi belum ditemukan di database.");
+  await rest("studio_merek?slug=eq.lekkopi", {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      profil: { ...(lek.profil ?? {}), serial_kartun: bersih },
+      diubah: new Date().toISOString(),
+    }),
+  });
+  return bersih;
+}
+
+/** Masukkan tugas pembuatan 1 episode Serial Kartun 2D Lek Kopi ke antrean mesin Studio. */
+export async function buatTugasSerialKartun(opsi: {
+  serialId?: string;
+  ide?: string;
+  mood?: MoodSerial;
+  formatSuara?: FormatSuaraSerial;
+  modeJadwal?: "persetujuan" | "prime19" | "custom";
+  jadwal?: string | null;
+  sasaran?: SasaranTayang | string | null;
+  naskahJadi?: NaskahDrafSerial | null;
+}) {
+  const [konfig, daftarMenu] = await Promise.all([
+    bacaKonfigSerialLekKopi(),
+    ambilMenuLekKopiUntukPrompt().catch(() => [] as MenuRingkasSerial[]),
+  ]);
+  const serial =
+    konfig.serial.find((s) => s.id === opsi.serialId) ??
+    konfig.serial.find((s) => s.id === konfig.serialAktifId) ??
+    konfig.serial[0];
+  if (!serial) throw new Error("Serial kartun belum dikonfigurasi.");
+
+  const nomorEpisode = episodeBerikutnya(serial);
+  const mood: MoodSerial = opsi.mood ?? serial.moodBawaan ?? "komedi_ceria";
+  const formatSuara: FormatSuaraSerial = opsi.formatSuara ?? serial.formatSuara ?? "dialog";
+  const ideBersih = String(opsi.ide ?? "").trim().slice(0, 500);
+  const naskahJadi = opsi.naskahJadi && opsi.naskahJadi.adegan?.length > 0 ? opsi.naskahJadi : null;
+
+  let jadwalIso: string | null = null;
+  if (opsi.modeJadwal === "prime19") {
+    jadwalIso = jamTayangBerikutnya().toISOString();
+  } else if (opsi.modeJadwal === "custom" && String(opsi.jadwal ?? "").trim()) {
+    const parsed = uraiJadwalCustomWIB(String(opsi.jadwal));
+    if (!parsed.ok) throw new Error(parsed.pesan);
+    jadwalIso = parsed.tanggal.toISOString();
+  }
+
+  const sasaran = opsi.sasaran ? normalisasiSasaran(opsi.sasaran) : undefined;
+  const judulSementara = naskahJadi?.judulEpisode?.trim() || `${serial.judul} — Episode ${nomorEpisode}`;
+  const arahan = [
+    `[Serial: ${serial.id} · Ep ${nomorEpisode} · ${mood} · ${formatSuara}]`,
+    ideBersih || `Lanjutkan kisah hangat dan lucu "${serial.judul}" episode ${nomorEpisode} di Lek Kopi.`,
+  ].join(" ");
+
+  const baris: Record<string, unknown> = {
+    merek: "lekkopi",
+    jenis: "video",
+    produk_slug: "lekkopi-serial",
+    arahan,
+    latar: "polos",
+    status: "antre",
+    naskah: {
+      sumber: "serial-kartun-antre",
+      judul: judulSementara,
+      serialKartun: {
+        serialId: serial.id,
+        judulSerial: serial.judul,
+        nomorEpisode,
+        mood,
+        formatSuara,
+        ide: ideBersih,
+        suaraTokoh: serial.suaraTokoh ?? {},
+        ...(daftarMenu.length ? { daftarMenu } : {}),
+        ...(naskahJadi ? { naskahJadi } : {}),
+      },
+    },
+    ...(jadwalIso ? { status_tayang: "dijadwalkan", jadwal_tayang: jadwalIso } : {}),
+    ...(sasaran && sasaran !== "otomatis" ? { tayang: { sasaran } } : {}),
+  };
+
+  const [tugas] = (await rest("studio_tugas", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify(baris),
+  })) as RingkasTugas[];
+
+  const dipicu = await picuStudio();
+  return { tugas, dipicu, jadwalIso, nomorEpisode, judulSerial: serial.judul };
 }

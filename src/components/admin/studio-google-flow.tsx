@@ -509,7 +509,7 @@ export function PanelGoogleFlow({
             onChange={(e) => setTopik(e.target.value)}
             placeholder={
               merek === "lekkopi"
-                ? "Mis. Sketsa bapak-bapak Panjunan kaget nyoba Sakura-ne Lek Rp14.000, atau kosongkan untuk ide viral otomatis…"
+                ? "Mis. Sketsa bapak-bapak Panjunan kaget nyoba Butterscoth Latte Rp14.000, atau kosongkan untuk ide viral otomatis…"
                 : "Mis. Cerita pemilik toko kelontong capek rekap manual malam-malam lalu kenal Maktaba POS, atau kosongkan…"
             }
             className="rounded-xl border border-input bg-transparent px-3 py-2 text-sm"

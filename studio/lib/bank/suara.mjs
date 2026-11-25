@@ -440,6 +440,7 @@ async function mintaElevenLabs(teks, keluar, profil, opsi = {}) {
     daftarVoice: opsi?.daftarVoice,
     profil,
     benih: teks,
+    gender: opsi?.gender ?? null,
   })
   const badan = JSON.stringify({
     text: String(teks ?? '').trim(),
@@ -551,5 +552,144 @@ export async function suaraAdegan(teks, folder, opsi = {}) {
       if (j === urutan.at(-1)) throw e
       if (!galatUtama) galatUtama = String(e?.message ?? e).slice(0, 120)
     }
+  }
+}
+
+// ------------------------------------------------------------------ Serial Kartun Multi-Tokoh
+
+const BAWAAN_VOICE_TOKOH = {
+  mas_barista: 'TX3LPaxmHKxFdv7VOQHJ',
+  mas_pelanggan: 'JBFqnCBsd6RMkjVDRZzb',
+  pak_tetangga: 'pNInz6obpgDQGcFmaJgB',
+  mbak_pelanggan: 'EXAVITQu4vr4xnSDxMaL',
+  narator: 'XB0fDUnXU5powFXDhCwa',
+}
+
+const URUTAN_INDEX_TOKOH = {
+  mas_barista: 0,
+  mas_pelanggan: 1,
+  pak_tetangga: 2,
+  mbak_pelanggan: 0,
+  narator: 0,
+}
+
+/**
+ * Pilih Voice ID ElevenLabs khusus per tokoh serial kartun agar dialog antar karakter
+ * memakai suara berbeda & konsisten lintas adegan. Murni.
+ */
+export function pilihVoicePerTokoh(
+  pembicara,
+  { suaraTokoh = {}, daftarVoice = [], envNilai = ELEVENLABS_VOICE_ID() } = {},
+) {
+  const peran = String(pembicara || 'narator').trim().toLowerCase()
+  const manual = String(suaraTokoh?.[peran] ?? '').trim()
+  if (POLA_VOICE_ID.test(manual)) return manual
+
+  const adalahWanita = peran === 'mbak_pelanggan'
+  const objekFav = Array.isArray(daftarVoice)
+    ? daftarVoice.filter((item) => item && typeof item === 'object' && POLA_VOICE_ID.test(String(item.id ?? '').trim()))
+    : []
+
+  if (objekFav.length) {
+    if (adalahWanita) {
+      const kolamWanita = objekFav
+        .filter((item) => NAMA_SUARA_WANITA.test(String(item.nama ?? '')))
+        .map((item) => String(item.id).trim())
+      if (kolamWanita.length) return kolamWanita[0]
+    } else if (peran !== 'narator') {
+      const kolamPria = objekFav
+        .filter((item) => !NAMA_SUARA_WANITA.test(String(item.nama ?? '')))
+        .map((item) => String(item.id).trim())
+      if (kolamPria.length) {
+        const idx = URUTAN_INDEX_TOKOH[peran] ?? 0
+        return kolamPria[idx % kolamPria.length]
+      }
+    } else {
+      return String(objekFav[0].id).trim()
+    }
+  }
+
+  const kolamEnv = daftarVoiceElevenLabs([], envNilai)
+  if (kolamEnv.length > 1) {
+    const idx = URUTAN_INDEX_TOKOH[peran] ?? 0
+    return kolamEnv[idx % kolamEnv.length]
+  }
+  if (kolamEnv.length === 1 && peran === 'mas_barista') return kolamEnv[0]
+
+  return BAWAAN_VOICE_TOKOH[peran] ?? BAWAAN_VOICE_TOKOH.narator
+}
+
+function profilUntukTokoh(pembicara) {
+  const p = String(pembicara || 'narator').toLowerCase()
+  if (p === 'mbak_pelanggan') return { kode: 'santai_indo', ...PROFIL_SUARA.santai_indo }
+  if (p === 'pak_tetangga') return { kode: 'jawa_timur', ...PROFIL_SUARA.jawa_timur }
+  if (p === 'mas_pelanggan') return { kode: 'iklan_energik', ...PROFIL_SUARA.iklan_energik }
+  if (p === 'mas_barista') return { kode: 'jawa_timur', ...PROFIL_SUARA.jawa_timur }
+  return { kode: 'storytelling_hangat', ...PROFIL_SUARA.storytelling_hangat }
+}
+
+/**
+ * Buat audio per adegan serial kartun dengan dukungan multi-tokoh & alignment kata ElevenLabs.
+ * Adegan bisu / hanya tag aksi (`[meong]`) dikembalikan dengan `berkas: null`.
+ */
+export async function suaraDialogSerial(daftarItem = [], folder, opsi = {}) {
+  const hasil = []
+  const catatanSet = new Set()
+  const jalurAwal = opsi.jalur ?? jalurSuara()
+  const urutan =
+    jalurAwal === 'elevenlabs'
+      ? ['elevenlabs', ...(process.env.GEMINI_API_KEY ? ['gemini'] : []), 'edge']
+      : jalurAwal === 'gemini'
+      ? ['gemini', 'edge']
+      : jalurAwal === 'azure'
+      ? ['azure', 'edge']
+      : ['edge']
+
+  const buat = opsi.buat ?? ((t, k, j, info) => buatSuara(t, k, j, info.profil, { voiceId: info.voiceId, gender: info.gender }))
+
+  for (const [i, item] of daftarItem.entries()) {
+    const teks = String(item?.teks ?? '').replace(/\s+/g, ' ').trim()
+    const pembicara = String(item?.pembicara || 'narator').trim().toLowerCase()
+    const hanyaTag = !teks || /^\[[^\]]+\]$/.test(teks)
+    if (hanyaTag || (pembicara === 'kucing_kedai' && !/[a-zA-Z]{2,}/.test(teks.replace(/\[[^\]]+\]/g, '')))) {
+      hasil.push({ berkas: null, kata: [], jalur: 'sunyi', voiceId: null })
+      continue
+    }
+
+    const gender = item?.gender || (pembicara === 'mbak_pelanggan' ? 'wanita' : 'pria')
+    const profil = profilUntukTokoh(pembicara)
+    const voiceId = pilihVoicePerTokoh(pembicara, {
+      suaraTokoh: opsi.suaraTokoh,
+      daftarVoice: opsi.daftarVoice,
+      envNilai: opsi.envNilai,
+    })
+
+    let selesaiItem = null
+    let galatPertama = null
+    for (const j of urutan) {
+      try {
+        const berkas = path.join(folder, `dialog_${i}_${pembicara}.${EKSTENSI[j] ?? 'mp3'}`)
+        const r = await buat(teks, berkas, j, { profil, voiceId, gender, pembicara })
+        if (galatPertama) {
+          catatanSet.add(`suara tokoh ${pembicara} beralih ke ${j} (${jalurAwal} gagal: ${galatPertama})`)
+        }
+        selesaiItem = {
+          berkas,
+          kata: j === 'elevenlabs' && Array.isArray(r?.kata) ? r.kata : [],
+          jalur: j,
+          voiceId: j === 'elevenlabs' ? (r?.voiceId || voiceId) : null,
+        }
+        break
+      } catch (e) {
+        if (!galatPertama) galatPertama = String(e?.message ?? e).slice(0, 100)
+        if (j === urutan.at(-1)) throw e
+      }
+    }
+    hasil.push(selesaiItem)
+  }
+
+  return {
+    item: hasil,
+    catatan: [...catatanSet],
   }
 }

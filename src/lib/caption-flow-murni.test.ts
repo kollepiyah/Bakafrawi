@@ -14,11 +14,11 @@ test("formatCaptionKonsisten selalu menyertakan CTA konsisten & hashtag inti uni
   const lk = formatCaptionKonsisten({
     merek: "lekkopi",
     isiCaption: "Sore mendung enaknya ngopi santai di Waru. #spam #lekkopi",
-    hashtagTambahan: ["#SakuraIcedCoffee", "lekkopi", "kopi-sore"],
+    hashtagTambahan: ["#ButterscothLatte", "lekkopi", "kopi-sore"],
   });
   assert.match(lk.captionLengkap, /Jl\. Kolonel Sugiono No\. 112/);
   assert.match(lk.captionLengkap, /#lekkopi\b/);
-  assert.match(lk.captionLengkap, /#sakuraicedcoffee\b/);
+  assert.match(lk.captionLengkap, /#butterscothlatte\b/);
   assert.equal(lk.hashtag.filter((h) => h === "lekkopi").length, 1);
   assert.ok(lk.hashtag.length <= 10);
 
@@ -111,7 +111,7 @@ test("apakahNamaFileAcak & promptCaptionOtomatis multi-bingkai membaca isi visua
   assert.equal(apakahNamaFileAcak("VID_20261124_193011.mp4"), true);
   assert.equal(apakahNamaFileAcak("lv_0_202611241230.mp4"), true);
   assert.equal(apakahNamaFileAcak("ScreenRecording_1124.mp4"), true);
-  assert.equal(apakahNamaFileAcak("Promo Sakura-ne Lek.mp4"), false);
+  assert.equal(apakahNamaFileAcak("Promo Kopi Lek Sore.mp4"), false);
 
   const pAcak = promptCaptionOtomatis({
     merek: "lekkopi",

@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CalendarDays,
   Check,
+  Clapperboard,
   Clock,
   Copy,
   Download,
@@ -40,6 +41,7 @@ import { PanelUnggahManual } from "./studio-unggah";
 import { PanelGoogleFlow } from "./studio-google-flow";
 import { KalenderStudio } from "./studio-kalender";
 import { PanelAsetStudio } from "./studio-aset";
+import { PanelSerialKartun } from "./studio-serial";
 import type { Situs } from "@/content/skema";
 import type { EvaluasiMingguan } from "@/lib/evaluasi-mingguan-murni";
 import { jalurGudang, muatKonten, supabase } from "@/lib/gudang-admin";
@@ -251,7 +253,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   const kolomArahan = useRef<HTMLTextAreaElement>(null);
 
   // Navigasi sub-menu Studio
-  type TabStudio = "unggah" | "rutin" | "buat" | "flow" | "riwayat" | "aset" | "riset" | "sambungan";
+  type TabStudio = "unggah" | "rutin" | "buat" | "serial" | "flow" | "riwayat" | "aset" | "riset" | "sambungan";
   const [tabStudio, setTabStudio] = useState<TabStudio>("unggah");
   const [topikFlowAwal, setTopikFlowAwal] = useState("");
   const [filterRiwayat, setFilterRiwayat] = useState<"semua" | "terjadwal" | "cek" | "tayang">("semua");
@@ -887,9 +889,11 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
   }
 
   const namaProduk = (slug: string) =>
-    situs.produk.find((p) => p.slug === slug)?.nama ??
-    FOKUS_LEKKOPI.find((f) => f.slug === slug)?.nama ??
-    slug;
+    slug === "lekkopi-serial"
+      ? "Serial Kartun Lek Kopi"
+      : situs.produk.find((p) => p.slug === slug)?.nama ??
+        FOKUS_LEKKOPI.find((f) => f.slug === slug)?.nama ??
+        slug;
   const merekAktif = merek.filter((m) => m.aktif);
   const adalahBakafrawi = pilihMerek === "bakafrawi";
   const suaraFavorit: SuaraFavorit[] = (() => {
@@ -945,6 +949,7 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       lencana: jadwalRutin.aktif ? jadwalRutin.jam : null,
     },
     { id: "buat", label: "Buat AI", ikon: <Sparkles className="size-3.5 shrink-0" /> },
+    { id: "serial", label: "Serial Kartun", ikon: <Clapperboard className="size-3.5 shrink-0" /> },
     { id: "flow", label: "Google Flow", ikon: <Wand2 className="size-3.5 shrink-0" /> },
     {
       id: "riwayat",
@@ -1910,6 +1915,20 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                   </button>
                 </div>
               </form>
+            )}
+
+            {/* ══════════ TAB 3a: SERIAL KARTUN 2D LEK KOPI ══════════ */}
+            {tabStudio === "serial" && (
+              <PanelSerialKartun
+                tokenSegar={tokenSegar}
+                suaraFavorit={suaraFavorit}
+                selesaiBuat={(msg) => {
+                  setPesan(msg);
+                  setFilterRiwayat("semua");
+                  setTabStudio("riwayat");
+                  void muat();
+                }}
+              />
             )}
 
             {/* ══════════ TAB 3b: GOOGLE FLOW BRIDGE (VIDEO FULL AI) ══════════ */}

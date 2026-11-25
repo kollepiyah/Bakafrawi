@@ -1,6 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
+import { panggilRouterWorkerJson, urutanPenyediaWorker } from './router-worker.mjs';
 
 // Naskah iklan untuk satu produk: dipakai poster (judul, poin, ajakan) dan video (narasi).
 export const SkemaNaskah = z.object({
@@ -15,156 +14,6 @@ export const SkemaNaskah = z.object({
     .array(z.string())
     .describe('2 deskripsi foto suasana dalam bahasa Inggris untuk latar (generator gambar AI): orang Indonesia sasaran produk dalam situasi nyata terkait masalah/manfaatnya, tanpa layar HP yang terbaca dan tanpa tulisan'),
 });
-
-// Sama dengan Lek Kopi (MODEL_KONTEN): Sonnet 5.5 effort medium — naskah iklan pendek tak butuh
-// Opus, dan biayanya kira-kira separuh.
-const MODEL = process.env.STUDIO_MODEL || 'claude-sonnet-5-5';
-
-// Catatan biaya (USD per 1 juta token, perkiraan) → naskah.pemakaian, dijumlah di Deck admin.
-const HARGA_WORKER = {
-  nvidia: { input: 0, output: 0 },
-  gemini: { input: 0.3, output: 2.5 },
-  cloudflare: { input: 0.29, output: 2.25 },
-  'claude-haiku': { input: 0.1, output: 0.5 },
-  'claude-sonnet': { input: 2, output: 10 },
-};
-
-function catatBiaya(tahap, u = {}, penyedia = 'claude', model = MODEL) {
-  const h = penyedia === 'claude' ? (model.includes('haiku') ? HARGA_WORKER['claude-haiku'] : HARGA_WORKER['claude-sonnet']) : (HARGA_WORKER[penyedia] ?? { input: 0, output: 0 });
-  const input = (u.input_tokens ?? u.input ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
-  const output = u.output_tokens ?? u.output ?? 0;
-  return { tahap, penyedia, model, input, output, biayaUsd: Math.round(((input * h.input + output * h.output) / 1e6) * 1e6) / 1e6 };
-}
-
-function ekstrakJson(teks) {
-  const t = String(teks ?? '').trim();
-  const m = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  const bersih = m ? m[1].trim() : t;
-  const awal = bersih.search(/[[{]/);
-  if (awal < 0) return bersih;
-  const buka = bersih[awal];
-  const tutup = buka === '{' ? '}' : ']';
-  const akhir = bersih.lastIndexOf(tutup);
-  return akhir > awal ? bersih.slice(awal, akhir + 1) : bersih.slice(awal);
-}
-
-async function panggilNvidiaWorker({ system, prompt, maksToken = 4096 }) {
-  const baseUrl = (process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, '');
-  const kandidat = [...new Set([process.env.STUDIO_NVIDIA_TEKS, 'qwen/qwen2.5-72b-instruct', 'deepseek-ai/deepseek-v3.2', 'meta/llama-3.1-70b-instruct'].filter(Boolean))];
-  let galat = null;
-  for (const model of kandidat) {
-    try {
-      const res = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        signal: AbortSignal.timeout(45_000),
-        headers: { Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
-          temperature: 0.7,
-          max_tokens: maksToken,
-        }),
-      });
-      if (!res.ok) {
-        const msg = `NVIDIA ${res.status}: ${(await res.text().catch(() => '')).slice(0, 160)}`;
-        if (res.status === 404 || res.status === 410) { galat = new Error(msg); continue; }
-        throw new Error(msg);
-      }
-      const j = await res.json();
-      const teks = String(j.choices?.[0]?.message?.content ?? '{}');
-      return {
-        data: JSON.parse(ekstrakJson(teks)),
-        penyedia: 'nvidia',
-        model,
-        usage: { input: Number(j.usage?.prompt_tokens) || 0, output: Number(j.usage?.completion_tokens) || 0 },
-      };
-    } catch (e) {
-      galat = e;
-      if (!/NVIDIA (404|410)/.test(String(e))) throw e;
-    }
-  }
-  throw galat ?? new Error('NVIDIA NIM gagal merespons.');
-}
-
-async function panggilGeminiWorker({ system, prompt, gambar = [], maksToken = 8000 }) {
-  const kandidat = [...new Set([process.env.STUDIO_GEMINI_TEKS, 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'].filter(Boolean))];
-  const parts = [
-    ...gambar.flatMap((g) => [
-      { text: g.label },
-      { inline_data: { mime_type: 'image/jpeg', data: g.data } },
-    ]),
-    { text: prompt },
-  ];
-  let galat = null;
-  for (const model of kandidat) {
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: 'POST',
-        signal: AbortSignal.timeout(45_000),
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: system }] },
-          contents: [{ role: 'user', parts }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: maksToken, responseMimeType: 'application/json' },
-        }),
-      });
-      if (!res.ok) {
-        const msg = `Gemini ${res.status}: ${(await res.text().catch(() => '')).slice(0, 160)}`;
-        if (res.status === 404) { galat = new Error(msg); continue; }
-        throw new Error(msg);
-      }
-      const j = await res.json();
-      const teks = (j.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('') || '{}';
-      const u = j.usageMetadata ?? {};
-      return {
-        data: JSON.parse(ekstrakJson(teks)),
-        penyedia: 'gemini',
-        model,
-        usage: { input: Number(u.promptTokenCount) || 0, output: (Number(u.candidatesTokenCount) || 0) + (Number(u.thoughtsTokenCount) || 0) },
-      };
-    } catch (e) {
-      galat = e;
-      if (!String(e).includes('Gemini 404')) throw e;
-    }
-  }
-  throw galat ?? new Error('Gemini gagal merespons.');
-}
-
-async function panggilCloudflareWorker({ system, prompt, maksToken = 4096 }) {
-  const model = process.env.STUDIO_CF_TEKS || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
-  const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID}/ai/run/${model}`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(45_000),
-    headers: { Authorization: `Bearer ${process.env.CF_API_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: maksToken,
-    }),
-  });
-  if (!res.ok) throw new Error(`Cloudflare ${res.status}: ${(await res.text().catch(() => '')).slice(0, 160)}`);
-  const j = await res.json();
-  const r = j.result?.response;
-  const data = typeof r === 'string' ? JSON.parse(ekstrakJson(r)) : (r ?? {});
-  return {
-    data,
-    penyedia: 'cloudflare',
-    model,
-    usage: { input: Number(j.result?.usage?.prompt_tokens) || 0, output: Number(j.result?.usage?.completion_tokens) || 0 },
-  };
-}
-
-/** Urutan hemat worker: NVIDIA NIM → Gemini → Cloudflare → Claude (atau sesuai STUDIO_AI_PROVIDER). */
-function daftarPenyediaWorker(adaGambar) {
-  const paksa = String(process.env.STUDIO_AI_PROVIDER ?? '').trim().toLowerCase();
-  const semua = [
-    { nama: 'nvidia', kode: ['nvidia', 'nim'], ada: () => !adaGambar && !!process.env.NVIDIA_API_KEY },
-    { nama: 'gemini', kode: ['gemini'], ada: () => !!process.env.GEMINI_API_KEY },
-    { nama: 'cloudflare', kode: ['cf', 'cloudflare'], ada: () => !adaGambar && !!(process.env.CF_ACCOUNT_ID && process.env.CF_API_TOKEN) },
-    { nama: 'claude', kode: ['claude', 'anthropic'], ada: () => !!process.env.ANTHROPIC_API_KEY },
-  ];
-  return semua.filter((p) => p.ada()).sort((a, b) => Number(b.kode.includes(paksa)) - Number(a.kode.includes(paksa)));
-}
 
 const PETUNJUK_JSON_POSTER = `\n\nJawab HANYA dengan JSON valid (tanpa markdown) berstruktur:\n{"judul":"...","sub":"...","poin":["...","...","..."],"ajakan":"...","narasi":["..."],"caption":"...","hashtag":["..."],"adegan":["english prompt 1","english prompt 2"]}`;
 const PETUNJUK_JSON_VIDEO = `\n\nJawab HANYA dengan JSON valid (tanpa markdown) berstruktur:\n{"adegan":[{"jenis":"hook|layar|kasir|alur|daftar|penutup","narasi":"...","kunci":["..."],"pose":"kaget|tunjuk|hp|jempol|lambai","badge":"","label":"","judul":"","tekan":"","sub":"","coretan":"","dari":"","ke":"","layar":0,"fokus_x":0.5,"fokus_y":0.3,"sorotan":"","produk":[],"total":"","lencana":"","struk":"","simpul":[],"notifikasi":"","hitung_label":"","hitung_dari":0,"hitung_ke":0,"label_angka":"","angka":"","catatan":"","daftar":[],"tombol":""}],"karakter":"","ajakan":"...","caption":"...","hashtag":["..."]}`;
@@ -204,7 +53,6 @@ function ringkasReferensiWorker(referensi = []) {
 
 /** Naskah Video Storytelling Full AI (5-6 adegan gambar AI sinematik + narasi natural). */
 export async function buatNaskahVideoFullAi(produk, situs, arahan, merek = null, referensi = []) {
-  const penyediaAktif = daftarPenyediaWorker(false);
   const adalahKedai = produk.kategori === 'kedai';
   const templat = () => {
     const t = naskahTemplat(produk, situs, merek);
@@ -236,7 +84,7 @@ export async function buatNaskahVideoFullAi(produk, situs, arahan, merek = null,
       sumber: 'templat-full-ai',
     };
   };
-  if (!penyediaAktif.length) return templat();
+  if (!urutanPenyediaWorker({ adaGambar: false }).length) return templat();
 
   const gayaDasar = merek?.profil?.gaya || (merek?.slug === 'lekkopi' ? GAYA_LEKKOPI : GAYA_BAWAAN);
   const blokRef = ringkasReferensiWorker(referensi);
@@ -244,46 +92,26 @@ export async function buatNaskahVideoFullAi(produk, situs, arahan, merek = null,
     + ' Kamu membuat naskah VIDEO STORYTELLING FULL AI vertikal 9:16 (bukan demo screenshot layar). Buat alur cerita sinematik 5 adegan yang memikat sejak 2 detik pertama: Adegan 1 Hook menyentil masalah/momen nyata, Adegan 2-4 Cerita suasana/keunggulan nyata, Adegan 5 Penutup & ajakan hangat.';
   const prompt = `Buat naskah video Reels/TikTok Storytelling Full AI (5 adegan) untuk ${adalahKedai ? 'kedai/merek' : 'produk'} berikut.\n\n${ringkasProduk(produk, situs, merek)}${blokRef}\n\nArahan tambahan dari pemilik: ${arahan || '(pilih sudut cerita paling segar & relatable untuk audiens Indonesia)'}`;
 
-  const galat = [];
-  for (const p of penyediaAktif) {
-    try {
-      if (p.nama === 'claude') {
-        const client = new Anthropic();
-        const res = await client.messages.parse({
-          model: MODEL,
-          max_tokens: 6000,
-          output_config: { effort: 'low', format: zodOutputFormat(SkemaVideoFullAi) },
-          system,
-          messages: [{ role: 'user', content: prompt }],
-        });
-        if (res.stop_reason === 'refusal' || !res.parsed_output?.adegan?.length) throw new Error(`Claude menolak (${res.stop_reason}).`);
-        return {
-          ...res.parsed_output,
-          narasi: res.parsed_output.adegan.map((a) => a.narasi),
-          sumber: `full-ai:${MODEL}`,
-          pemakaian: [catatBiaya('naskah video full ai', res.usage, 'claude', MODEL)],
-        };
-      }
-      const r = p.nama === 'nvidia'
-        ? await panggilNvidiaWorker({ system: system + PETUNJUK_JSON_FULL_AI, prompt, maksToken: 4096 })
-        : p.nama === 'gemini'
-        ? await panggilGeminiWorker({ system: system + PETUNJUK_JSON_FULL_AI, prompt, maksToken: 4096 })
-        : await panggilCloudflareWorker({ system: system + PETUNJUK_JSON_FULL_AI, prompt, maksToken: 4096 });
-      const cek = SkemaVideoFullAi.safeParse(r.data);
-      if (!cek.success || !cek.data.adegan?.length) throw new Error(`Format JSON Full AI tidak cocok (${cek.error?.issues[0]?.path?.join('.') || 'adegan'})`);
-      return {
-        ...cek.data,
-        narasi: cek.data.adegan.map((a) => a.narasi),
-        sumber: `full-ai:${r.penyedia}:${r.model}`,
-        pemakaian: [catatBiaya('naskah video full ai', r.usage, r.penyedia, r.model)],
-      };
-    } catch (e) {
-      galat.push(`${p.nama}: ${e.message}`);
-      console.warn(`Naskah video Full AI ${p.nama} gagal, coba penyedia berikutnya:`, e.message);
-    }
+  try {
+    const r = await panggilRouterWorkerJson({
+      system,
+      prompt,
+      maksToken: 4096,
+      skemaZod: SkemaVideoFullAi,
+      petunjukJson: PETUNJUK_JSON_FULL_AI,
+      namaTahap: 'naskah video full ai',
+      effortClaude: 'low',
+    });
+    return {
+      ...r.data,
+      narasi: r.data.adegan.map((a) => a.narasi),
+      sumber: `full-ai:${r.sumber}`,
+      pemakaian: r.pemakaian,
+    };
+  } catch (e) {
+    console.error('Semua penyedia naskah video Full AI gagal, memakai templat:', e.message);
+    return { ...templat(), sumber: `templat-full-ai (${String(e.message).slice(0, 100)})` };
   }
-  console.error('Semua penyedia naskah video Full AI gagal, memakai templat:', galat.join(' | '));
-  return { ...templat(), sumber: `templat-full-ai (${galat[0]?.slice(0, 100) ?? 'galat'})` };
 }
 
 // Cadangan bila profil merek belum berisi gaya (isi utamanya ada di studio_merek.profil.gaya).
@@ -324,11 +152,12 @@ function ringkasProduk(produk, situs, merek = null) {
   ].join('\n');
 }
 
-/** Naskah hemat multi-provider (NVIDIA NIM → Gemini → Cloudflare → Claude); gagal semua → templat. */
+/** Naskah hemat multi-provider (Groq → NVIDIA → Gemini → OpenRouter → Cloudflare → Claude terakhir); gagal semua → templat. */
 /** merek: baris studio_merek; profil.gaya = arahan copywriter merek itu (bawaan: Bakafrawi / Lek Kopi). */
 export async function buatNaskah(produk, situs, arahan, jenis, merek = null) {
-  const penyediaAktif = daftarPenyediaWorker(false);
-  if (!penyediaAktif.length) return { ...naskahTemplat(produk, situs, merek), sumber: 'templat (tanpa kunci API)' };
+  if (!urutanPenyediaWorker({ adaGambar: false }).length) {
+    return { ...naskahTemplat(produk, situs, merek), sumber: 'templat (tanpa kunci API)' };
+  }
   const system = merek?.profil?.gaya || (merek?.slug === 'lekkopi' ? GAYA_LEKKOPI : GAYA_BAWAAN);
   const promptJenis = jenis === 'video'
     ? 'video iklan vertikal (Reels/TikTok) yang menampilkan rekaman layar aplikasinya'
@@ -336,36 +165,22 @@ export async function buatNaskah(produk, situs, arahan, jenis, merek = null) {
     ? 'poster promosi Full AI yang menarik perhatian untuk Instagram Feed & Story (pastikan "adegan" berisi prompt visual foto/ilustrasi kopi & suasana sesuai arahan tanpa tulisan)'
     : 'poster promosi';
   const prompt = `Buat naskah ${promptJenis}.\n\n${ringkasProduk(produk, situs, merek)}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}`;
-  const galat = [];
-  for (const p of penyediaAktif) {
-    try {
-      if (p.nama === 'claude') {
-        const client = new Anthropic();
-        const res = await client.messages.parse({
-          model: MODEL,
-          max_tokens: 16000,
-          output_config: { effort: 'medium', format: zodOutputFormat(SkemaNaskah) },
-          system,
-          messages: [{ role: 'user', content: prompt }],
-        });
-        if (res.stop_reason === 'refusal' || !res.parsed_output) throw new Error(`Claude tidak memberi naskah (${res.stop_reason}).`);
-        return { ...res.parsed_output, sumber: MODEL, pemakaian: [catatBiaya('naskah poster', res.usage, 'claude', MODEL)] };
-      }
-      const r = p.nama === 'nvidia'
-        ? await panggilNvidiaWorker({ system: system + PETUNJUK_JSON_POSTER, prompt })
-        : p.nama === 'gemini'
-        ? await panggilGeminiWorker({ system: system + PETUNJUK_JSON_POSTER, prompt })
-        : await panggilCloudflareWorker({ system: system + PETUNJUK_JSON_POSTER, prompt });
-      const cek = SkemaNaskah.safeParse(r.data);
-      if (!cek.success) throw new Error(`Format JSON tidak cocok (${cek.error.issues[0]?.path?.join('.') || 'skema'})`);
-      return { ...cek.data, sumber: `${r.penyedia}:${r.model}`, pemakaian: [catatBiaya('naskah poster', r.usage, r.penyedia, r.model)] };
-    } catch (e) {
-      galat.push(`${p.nama}: ${e.message}`);
-      console.warn(`Naskah ${p.nama} gagal, coba penyedia berikutnya:`, e.message);
-    }
+
+  try {
+    const r = await panggilRouterWorkerJson({
+      system,
+      prompt,
+      maksToken: 4096,
+      skemaZod: SkemaNaskah,
+      petunjukJson: PETUNJUK_JSON_POSTER,
+      namaTahap: 'naskah poster',
+      effortClaude: 'medium',
+    });
+    return { ...r.data, sumber: r.sumber, pemakaian: r.pemakaian };
+  } catch (e) {
+    console.error('Semua penyedia naskah gagal, memakai templat:', e.message);
+    return { ...naskahTemplat(produk, situs, merek), sumber: `templat (AI gagal: ${String(e.message).slice(0, 120)})` };
   }
-  console.error('Semua penyedia naskah gagal, memakai templat:', galat.join(' | '));
-  return { ...naskahTemplat(produk, situs, merek), sumber: `templat (AI gagal: ${galat[0]?.slice(0, 120) ?? 'galat'})` };
 }
 
 // ------------------------------------------------------------ naskah video Remotion (19 Nov 2026)
@@ -427,8 +242,8 @@ kartu UI beranimasi, lencana langkah 1-2-3, subtitle kata-per-kata). Urutan:
 
 /**
  * Naskah video iklan Remotion. layar: [{ berkas, keterangan? }] tangkapan layar aplikasi — dikirim ke
- * Claude sebagai gambar (diperkecil) supaya ia memilih bagian yang disorot. Tanpa kunci / gagal →
- * templat. Hasil: keluaran mentah (dirapikan video.mjs keNaskah) + narasi/judul untuk tampilan lama.
+ * AI Vision (diperkecil) supaya ia memilih bagian yang disorot. Tanpa kunci / gagal → templat.
+ * Hasil: keluaran mentah (dirapikan video.mjs keNaskah) + narasi/judul untuk tampilan lama.
  */
 export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar = [], kecilkan = null, karakter = [], referensi = []) {
   const templat = () => naskahVideoTemplat(produk, situs, merek, layar.length);
@@ -436,49 +251,32 @@ export async function buatNaskahVideo(produk, situs, arahan, merek = null, layar
   for (const [i, l] of layar.entries()) {
     const data = kecilkan ? await kecilkan(l.berkas) : null;
     if (!data) continue;
-    gambarSiap.push({ label: `Layar ${i}${l.keterangan ? ` (${l.keterangan})` : ''}:`, data });
+    gambarSiap.push({ label: `Layar ${i}${l.keterangan ? ` (${l.keterangan})` : ''}:`, mimeType: 'image/jpeg', data });
   }
-  const penyediaAktif = daftarPenyediaWorker(gambarSiap.length > 0);
-  if (!penyediaAktif.length) return { ...templat(), sumber: 'templat (tanpa kunci API)' };
+  if (!urutanPenyediaWorker({ adaGambar: gambarSiap.length > 0 }).length) {
+    return { ...templat(), sumber: 'templat (tanpa kunci API)' };
+  }
 
   const system = merek?.profil?.gaya || GAYA_BAWAAN;
   const blokRef = ringkasReferensiWorker(referensi);
   const prompt = `${ATURAN_VIDEO}\n\nAda ${layar.length} layar aplikasi di atas (nomor 0-${Math.max(0, layar.length - 1)}).${layar.length ? '' : ' Tidak ada layar: jangan pakai jenis "layar".'}\n\nKarakter maskot 3D yang tersedia (tampil di bawah layar, satu karakter untuk seluruh video): ${karakter.length ? karakter.join(', ') : '(belum ada — isi karakter kosong)'}.\n\n${ringkasProduk(produk, situs)}${blokRef}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}`;
-  const galat = [];
 
-  for (const p of penyediaAktif) {
-    try {
-      if (p.nama === 'claude') {
-        const gambarClaude = gambarSiap.flatMap((g) => [
-          { type: 'text', text: g.label },
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: g.data } },
-        ]);
-        const client = new Anthropic();
-        const res = await client.messages.parse({
-          model: MODEL,
-          max_tokens: 16000,
-          output_config: { effort: 'medium', format: zodOutputFormat(SkemaVideo) },
-          system,
-          messages: [{ role: 'user', content: [...gambarClaude, { type: 'text', text: prompt }] }],
-        });
-        if (res.stop_reason === 'refusal' || !res.parsed_output?.adegan?.length) throw new Error(`Claude tidak memberi naskah (${res.stop_reason}).`);
-        return { ...lengkapiVideo(res.parsed_output, MODEL), pemakaian: [catatBiaya('naskah video', res.usage, 'claude', MODEL)] };
-      }
-      const r = p.nama === 'nvidia'
-        ? await panggilNvidiaWorker({ system: system + PETUNJUK_JSON_VIDEO, prompt, maksToken: 6000 })
-        : p.nama === 'gemini'
-        ? await panggilGeminiWorker({ system: system + PETUNJUK_JSON_VIDEO, prompt, gambar: gambarSiap, maksToken: 8000 })
-        : await panggilCloudflareWorker({ system: system + PETUNJUK_JSON_VIDEO, prompt, maksToken: 6000 });
-      const cek = SkemaVideo.safeParse(r.data);
-      if (!cek.success || !cek.data.adegan?.length) throw new Error(`Format JSON video tidak cocok (${cek.error?.issues[0]?.path?.join('.') || 'adegan'})`);
-      return { ...lengkapiVideo(cek.data, `${r.penyedia}:${r.model}`), pemakaian: [catatBiaya('naskah video', r.usage, r.penyedia, r.model)] };
-    } catch (e) {
-      galat.push(`${p.nama}: ${e.message}`);
-      console.warn(`Naskah video ${p.nama} gagal, coba penyedia berikutnya:`, e.message);
-    }
+  try {
+    const r = await panggilRouterWorkerJson({
+      system,
+      prompt,
+      gambar: gambarSiap,
+      maksToken: 6000,
+      skemaZod: SkemaVideo,
+      petunjukJson: PETUNJUK_JSON_VIDEO,
+      namaTahap: 'naskah video',
+      effortClaude: 'medium',
+    });
+    return { ...lengkapiVideo(r.data, r.sumber), pemakaian: r.pemakaian };
+  } catch (e) {
+    console.error('Semua penyedia naskah video gagal, memakai templat:', e.message);
+    return { ...templat(), sumber: `templat (AI gagal: ${String(e.message).slice(0, 120)})` };
   }
-  console.error('Semua penyedia naskah video gagal, memakai templat:', galat.join(' | '));
-  return { ...templat(), sumber: `templat (AI gagal: ${galat[0]?.slice(0, 120) ?? 'galat'})` };
 }
 
 // narasi & judul ikut disimpan supaya tampilan lama (admin, Telegram) tetap terbaca.
