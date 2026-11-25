@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { gabungRiwayatEpisode, siapkanPropsSerialKartun } from './serial-kartun.mjs';
-import { urutanPenyediaWorker } from './router-worker.mjs';
+import { KANDIDAT_MODEL_WORKER, urutanPenyediaWorker } from './router-worker.mjs';
 import { pilihVoicePerTokoh, suaraDialogSerial } from './bank/suara.mjs';
 import {
   contohSerialKartun,
@@ -233,4 +233,10 @@ test('urutanPenyediaWorker mendahulukan AI gratis, memisahkan vision & mematikan
     env: { ...semuaKunci, STUDIO_TANPA_CLAUDE: '1' },
   }).map((p) => p.nama);
   assert.ok(!viaEnv.includes('claude'));
+
+  // Pastikan daftar model aktif worker bebas dari model NVIDIA EOL (meta/llama-3.1-70b-instruct)
+  assert.ok(!KANDIDAT_MODEL_WORKER.nvidia.includes('meta/llama-3.1-70b-instruct'));
+  assert.ok(KANDIDAT_MODEL_WORKER.nvidia.includes('meta/llama-3.3-70b-instruct'));
+  assert.equal(KANDIDAT_MODEL_WORKER.gemini[0], 'gemini-2.5-flash');
+  assert.ok(KANDIDAT_MODEL_WORKER.cloudflare.includes('@cf/meta/llama-4-scout-17b-16e-instruct'));
 });

@@ -74,6 +74,20 @@ function ekstrakJson(teks: string): string {
 const teksSkema = (skema?: Record<string, unknown>) =>
   skema ? `\n\nJawab HANYA dengan JSON valid (tanpa markdown, tanpa komentar) yang mengikuti JSON Schema ini:\n${JSON.stringify(skema)}` : "";
 
+const STATUS_LANJUT_BAWAAN = [404, 410, 429, 500, 502, 503, 504];
+
+function bolehLanjutModel(err: unknown, label: string, statusLanjut: Set<number>): boolean {
+  if (err instanceof SyntaxError) return true;
+  if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) return true;
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  if (/timeout|timed out|aborted/i.test(msg)) return true;
+  if (msg.includes("format tidak valid")) return true;
+  for (const s of statusLanjut) {
+    if (msg.includes(`${label} ${s}`)) return true;
+  }
+  return false;
+}
+
 /** Helper bersama untuk penyedia API berformat OpenAI Chat Completions (Groq, NVIDIA NIM, OpenRouter). */
 async function panggilOpenAiKompatibel(
   opsi: OpsiLlm,
@@ -104,9 +118,11 @@ async function panggilOpenAiKompatibel(
     choices?: { message?: { content?: string } }[];
     usage?: { prompt_tokens?: number; completion_tokens?: number };
   } | null = null;
+  let dataHasil: unknown = null;
+  let teksHasil = "{}";
   let modelDipakai = konfig.kandidatModel[0];
   let galatTerakhir: unknown = null;
-  const statusLanjut = new Set(konfig.statusLanjutModel ?? [404, 410]);
+  const statusLanjut = new Set(konfig.statusLanjutModel ?? STATUS_LANJUT_BAWAAN);
 
   for (const model of konfig.kandidatModel) {
     modelDipakai = model;
@@ -130,30 +146,34 @@ async function panggilOpenAiKompatibel(
         }),
       });
       if (!res.ok) {
-        const msg = `${konfig.label} ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`;
-        if (statusLanjut.has(res.status)) {
-          galatTerakhir = new Error(msg);
-          continue;
-        }
-        throw new Error(msg);
+        throw new Error(`${konfig.label} ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
       }
-      j = await res.json();
+      const mentah = (await res.json()) as {
+        choices?: { message?: { content?: string } }[];
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+      const teks = String(mentah.choices?.[0]?.message?.content ?? "{}");
+      const data = JSON.parse(ekstrakJson(teks));
+      if (opsi.valid && !opsi.valid(data)) {
+        const keys = data && typeof data === "object" ? Object.keys(data as Record<string, unknown>).slice(0, 5).join(",") : typeof data;
+        throw new Error(`${konfig.label} (${model}) format tidak valid (keys: ${keys || "kosong"})`);
+      }
+      j = mentah;
+      dataHasil = data;
+      teksHasil = teks;
       break;
     } catch (e) {
       galatTerakhir = e;
-      const msg = String(e);
-      if (![...statusLanjut].some((s) => msg.includes(`${konfig.label} ${s}`))) throw e;
+      if (!bolehLanjutModel(e, konfig.label, statusLanjut)) throw e;
     }
   }
 
   if (!j) throw galatTerakhir ?? new Error(`${konfig.label} gagal merespons.`);
-  const teks = String(j.choices?.[0]?.message?.content ?? "{}");
-  const data = JSON.parse(ekstrakJson(teks));
   const input = Number(j.usage?.prompt_tokens) || Math.round((opsi.system.length + opsi.prompt.length) / 4);
-  const output = Number(j.usage?.completion_tokens) || Math.round(teks.length / 4);
+  const output = Number(j.usage?.completion_tokens) || Math.round(teksHasil.length / 4);
   const tarif = HARGA[konfig.nama] ?? { input: 0, output: 0 };
   return {
-    data,
+    data: dataHasil,
     pemakaian: { penyedia: konfig.nama, model: modelDipakai, input, output, biayaUsd: biaya(input, output, tarif) },
   };
 }
@@ -175,7 +195,7 @@ async function panggilGroq(opsi: OpsiLlm) {
     apiKey: process.env.GROQ_API_KEY!,
     kandidatModel: [...new Set(kandidatModel)],
     izinkanGambar: true,
-    statusLanjutModel: [404, 410],
+    statusLanjutModel: STATUS_LANJUT_BAWAAN,
   });
 }
 
@@ -185,9 +205,10 @@ async function panggilNvidia(opsi: OpsiLlm) {
     ...new Set(
       [
         process.env.STUDIO_NVIDIA_TEKS,
+        "meta/llama-3.3-70b-instruct",
+        "nvidia/llama-3.3-nemotron-super-49b-v1",
         "qwen/qwen2.5-72b-instruct",
-        "deepseek-ai/deepseek-v3.2",
-        "meta/llama-3.1-70b-instruct",
+        "mistralai/mistral-large-2-instruct",
       ].filter(Boolean) as string[],
     ),
   ];
@@ -199,7 +220,7 @@ async function panggilNvidia(opsi: OpsiLlm) {
     apiKey: process.env.NVIDIA_API_KEY!,
     kandidatModel,
     izinkanGambar: false,
-    statusLanjutModel: [404, 410],
+    statusLanjutModel: STATUS_LANJUT_BAWAAN,
   });
 }
 
@@ -232,7 +253,17 @@ async function panggilOpenRouter(opsi: OpsiLlm) {
 
 async function panggilGemini(opsi: OpsiLlm) {
   const kunci = process.env.GEMINI_API_KEY!;
-  const kandidatModel = [...new Set([process.env.STUDIO_GEMINI_TEKS, "gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash"].filter(Boolean) as string[])];
+  const kandidatModel = [
+    ...new Set(
+      [
+        process.env.STUDIO_GEMINI_TEKS,
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-flash-latest",
+        "gemini-2.0-flash",
+      ].filter(Boolean) as string[],
+    ),
+  ];
 
   const bagianUser = [
     ...(opsi.gambar ?? []).map((g) => ({ inline_data: { mime_type: g.mimeType, data: g.data } })),
@@ -261,62 +292,100 @@ async function panggilGemini(opsi: OpsiLlm) {
     return res.json();
   };
 
-  let j;
+  let j: {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
+  } | null = null;
+  let dataHasil: unknown = null;
   let modelDipakai = kandidatModel[0];
   let galatTerakhir: unknown = null;
+  const statusLanjut = new Set(STATUS_LANJUT_BAWAAN);
+
   for (const model of kandidatModel) {
     modelDipakai = model;
     try {
+      let mentah;
       if (opsi.pakaiSearch) {
         try {
-          j = await kirim(model, false, true);
+          mentah = await kirim(model, false, true);
         } catch {
-          j = await kirim(model, true, false).catch(() => kirim(model, false, false));
+          mentah = await kirim(model, true, false).catch(() => kirim(model, false, false));
         }
       } else {
         try {
-          j = await kirim(model, true, false);
+          mentah = await kirim(model, true, false);
         } catch (e) {
           if (!opsi.skema || !String(e).includes("Gemini 400")) throw e;
-          j = await kirim(model, false, false);
+          mentah = await kirim(model, false, false);
         }
       }
+      const teks = (mentah.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("") || "{}";
+      const data = JSON.parse(ekstrakJson(teks));
+      if (opsi.valid && !opsi.valid(data)) {
+        const keys = data && typeof data === "object" ? Object.keys(data as Record<string, unknown>).slice(0, 5).join(",") : typeof data;
+        throw new Error(`Gemini (${model}) format tidak valid (keys: ${keys || "kosong"})`);
+      }
+      j = mentah;
+      dataHasil = data;
       break;
     } catch (e) {
       galatTerakhir = e;
-      if (!String(e).includes("Gemini 404")) throw e;
+      if (!bolehLanjutModel(e, "Gemini", statusLanjut)) throw e;
     }
   }
   if (!j) throw galatTerakhir ?? new Error("Gemini gagal merespons.");
-  const teks = (j.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("") || "{}";
   const u = j.usageMetadata ?? {};
   const input = Number(u.promptTokenCount) || 0;
   const output = (Number(u.candidatesTokenCount) || 0) + (Number(u.thoughtsTokenCount) || 0);
-  return { data: JSON.parse(ekstrakJson(teks)), pemakaian: { penyedia: "gemini" as const, model: modelDipakai, input, output, biayaUsd: biaya(input, output, HARGA.gemini) } };
+  return { data: dataHasil, pemakaian: { penyedia: "gemini" as const, model: modelDipakai, input, output, biayaUsd: biaya(input, output, HARGA.gemini) } };
 }
 
 async function panggilCloudflare(opsi: OpsiLlm) {
-  const model = process.env.STUDIO_CF_TEKS || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-  const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID}/ai/run/${model}`, {
-    method: "POST",
-    signal: AbortSignal.timeout(25_000),
-    headers: { Authorization: `Bearer ${process.env.CF_API_TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messages: [
-        { role: "system", content: opsi.system + teksSkema(opsi.skema) },
-        { role: "user", content: opsi.prompt },
-      ],
-      temperature: opsi.suhu ?? 0.7,
-      max_tokens: opsi.maksToken ?? 4000,
-    }),
-  });
-  if (!res.ok) throw new Error(`Cloudflare AI ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
-  const j = await res.json();
-  const r = j.result?.response;
-  const data = typeof r === "string" ? JSON.parse(ekstrakJson(r)) : r ?? {};
-  const input = Number(j.result?.usage?.prompt_tokens) || Math.round((opsi.system.length + opsi.prompt.length) / 4);
-  const output = Number(j.result?.usage?.completion_tokens) || Math.round(JSON.stringify(data).length / 4);
-  return { data, pemakaian: { penyedia: "cloudflare" as const, model, input, output, biayaUsd: biaya(input, output, HARGA.cloudflare) } };
+  const kandidatModel = [
+    ...new Set(
+      [
+        process.env.STUDIO_CF_TEKS,
+        "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        "@cf/meta/llama-4-scout-17b-16e-instruct",
+        "@cf/meta/llama-3.1-8b-instruct-fast",
+      ].filter(Boolean) as string[],
+    ),
+  ];
+  const statusLanjut = new Set([400, ...STATUS_LANJUT_BAWAAN]);
+  let galatTerakhir: unknown = null;
+
+  for (const model of kandidatModel) {
+    try {
+      const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID}/ai/run/${model}`, {
+        method: "POST",
+        signal: AbortSignal.timeout(24_000),
+        headers: { Authorization: `Bearer ${process.env.CF_API_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            { role: "system", content: opsi.system + teksSkema(opsi.skema) },
+            { role: "user", content: opsi.prompt },
+          ],
+          temperature: opsi.suhu ?? 0.7,
+          max_tokens: opsi.maksToken ?? 4000,
+        }),
+      });
+      if (!res.ok) throw new Error(`Cloudflare AI ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+      const j = await res.json();
+      const r = j.result?.response;
+      const data = typeof r === "string" ? JSON.parse(ekstrakJson(r)) : (r ?? {});
+      if (opsi.valid && !opsi.valid(data)) {
+        const keys = data && typeof data === "object" ? Object.keys(data as Record<string, unknown>).slice(0, 5).join(",") : typeof data;
+        throw new Error(`Cloudflare AI (${model}) format tidak valid (keys: ${keys || "kosong"})`);
+      }
+      const input = Number(j.result?.usage?.prompt_tokens) || Math.round((opsi.system.length + opsi.prompt.length) / 4);
+      const output = Number(j.result?.usage?.completion_tokens) || Math.round(JSON.stringify(data).length / 4);
+      return { data, pemakaian: { penyedia: "cloudflare" as const, model, input, output, biayaUsd: biaya(input, output, HARGA.cloudflare) } };
+    } catch (e) {
+      galatTerakhir = e;
+      if (!bolehLanjutModel(e, "Cloudflare AI", statusLanjut)) throw e;
+    }
+  }
+  throw galatTerakhir ?? new Error("Cloudflare AI gagal merespons.");
 }
 
 /** Claude Structured Outputs mewajibkan `additionalProperties: false` di setiap node `type: "object"`. */
@@ -336,6 +405,7 @@ function rapikanSkemaClaude(node: unknown): unknown {
 async function panggilClaude(opsi: OpsiLlm) {
   const model = process.env.STUDIO_CLAUDE_TEKS || "claude-haiku-5-5";
   const skemaClaude = opsi.skema ? (rapikanSkemaClaude(opsi.skema) as Record<string, unknown>) : undefined;
+  const maxTokens = Math.max(opsi.maksToken ?? 4096, 4096);
   const kontenUser: Anthropic.MessageParam["content"] = opsi.gambar?.length
     ? [
         ...opsi.gambar.map((g) => ({
@@ -349,19 +419,42 @@ async function panggilClaude(opsi: OpsiLlm) {
         { type: "text" as const, text: opsi.prompt },
       ]
     : opsi.prompt;
-  const res = await new Anthropic().messages.create({
-    model,
-    max_tokens: opsi.maksToken ?? 8000,
-    output_config: skemaClaude ? { effort: "low", format: { type: "json_schema", schema: skemaClaude } } : undefined,
-    system: opsi.system,
-    messages: [{ role: "user", content: kontenUser }],
-  });
-  if (res.stop_reason === "refusal") throw new Error("Claude menolak permintaan ini.");
-  const teks = res.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "{}";
-  const input = res.usage?.input_tokens ?? 0;
-  const output = res.usage?.output_tokens ?? 0;
-  const h = model.includes("sonnet") ? HARGA["claude-sonnet"] : HARGA["claude-haiku"];
-  return { data: JSON.parse(ekstrakJson(teks)), pemakaian: { penyedia: "claude" as const, model, input, output, biayaUsd: biaya(input, output, h) } };
+
+  const kirimClaude = async (pakaiSkema: boolean) => {
+    const gunakanFormatSkema = pakaiSkema && Boolean(skemaClaude);
+    const res = await new Anthropic().messages.create({
+      model,
+      max_tokens: maxTokens,
+      output_config: gunakanFormatSkema
+        ? { effort: "low", format: { type: "json_schema", schema: skemaClaude! } }
+        : { effort: "low" },
+      system: gunakanFormatSkema ? opsi.system : opsi.system + teksSkema(opsi.skema),
+      messages: [{ role: "user", content: kontenUser }],
+    });
+    if (res.stop_reason === "refusal") throw new Error("Claude menolak permintaan ini.");
+    const teks = res.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("")
+      .trim();
+    if (!teks) throw new Error(`Claude respons kosong (stop_reason: ${res.stop_reason ?? "unknown"})`);
+    const data = JSON.parse(ekstrakJson(teks));
+    const input = res.usage?.input_tokens ?? 0;
+    const output = res.usage?.output_tokens ?? 0;
+    const h = model.includes("sonnet") ? HARGA["claude-sonnet"] : HARGA["claude-haiku"];
+    return { data, pemakaian: { penyedia: "claude" as const, model, input, output, biayaUsd: biaya(input, output, h) } };
+  };
+
+  if (skemaClaude) {
+    try {
+      const hasil1 = await kirimClaude(true);
+      if (!opsi.valid || opsi.valid(hasil1.data)) return hasil1;
+    } catch {
+      // Lanjut ke fallback mode JSON prompt standar bila structured output ditolak atau kosong.
+    }
+    return kirimClaude(false);
+  }
+  return kirimClaude(false);
 }
 
 type HasilPanggil = { data: unknown; pemakaian: Omit<PemakaianLlm, "tahap"> };
@@ -422,7 +515,13 @@ export async function panggilLlmJson<T>(opsi: OpsiLlm, tahap?: string): Promise<
     if (adaGambar && (p.nama === "cloudflare" || p.nama === "nvidia")) continue;
     try {
       const r = await p.panggil(opsi);
-      if (opsi.valid && !opsi.valid(r.data)) throw new Error("jawaban tidak sesuai format");
+      if (opsi.valid && !opsi.valid(r.data)) {
+        const keys =
+          r.data && typeof r.data === "object"
+            ? Object.keys(r.data as Record<string, unknown>).slice(0, 6).join(",")
+            : typeof r.data;
+        throw new Error(`jawaban tidak sesuai format (keys: ${keys || "kosong"})`);
+      }
       return { data: r.data as T, pemakaian: { ...r.pemakaian, ...(tahap ? { tahap } : {}) } };
     } catch (e) {
       galat.push(`${p.nama}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 220));

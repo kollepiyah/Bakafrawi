@@ -236,3 +236,38 @@ test("normalisasiNaskahDrafSerial mendukung hingga 16 adegan & dialog panjang, p
   assert.equal(adeganBaru.latarKode, "meja-bar");
   assert.equal(adeganBaru.pembicara, "narator");
 });
+
+test("normalisasiSaranCeritaSerial, normalisasiNaskahDrafSerial & kataKunci panjang toleran variasi key AI", () => {
+  const kataKunciPanjang = `${"Kisah Syekh Abul Hasan Asy-Syadzili di Yaman. ".repeat(14)}UJUNG_KATA_KUNCI`;
+  assert.ok(kataKunciPanjang.length > 500);
+  const { prompt } = buatPromptSaranCeritaSerial({
+    kataKunci: kataKunciPanjang,
+    panjangNaskah: "panjang",
+  });
+  assert.match(prompt, /UJUNG_KATA_KUNCI/);
+
+  const saranBungkus = normalisasiSaranCeritaSerial({
+    ide: [
+      { title: "Biji Merah di Lembah Sunyi", ringkasan: "Perjalanan tafakur Syekh.", ending: "Lahirnya qahwah.", ide: "Kisah lengkap episode 1." },
+    ],
+  });
+  assert.equal(saranBungkus.length, 1);
+  assert.equal(saranBungkus[0].judul, "Biji Merah di Lembah Sunyi");
+
+  const drafBungkus = normalisasiNaskahDrafSerial({
+    naskah: {
+      judulEpisode: "Qahwah Pertama",
+      adegan: [
+        {
+          nomor: 1,
+          latarKode: "outdoor",
+          narasi: "Setiap pagi miliaran orang memulai harinya dengan secangkir kopi.",
+          pembicara: "narator",
+        },
+      ],
+    },
+  });
+  assert.equal(drafBungkus.judulEpisode, "Qahwah Pertama");
+  assert.equal(drafBungkus.adegan.length, 1);
+  assert.match(drafBungkus.adegan[0].dialog, /secangkir kopi/);
+});

@@ -30,7 +30,7 @@ import {
   simpanKonfigSerialLekKopi,
 } from "@/lib/studio-server";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function GET(req: Request) {
   if (!(await permintaanDariAdmin(req))) return Response.json({ ok: false }, { status: 401 });

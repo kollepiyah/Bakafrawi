@@ -610,7 +610,7 @@ export function buatPromptSaranCeritaSerial({
   riwayatEpisode?: EpisodeSerial[];
   daftarMenu?: MenuRingkasSerial[];
 }) {
-  const kw = String(kataKunci ?? "").trim().slice(0, 240);
+  const kw = String(kataKunci ?? "").trim().slice(0, 1200);
   const spek = PANJANG_SPEK[panjangNaskah] ?? PANJANG_SPEK.sedang;
   const riwayat = riwayatEpisode.length
     ? `\n\nEPISODE SEBELUMNYA (lanjutkan benang merah, jangan ulang ide/konflik yang sama persis):\n${riwayatEpisode
@@ -636,17 +636,20 @@ export function buatPromptSaranCeritaSerial({
 
 /** Rapikan saran cerita AI menjadi maks 3 opsi valid. */
 export function normalisasiSaranCeritaSerial(mentah: unknown, moodBawaan: MoodSerial = "komedi_ceria"): SaranCeritaSerial[] {
-  const obj = mentah && typeof mentah === "object" ? (mentah as Record<string, unknown>) : {};
-  const daftar = Array.isArray(obj.saran) ? obj.saran : Array.isArray(mentah) ? mentah : [];
+  const obj = mentah && typeof mentah === "object" && !Array.isArray(mentah) ? (mentah as Record<string, unknown>) : {};
+  const calonDaftar = Array.isArray(mentah)
+    ? mentah
+    : obj.saran ?? obj.ide ?? obj.ideas ?? obj.cerita ?? obj.pilihan ?? [];
+  const daftar = Array.isArray(calonDaftar) ? calonDaftar : [];
   const hasil: SaranCeritaSerial[] = [];
   for (const item of daftar) {
     if (!item || typeof item !== "object") continue;
     const r = item as Record<string, unknown>;
-    const judul = String(r.judul ?? "").trim().slice(0, 72);
-    const premis = String(r.premis ?? "").trim().slice(0, 260);
-    const punchline = String(r.punchline ?? "").trim().slice(0, 220);
+    const judul = String(r.judul ?? r.title ?? "").trim().slice(0, 72);
+    const premis = String(r.premis ?? r.ringkasan ?? "").trim().slice(0, 260);
+    const punchline = String(r.punchline ?? r.ending ?? "").trim().slice(0, 220);
     const moodMentah = String(r.mood ?? "").trim() as MoodSerial;
-    const ideLengkap = String(r.ideLengkap ?? "").trim().slice(0, 650) || [premis, punchline].filter(Boolean).join(" ");
+    const ideLengkap = String(r.ideLengkap ?? r.ide ?? "").trim().slice(0, 650) || [premis, punchline].filter(Boolean).join(" ");
     if (!judul || !ideLengkap) continue;
     hasil.push({
       judul,
@@ -759,8 +762,12 @@ function normalisasiTokohDraf(mentah: unknown): TokohDrafSerial | null {
 
 /** Rapikan draf naskah episode hasil AI agar siap diedit di UI maupun langsung dirender Remotion. */
 export function normalisasiNaskahDrafSerial(mentah: unknown, nomorEpisode = 1): NaskahDrafSerial {
-  const obj = mentah && typeof mentah === "object" ? (mentah as Record<string, unknown>) : {};
-  const daftarAdegan = Array.isArray(obj.adegan) ? obj.adegan : [];
+  const akar = mentah && typeof mentah === "object" && !Array.isArray(mentah) ? (mentah as Record<string, unknown>) : {};
+  const isiBungkus = [akar.naskah, akar.episode, akar.data].find(
+    (v): v is Record<string, unknown> => Boolean(v && typeof v === "object" && !Array.isArray(v)),
+  );
+  const obj = Array.isArray(akar.adegan) || Array.isArray(akar.scenes) ? akar : (isiBungkus ?? akar);
+  const daftarAdegan = Array.isArray(obj.adegan) ? obj.adegan : Array.isArray(obj.scenes) ? obj.scenes : [];
   const adegan: AdeganDrafSerial[] = daftarAdegan.slice(0, 16).map((item, idx) => {
     const a = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
     let tokohKiri = normalisasiTokohDraf(a.tokohKiri);
@@ -788,7 +795,7 @@ export function normalisasiNaskahDrafSerial(mentah: unknown, nomorEpisode = 1): 
       tokohKanan,
       pembicara,
       namaPembicara: String(a.namaPembicara ?? "").trim().slice(0, 48) || NAMA_TOKOH_PETA[idPembicara ?? "narator"] || "Lek Kopi",
-      dialog: String(a.dialog ?? "").trim().slice(0, 650),
+      dialog: String(a.dialog ?? a.narasi ?? a.teks ?? "").trim().slice(0, 650),
       sfx: sfxMentah === "pop" || sfxMentah === "whoosh" ? sfxMentah : "tanpa",
     };
   });

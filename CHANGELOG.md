@@ -1,5 +1,15 @@
 # CHANGELOG — bakafrawi.com
 
+## Perbaikan Ketahanan Router AI & Parser Naskah Serial (25 Nov)
+
+- **Atasi Galat Serentak NVIDIA 410 / Gemini 503 / Cloudflare Timeout / Claude Format (`src/lib/llm-router.ts`, `studio/lib/router-worker.mjs`):**
+  - Menghapus model NVIDIA EOL `meta/llama-3.1-70b-instruct` dan memprioritaskan `meta/llama-3.3-70b-instruct`, `nvidia/llama-3.3-nemotron-super-49b-v1`, `qwen/qwen2.5-72b-instruct`, dan `mistralai/mistral-large-2-instruct`, dengan rotasi penuh untuk status `404/410/429/5xx`, timeout, maupun gagal parse JSON.
+  - Memprioritaskan `gemini-2.5-flash` → `gemini-2.5-flash-lite` → `gemini-flash-latest` → `gemini-2.0-flash` serta memperbolehkan pindah model saat `503` (high demand), `429`, atau timeout (sebelumnya hanya pindah di `404`).
+  - Menambahkan fallback model cepat di Cloudflare (`@cf/meta/llama-3.3-70b-instruct-fp8-fast` → `@cf/meta/llama-4-scout-17b-16e-instruct` → `@cf/meta/llama-3.1-8b-instruct-fast`) agar tidak langsung gugur saat 1 model timeout.
+  - Memperbaiki `panggilClaude` agar tidak lagi diam-diam mengubah respons tanpa teks menjadi `"{}"`, otomatis fallback sekali dari constrained `output_config.json_schema` ke mode prompt JSON standar bila gagal atau tidak valid, serta menambahkan info `keys` pada pesan galat validasi.
+- **Toleransi Pembungkus JSON & Timeout API (`src/lib/serial-kartun-murni.ts`, `src/app/api/studio/serial/route.ts`):**
+  - Menaikkan `maxDuration` rute `/api/studio/serial` dari `60` ke `120` detik, memperluas `kataKunci` menjadi `1.200` karakter, serta membuat `normalisasiSaranCeritaSerial` & `normalisasiNaskahDrafSerial` toleran terhadap variasi key pembungkus JSON dari LLM (`ide`, `title`, `naskah`, `scenes`, `narasi`).
+
 ## Dukungan Dialog Panjang, Narator + Dialog & Episode Bersambung Serial Kartun (25 Nov)
 
 - **Cerita Naratif Panjang, Campuran Narator + Dialog Tokoh & Mode Bersambung (`src/lib/serial-kartun-murni.ts`, `src/app/api/studio/serial/route.ts`, `src/lib/studio-server.ts`, `studio/lib/serial-kartun.mjs`):**
