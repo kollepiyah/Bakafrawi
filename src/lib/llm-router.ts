@@ -71,6 +71,52 @@ function ekstrakJson(teks: string): string {
   return akhir > awal ? bersih.slice(awal, akhir + 1) : bersih.slice(awal);
 }
 
+/** Perbaiki kecacatan kecil JSON dari LLM (trailing comma, newline mentah di dalam string) lalu parse. */
+function parseJsonToleran(teks: string): unknown {
+  const mentah = ekstrakJson(teks);
+  try {
+    return JSON.parse(mentah);
+  } catch (errAwal) {
+    // 1. Escape newline/tab mentah di dalam string JSON
+    let hasil = "";
+    let dalamString = false;
+    let escape = false;
+    for (let i = 0; i < mentah.length; i++) {
+      const ch = mentah[i];
+      if (dalamString) {
+        if (escape) {
+          hasil += ch;
+          escape = false;
+        } else if (ch === "\\") {
+          hasil += ch;
+          escape = true;
+        } else if (ch === '"') {
+          hasil += ch;
+          dalamString = false;
+        } else if (ch === "\n") {
+          hasil += "\\n";
+        } else if (ch === "\r") {
+          hasil += "";
+        } else if (ch === "\t") {
+          hasil += "\\t";
+        } else {
+          hasil += ch;
+        }
+      } else {
+        if (ch === '"') dalamString = true;
+        hasil += ch;
+      }
+    }
+    // 2. Buang trailing comma sebelum } atau ]
+    hasil = hasil.replace(/,\s*([}\]])/g, "$1");
+    try {
+      return JSON.parse(hasil);
+    } catch {
+      throw errAwal;
+    }
+  }
+}
+
 const teksSkema = (skema?: Record<string, unknown>) =>
   skema ? `\n\nJawab HANYA dengan JSON valid (tanpa markdown, tanpa komentar) yang mengikuti JSON Schema ini:\n${JSON.stringify(skema)}` : "";
 
@@ -121,39 +167,55 @@ async function panggilOpenAiKompatibel(
   let dataHasil: unknown = null;
   let teksHasil = "{}";
   let modelDipakai = konfig.kandidatModel[0];
+  let galatPertama: string | null = null;
   let galatTerakhir: unknown = null;
   const statusLanjut = new Set(konfig.statusLanjutModel ?? STATUS_LANJUT_BAWAAN);
+
+  const kirimOpenAi = async (model: string, pakaiJsonMode: boolean) => {
+    const res = await fetch(konfig.url, {
+      method: "POST",
+      signal: AbortSignal.timeout(32_000),
+      headers: {
+        Authorization: `Bearer ${konfig.apiKey}`,
+        "Content-Type": "application/json",
+        ...konfig.headerTambahan,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: opsi.system + teksSkema(opsi.skema) },
+          { role: "user", content: isiUser },
+        ],
+        ...(pakaiJsonMode ? { response_format: { type: "json_object" } } : {}),
+        temperature: opsi.suhu ?? 0.7,
+        max_tokens: opsi.maksToken ?? 4096,
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`${konfig.label} ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+    }
+    return (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+  };
 
   for (const model of konfig.kandidatModel) {
     modelDipakai = model;
     try {
-      const res = await fetch(konfig.url, {
-        method: "POST",
-        signal: AbortSignal.timeout(25_000),
-        headers: {
-          Authorization: `Bearer ${konfig.apiKey}`,
-          "Content-Type": "application/json",
-          ...konfig.headerTambahan,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: opsi.system + teksSkema(opsi.skema) },
-            { role: "user", content: isiUser },
-          ],
-          temperature: opsi.suhu ?? 0.7,
-          max_tokens: opsi.maksToken ?? 4096,
-        }),
-      });
-      if (!res.ok) {
-        throw new Error(`${konfig.label} ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
+      let mentah;
+      if (daftarGambar.length === 0) {
+        try {
+          mentah = await kirimOpenAi(model, true);
+        } catch (eJson) {
+          if (!String(eJson).includes(`${konfig.label} 400`)) throw eJson;
+          mentah = await kirimOpenAi(model, false);
+        }
+      } else {
+        mentah = await kirimOpenAi(model, false);
       }
-      const mentah = (await res.json()) as {
-        choices?: { message?: { content?: string } }[];
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
-      };
       const teks = String(mentah.choices?.[0]?.message?.content ?? "{}");
-      const data = JSON.parse(ekstrakJson(teks));
+      const data = parseJsonToleran(teks);
       if (opsi.valid && !opsi.valid(data)) {
         const keys = data && typeof data === "object" ? Object.keys(data as Record<string, unknown>).slice(0, 5).join(",") : typeof data;
         throw new Error(`${konfig.label} (${model}) format tidak valid (keys: ${keys || "kosong"})`);
@@ -163,12 +225,20 @@ async function panggilOpenAiKompatibel(
       teksHasil = teks;
       break;
     } catch (e) {
+      if (!galatPertama) galatPertama = `${model}: ${e instanceof Error ? e.message : String(e)}`;
       galatTerakhir = e;
       if (!bolehLanjutModel(e, konfig.label, statusLanjut)) throw e;
     }
   }
 
-  if (!j) throw galatTerakhir ?? new Error(`${konfig.label} gagal merespons.`);
+  if (!j) {
+    const pesanAkhir = galatTerakhir instanceof Error ? galatTerakhir.message : String(galatTerakhir ?? "gagal merespons");
+    throw new Error(
+      galatPertama && !pesanAkhir.includes(galatPertama.slice(0, 30))
+        ? `${galatPertama.slice(0, 140)} → ${pesanAkhir.slice(0, 140)}`
+        : pesanAkhir,
+    );
+  }
   const input = Number(j.usage?.prompt_tokens) || Math.round((opsi.system.length + opsi.prompt.length) / 4);
   const output = Number(j.usage?.completion_tokens) || Math.round(teksHasil.length / 4);
   const tarif = HARGA[konfig.nama] ?? { input: 0, output: 0 };
@@ -185,7 +255,7 @@ async function panggilGroq(opsi: OpsiLlm) {
     : ([
         process.env.STUDIO_GROQ_TEKS,
         "llama-3.3-70b-versatile",
-        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "llama-3.1-8b-instant",
       ].filter(Boolean) as string[]);
 
   return panggilOpenAiKompatibel(opsi, {
@@ -208,7 +278,6 @@ async function panggilNvidia(opsi: OpsiLlm) {
         "meta/llama-3.3-70b-instruct",
         "nvidia/llama-3.3-nemotron-super-49b-v1",
         "qwen/qwen2.5-72b-instruct",
-        "mistralai/mistral-large-2-instruct",
       ].filter(Boolean) as string[],
     ),
   ];
@@ -229,9 +298,9 @@ async function panggilOpenRouter(opsi: OpsiLlm) {
     ...new Set(
       [
         process.env.STUDIO_OPENROUTER_MODEL,
+        "openrouter/free",
         "meta-llama/llama-3.3-70b-instruct:free",
         "qwen/qwen-2.5-72b-instruct:free",
-        "google/gemini-2.0-flash-exp:free",
       ].filter(Boolean) as string[],
     ),
   ];
@@ -257,10 +326,11 @@ async function panggilGemini(opsi: OpsiLlm) {
     ...new Set(
       [
         process.env.STUDIO_GEMINI_TEKS,
+        "gemini-3.8-flash",
+        "gemini-3.8-flash-lite",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
         "gemini-flash-latest",
-        "gemini-2.0-flash",
       ].filter(Boolean) as string[],
     ),
   ];
@@ -298,6 +368,7 @@ async function panggilGemini(opsi: OpsiLlm) {
   } | null = null;
   let dataHasil: unknown = null;
   let modelDipakai = kandidatModel[0];
+  let galatPertama: string | null = null;
   let galatTerakhir: unknown = null;
   const statusLanjut = new Set(STATUS_LANJUT_BAWAAN);
 
@@ -321,7 +392,7 @@ async function panggilGemini(opsi: OpsiLlm) {
         }
       }
       const teks = (mentah.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? "").join("") || "{}";
-      const data = JSON.parse(ekstrakJson(teks));
+      const data = parseJsonToleran(teks);
       if (opsi.valid && !opsi.valid(data)) {
         const keys = data && typeof data === "object" ? Object.keys(data as Record<string, unknown>).slice(0, 5).join(",") : typeof data;
         throw new Error(`Gemini (${model}) format tidak valid (keys: ${keys || "kosong"})`);
@@ -330,11 +401,19 @@ async function panggilGemini(opsi: OpsiLlm) {
       dataHasil = data;
       break;
     } catch (e) {
+      if (!galatPertama) galatPertama = `${model}: ${e instanceof Error ? e.message : String(e)}`;
       galatTerakhir = e;
       if (!bolehLanjutModel(e, "Gemini", statusLanjut)) throw e;
     }
   }
-  if (!j) throw galatTerakhir ?? new Error("Gemini gagal merespons.");
+  if (!j) {
+    const pesanAkhir = galatTerakhir instanceof Error ? galatTerakhir.message : String(galatTerakhir ?? "Gemini gagal merespons");
+    throw new Error(
+      galatPertama && !pesanAkhir.includes(galatPertama.slice(0, 30))
+        ? `${galatPertama.slice(0, 140)} → ${pesanAkhir.slice(0, 140)}`
+        : pesanAkhir,
+    );
+  }
   const u = j.usageMetadata ?? {};
   const input = Number(u.promptTokenCount) || 0;
   const output = (Number(u.candidatesTokenCount) || 0) + (Number(u.thoughtsTokenCount) || 0);
@@ -359,7 +438,7 @@ async function panggilCloudflare(opsi: OpsiLlm) {
     try {
       const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID}/ai/run/${model}`, {
         method: "POST",
-        signal: AbortSignal.timeout(24_000),
+        signal: AbortSignal.timeout(28_000),
         headers: { Authorization: `Bearer ${process.env.CF_API_TOKEN}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [
@@ -367,13 +446,13 @@ async function panggilCloudflare(opsi: OpsiLlm) {
             { role: "user", content: opsi.prompt },
           ],
           temperature: opsi.suhu ?? 0.7,
-          max_tokens: opsi.maksToken ?? 4000,
+          max_tokens: Math.max(opsi.maksToken ?? 5200, 5200),
         }),
       });
       if (!res.ok) throw new Error(`Cloudflare AI ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
       const j = await res.json();
       const r = j.result?.response;
-      const data = typeof r === "string" ? JSON.parse(ekstrakJson(r)) : (r ?? {});
+      const data = typeof r === "string" ? parseJsonToleran(r) : (r ?? {});
       if (opsi.valid && !opsi.valid(data)) {
         const keys = data && typeof data === "object" ? Object.keys(data as Record<string, unknown>).slice(0, 5).join(",") : typeof data;
         throw new Error(`Cloudflare AI (${model}) format tidak valid (keys: ${keys || "kosong"})`);
@@ -406,7 +485,7 @@ function rapikanSkemaClaude(node: unknown): unknown {
 async function panggilClaude(opsi: OpsiLlm) {
   const model = process.env.STUDIO_CLAUDE_TEKS || "claude-haiku-5-5";
   const skemaClaude = opsi.skema ? (rapikanSkemaClaude(opsi.skema) as Record<string, unknown>) : undefined;
-  const maxTokens = Math.max(opsi.maksToken ?? 4096, 4096);
+  const maxTokens = Math.max(opsi.maksToken ?? 5200, 5200);
   const kontenUser: Anthropic.MessageParam["content"] = opsi.gambar?.length
     ? [
         ...opsi.gambar.map((g) => ({
@@ -439,7 +518,7 @@ async function panggilClaude(opsi: OpsiLlm) {
       .join("")
       .trim();
     if (!teks) throw new Error(`Claude respons kosong (stop_reason: ${res.stop_reason ?? "unknown"})`);
-    const data = JSON.parse(ekstrakJson(teks));
+    const data = parseJsonToleran(teks);
     const input = res.usage?.input_tokens ?? 0;
     const output = res.usage?.output_tokens ?? 0;
     const h = model.includes("sonnet") ? HARGA["claude-sonnet"] : HARGA["claude-haiku"];

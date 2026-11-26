@@ -1,5 +1,9 @@
 # CHANGELOG — bakafrawi.com
 
+## Perbaikan Daftar Model AI Aktif, JSON Mode Native & Parser JSON Toleran (26 Nov)
+- Memperbarui daftar model aktif di `src/lib/llm-router.ts` dan `studio/lib/router-worker.mjs` sesuai status terbaru: menaikkan Gemini ke `gemini-3.8-flash` & `gemini-3.8-flash-lite` (menghapus `gemini-2.0-flash` yang 404), menghapus `meta-llama/llama-4-scout-17b-16e-instruct` (404) di jalur teks Groq dan memakai `llama-3.3-70b-versatile` + `llama-3.1-8b-instant`, menghapus `mistralai/mistral-large-2-instruct` (410 EOL) di `llm-router.ts`, serta mengganti `google/gemini-2.0-flash-exp:free` (404) di OpenRouter dengan auto-router resmi `openrouter/free`.
+- Mengaktifkan `response_format: { type: "json_object" }` pada Groq, NVIDIA, dan OpenRouter (dengan fallback otomatis bila model tertentu menolak `400`), menaikkan batas token Cloudflare/Claude untuk naskah panjang, menambahkan `parseJsonToleran` (tahan trailing comma & baris baru mentah di dalam string), serta menjaga pesan galat model pertama agar tidak tertutup galat fallback terakhir.
+
 ## CeritaMotion (Malam Sinematik & Perkamen Sejarah), Tulis Manual per Bagian, & Perbaikan Suara (26 Nov)
 - Menambahkan komposisi Remotion baru `CeritaMotion` (`studio/remotion/src/CeritaMotion.tsx` & `studio/remotion/src/data/cerita-motion.ts`) yang mendukung 2 tema visual: **Malam Sinematik** (ala `@waktunya.malam`) dan **Perkamen Sejarah** dengan gulungan perkamen animasi, pita era, peta kuno SVG rute bercahaya, serta subtitle kinetik sorot kata kunci (ala `@motionformat`).
 - Menambahkan tombol **Tulis Manual per Bagian** di [studio-serial.tsx](src/components/admin/studio-serial.tsx) + helper `buatDrafManualSerial` di `src/lib/serial-kartun-murni.ts` agar narasi, tampilan bagian (`pembuka`/`ilustrasi`/`perkamen`/`peta`/`penutup`), judul kartu, pita era, kata kunci sorot emas/kuning, dan prompt visual bisa ditulis manual tanpa diubah AI.

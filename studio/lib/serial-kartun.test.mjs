@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { gabungRiwayatEpisode, siapkanPropsCeritaMotion, siapkanPropsSerialKartun } from './serial-kartun.mjs';
-import { KANDIDAT_MODEL_WORKER, urutanPenyediaWorker } from './router-worker.mjs';
+import { KANDIDAT_MODEL_WORKER, parseJsonToleran, urutanPenyediaWorker } from './router-worker.mjs';
 import { pilihVoicePerTokoh, suaraDialogSerial } from './bank/suara.mjs';
 import {
   contohSerialKartun,
@@ -283,12 +283,22 @@ test('urutanPenyediaWorker mendahulukan AI gratis, memisahkan vision & mematikan
   }).map((p) => p.nama);
   assert.ok(!viaEnv.includes('claude'));
 
-  // Pastikan daftar model aktif worker bebas dari model NVIDIA EOL (meta/llama-3.1-70b-instruct & mistral-large-2)
+  // Pastikan daftar model aktif worker bebas dari model EOL/404 dan memakai model aktif terbaru
+  assert.ok(!KANDIDAT_MODEL_WORKER.groq.includes('meta-llama/llama-4-scout-17b-16e-instruct'));
+  assert.equal(KANDIDAT_MODEL_WORKER.groq[0], 'llama-3.3-70b-versatile');
   assert.ok(!KANDIDAT_MODEL_WORKER.nvidia.includes('meta/llama-3.1-70b-instruct'));
   assert.ok(!KANDIDAT_MODEL_WORKER.nvidia.includes('mistralai/mistral-large-2-instruct'));
   assert.ok(KANDIDAT_MODEL_WORKER.nvidia.includes('meta/llama-3.3-70b-instruct'));
-  assert.equal(KANDIDAT_MODEL_WORKER.gemini[0], 'gemini-2.5-flash');
+  assert.equal(KANDIDAT_MODEL_WORKER.gemini[0], 'gemini-3.8-flash');
+  assert.ok(!KANDIDAT_MODEL_WORKER.gemini.includes('gemini-2.0-flash'));
+  assert.equal(KANDIDAT_MODEL_WORKER.openrouter[0], 'openrouter/free');
+  assert.ok(!KANDIDAT_MODEL_WORKER.openrouter.includes('google/gemini-2.0-flash-exp:free'));
   assert.ok(KANDIDAT_MODEL_WORKER.cloudflare.includes('@cf/meta/llama-4-scout-17b-16e-instruct'));
+
+  // Parser JSON toleran tahan trailing comma & newline mentah di dalam string
+  const parsed = parseJsonToleran('```json\n{"judul":"Qahwah\nMokha","adegan":[{"nomor":1,},]}\n```');
+  assert.equal(parsed.judul, 'Qahwah\nMokha');
+  assert.equal(parsed.adegan[0].nomor, 1);
 });
 
 test('siapkanPropsCeritaMotion memetakan adegan pembuka/perkamen/peta/penutup dan timestamps ElevenLabs', () => {
