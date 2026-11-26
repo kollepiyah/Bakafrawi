@@ -82,7 +82,6 @@ export const KANDIDAT_MODEL_WORKER = {
     'meta/llama-3.3-70b-instruct',
     'nvidia/llama-3.3-nemotron-super-49b-v1',
     'qwen/qwen2.5-72b-instruct',
-    'mistralai/mistral-large-2-instruct',
   ],
   gemini: [
     'gemini-2.5-flash',

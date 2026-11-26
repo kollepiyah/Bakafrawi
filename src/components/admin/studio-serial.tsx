@@ -23,6 +23,7 @@ import { DAFTAR_SASARAN_VIDEO, daftarSlotCepatWIB, type SasaranTayang } from "@/
 import {
   bersihkanKodeLokasi,
   buatAdeganKosongSerial,
+  buatDrafManualSerial,
   DAFTAR_TOKOH_LEKKOPI,
   episodeBerikutnya,
   estimasiDurasiNaskahSerial,
@@ -36,12 +37,15 @@ import {
   type FormatSuaraSerial,
   type GayaCeritaSerial,
   type GayaKartunLatar,
+  type GenderNaratorSerial,
+  type JenisAdeganMotion,
   type KonfigSerialLekKopi,
   type KonfigSuaraTokoh,
   type MoodSerial,
   type NaskahDrafSerial,
   type PanjangSerial,
   type SaranCeritaSerial,
+  type TemaVisualMotion,
   type TokohSuaraId,
 } from "@/lib/serial-kartun-murni";
 
@@ -192,6 +196,8 @@ export function PanelSerialKartun({
   const [saranCerita, setSaranCerita] = useState<SaranCeritaSerial[]>([]);
   const [infoPenyediaSaran, setInfoPenyediaSaran] = useState("");
   const [gayaCerita, setGayaCerita] = useState<GayaCeritaSerial>("kedai");
+  const [temaVisual, setTemaVisual] = useState<TemaVisualMotion>("malam");
+  const [genderNarator, setGenderNarator] = useState<GenderNaratorSerial>("pria");
   const [hasilRiset, setHasilRiset] = useState("");
   const [risetOtomatisGoogle, setRisetOtomatisGoogle] = useState(true);
   const [sedangRiset, setSedangRiset] = useState(false);
@@ -390,6 +396,7 @@ export function PanelSerialKartun({
           panjangNaskah,
           bersambung,
           gayaCerita,
+          temaVisual,
           hasilRiset: hasilRiset.trim(),
           risetGoogle: risetOtomatisGoogle,
         }),
@@ -412,9 +419,30 @@ export function PanelSerialKartun({
     }
   }
 
+  function bukaTulisManual() {
+    setGalat("");
+    const draf = buatDrafManualSerial({
+      judulEpisode: ide.trim().split(/\r?\n/)[0]?.slice(0, 80) || kataKunci.trim().slice(0, 80),
+      nomorEpisode: nomorBerikutnya,
+      gayaCerita,
+      temaVisual,
+      latarKode: konfig.latar[0]?.kode || "outdoor",
+    });
+    setDrafNaskah(draf);
+    setInfoPenyediaDraf("Manual (tanpa AI)");
+    setPesan(
+      "Editor manual per bagian siap diisi — teks yang Anda ketik akan langsung dipakai persis apa adanya saat render video.",
+    );
+  }
+
   function ubahAdeganDraf(
     indeks: number,
-    perubahan: Partial<Pick<AdeganDrafSerial, "namaPembicara" | "latarKode" | "dialog" | "pembicara" | "promptVisual">>,
+    perubahan: Partial<
+      Pick<
+        AdeganDrafSerial,
+        "namaPembicara" | "latarKode" | "dialog" | "pembicara" | "promptVisual" | "kartuWaktu" | "jenisMotion" | "judulKartu" | "kataSorot"
+      >
+    >,
   ) {
     setDrafNaskah((prev) => {
       if (!prev) return prev;
@@ -427,7 +455,7 @@ export function PanelSerialKartun({
     setDrafNaskah((prev) => {
       if (!prev || prev.adegan.length >= 16) return prev;
       const kodeDefault = prev.adegan[prev.adegan.length - 1]?.latarKode || konfig.latar[0]?.kode || "outdoor";
-      const baru = buatAdeganKosongSerial(prev.adegan.length + 1, kodeDefault, gayaCerita);
+      const baru = buatAdeganKosongSerial(prev.adegan.length + 1, kodeDefault, gayaCerita, temaVisual);
       return { ...prev, adegan: [...prev.adegan, baru] };
     });
   }
@@ -463,6 +491,8 @@ export function PanelSerialKartun({
           panjangNaskah,
           bersambung,
           gayaCerita,
+          temaVisual,
+          genderNarator,
           hasilRiset: hasilRiset.trim(),
           risetGoogle: risetOtomatisGoogle,
           modeJadwal,
@@ -743,12 +773,78 @@ export function PanelSerialKartun({
                   : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
               }`}
             >
-              <div className="text-xs font-semibold">Dokumenter Murni (Riset Google)</div>
+              <div className="text-xs font-semibold">Dokumenter / Cerita Motion</div>
               <div className="mt-0.5 text-[11px] opacity-80">
-                Fakta sejarah/edukasi dari Google tanpa tokoh kedai + ilustrasi AI per adegan.
+                Type motion + riset Google + ilustrasi AI / gulungan perkamen / peta kuno.
               </div>
             </button>
           </div>
+
+          {gayaCerita === "dokumenter" ? (
+            <div className="grid gap-2 pt-1 sm:grid-cols-2">
+              <div className="space-y-1">
+                <span className="block text-[11px] font-medium text-muted-foreground">Tema Visual CeritaMotion</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setTemaVisual("malam")}
+                    className={`rounded-lg border px-2.5 py-1.5 text-left text-[11px] transition ${
+                      temaVisual === "malam"
+                        ? "border-amber-400/70 bg-amber-400/15 text-amber-200"
+                        : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
+                    }`}
+                  >
+                    <div className="font-semibold">Malam Sinematik</div>
+                    <div className="text-[10px] opacity-75">Gelap hangat + sorot emas</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTemaVisual("perkamen")}
+                    className={`rounded-lg border px-2.5 py-1.5 text-left text-[11px] transition ${
+                      temaVisual === "perkamen"
+                        ? "border-amber-400/70 bg-amber-400/15 text-amber-200"
+                        : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
+                    }`}
+                  >
+                    <div className="font-semibold">Perkamen Sejarah</div>
+                    <div className="text-[10px] opacity-75">Gulungan + peta + pil kuning</div>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <span className="block text-[11px] font-medium text-muted-foreground">
+                  Gender Narator (Juga untuk Cadangan Suara)
+                </span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setGenderNarator("pria")}
+                    className={`rounded-lg border px-2.5 py-1.5 text-left text-[11px] transition ${
+                      genderNarator === "pria"
+                        ? "border-teal-400/70 bg-teal-400/15 text-teal-200"
+                        : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
+                    }`}
+                  >
+                    <div className="font-semibold">Pria · Berwibawa</div>
+                    <div className="text-[10px] opacity-75">Selalu jatuh ke suara pria</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGenderNarator("wanita")}
+                    className={`rounded-lg border px-2.5 py-1.5 text-left text-[11px] transition ${
+                      genderNarator === "wanita"
+                        ? "border-teal-400/70 bg-teal-400/15 text-teal-200"
+                        : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
+                    }`}
+                  >
+                    <div className="font-semibold">Wanita · Hangat</div>
+                    <div className="text-[10px] opacity-75">Selalu jatuh ke suara wanita</div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Asisten Kata Kunci → 3 Saran Cerita AI */}
@@ -1108,6 +1204,16 @@ export function PanelSerialKartun({
 
           <button
             type="button"
+            onClick={bukaTulisManual}
+            disabled={sedangBuatEp || sedangBuatDraf}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-amber-400/50 bg-amber-500/10 px-5 text-sm font-semibold text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50 sm:w-auto"
+          >
+            <Plus className="size-4" />
+            Tulis Manual per Bagian
+          </button>
+
+          <button
+            type="button"
             onClick={() => void buatEpisodeSekarang()}
             disabled={sedangBuatEp || sedangBuatDraf}
             className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full bg-emas px-5 text-sm font-semibold text-background transition hover:brightness-110 disabled:opacity-50 sm:w-auto"
@@ -1224,80 +1330,164 @@ export function PanelSerialKartun({
                       </div>
                     </div>
 
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      <label className="grid gap-1">
-                        <span className="text-[10px] text-muted-foreground">Posisi Suara / Peran</span>
-                        <select
-                          value={a.pembicara}
-                          onChange={(e) => {
-                            const p = e.target.value as AdeganDrafSerial["pembicara"];
-                            let namaSaran = a.namaPembicara;
-                            if (p === "narator") {
-                              namaSaran = "Narator";
-                            } else if (p === "kiri" && a.tokohKiri) {
-                              namaSaran = DAFTAR_TOKOH_LEKKOPI.find((t) => t.id === a.tokohKiri?.id)?.nama ?? a.namaPembicara;
-                            } else if (p === "kanan" && a.tokohKanan) {
-                              namaSaran = DAFTAR_TOKOH_LEKKOPI.find((t) => t.id === a.tokohKanan?.id)?.nama ?? a.namaPembicara;
+                    {gayaCerita === "dokumenter" ? (
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <label className="grid gap-1">
+                          <span className="text-[10px] text-muted-foreground">Tampilan Bagian (CeritaMotion)</span>
+                          <select
+                            value={
+                              a.jenisMotion ??
+                              (idx === 0
+                                ? "pembuka"
+                                : idx === drafNaskah.adegan.length - 1 && drafNaskah.adegan.length >= 2
+                                ? "penutup"
+                                : temaVisual === "perkamen"
+                                ? "perkamen"
+                                : "ilustrasi")
                             }
-                            ubahAdeganDraf(idx, { pembicara: p, namaPembicara: namaSaran });
-                          }}
-                          className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
-                        >
-                          <option value="narator" className="bg-card">Narator (VO)</option>
-                          <option value="kiri" className="bg-card">Tokoh Kiri</option>
-                          <option value="kanan" className="bg-card">Tokoh Kanan</option>
-                          <option value="tanpa" className="bg-card">Tanpa Suara</option>
-                        </select>
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="text-[10px] text-muted-foreground">Nama Pembicara</span>
-                        <input
-                          type="text"
-                          value={a.namaPembicara}
-                          onChange={(e) => ubahAdeganDraf(idx, { namaPembicara: e.target.value })}
-                          className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
-                        />
-                      </label>
-                      <label className="grid gap-1">
-                        <span className="text-[10px] text-muted-foreground">Latar Adegan</span>
-                        <select
-                          value={a.latarKode}
-                          onChange={(e) => ubahAdeganDraf(idx, { latarKode: e.target.value })}
-                          className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
-                        >
-                          {!adaDiOpsi && <option value={a.latarKode}>{a.latarKode}</option>}
-                          {opsiLatarDraf.map((o) => (
-                            <option key={o.kode} value={o.kode} className="bg-card">
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
+                            onChange={(e) =>
+                              ubahAdeganDraf(idx, { jenisMotion: e.target.value as JenisAdeganMotion })
+                            }
+                            className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
+                          >
+                            <option value="pembuka" className="bg-card">Pembuka Judul (Malam)</option>
+                            <option value="ilustrasi" className="bg-card">Ilustrasi Sinematik</option>
+                            <option value="perkamen" className="bg-card">Gulungan Perkamen</option>
+                            <option value="peta" className="bg-card">Peta Kuno (Rute Mokha)</option>
+                            <option value="penutup" className="bg-card">Penutup &amp; Kredit</option>
+                          </select>
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-[10px] text-muted-foreground">Judul Kartu / Gulungan</span>
+                          <input
+                            type="text"
+                            value={a.judulKartu ?? ""}
+                            onChange={(e) => ubahAdeganDraf(idx, { judulKartu: e.target.value })}
+                            placeholder={idx === 0 ? "mis. Qahwah" : "mis. Buah Merah di Lereng Yaman"}
+                            className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
+                          />
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-[10px] text-muted-foreground">Pita Era / Lencana Bagian</span>
+                          <input
+                            type="text"
+                            value={a.kartuWaktu}
+                            onChange={(e) => ubahAdeganDraf(idx, { kartuWaktu: e.target.value })}
+                            placeholder={idx === 0 ? `Bagian ${nomorBerikutnya}` : "YAMAN · ABAD KE-15"}
+                            className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
+                          />
+                        </label>
+                      </div>
+                    ) : (
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <label className="grid gap-1">
+                          <span className="text-[10px] text-muted-foreground">Posisi Suara / Peran</span>
+                          <select
+                            value={a.pembicara}
+                            onChange={(e) => {
+                              const p = e.target.value as AdeganDrafSerial["pembicara"];
+                              let namaSaran = a.namaPembicara;
+                              if (p === "narator") {
+                                namaSaran = "Narator";
+                              } else if (p === "kiri" && a.tokohKiri) {
+                                namaSaran = DAFTAR_TOKOH_LEKKOPI.find((t) => t.id === a.tokohKiri?.id)?.nama ?? a.namaPembicara;
+                              } else if (p === "kanan" && a.tokohKanan) {
+                                namaSaran = DAFTAR_TOKOH_LEKKOPI.find((t) => t.id === a.tokohKanan?.id)?.nama ?? a.namaPembicara;
+                              }
+                              ubahAdeganDraf(idx, { pembicara: p, namaPembicara: namaSaran });
+                            }}
+                            className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
+                          >
+                            <option value="narator" className="bg-card">Narator (VO)</option>
+                            <option value="kiri" className="bg-card">Tokoh Kiri</option>
+                            <option value="kanan" className="bg-card">Tokoh Kanan</option>
+                            <option value="tanpa" className="bg-card">Tanpa Suara</option>
+                          </select>
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-[10px] text-muted-foreground">Nama Pembicara</span>
+                          <input
+                            type="text"
+                            value={a.namaPembicara}
+                            onChange={(e) => ubahAdeganDraf(idx, { namaPembicara: e.target.value })}
+                            className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
+                          />
+                        </label>
+                        <label className="grid gap-1">
+                          <span className="text-[10px] text-muted-foreground">Latar Adegan</span>
+                          <select
+                            value={a.latarKode}
+                            onChange={(e) => ubahAdeganDraf(idx, { latarKode: e.target.value })}
+                            className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
+                          >
+                            {!adaDiOpsi && <option value={a.latarKode}>{a.latarKode}</option>}
+                            {opsiLatarDraf.map((o) => (
+                              <option key={o.kode} value={o.kode} className="bg-card">
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    )}
 
                     <label className="grid gap-1">
-                      <span className="text-[10px] text-muted-foreground">Dialog / Narasi (diucapkan ElevenLabs)</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {gayaCerita === "dokumenter"
+                          ? "Narasi Bagian Ini (diucapkan suara & tampil sebagai teks kinetik)"
+                          : "Dialog / Narasi (diucapkan ElevenLabs)"}
+                      </span>
                       <textarea
                         rows={3}
                         value={a.dialog}
                         onChange={(e) => ubahAdeganDraf(idx, { dialog: e.target.value })}
+                        placeholder={
+                          gayaCerita === "dokumenter"
+                            ? "Tulis kalimat narasi bagian ini secara manual…"
+                            : undefined
+                        }
                         className="w-full rounded-lg border border-input bg-background/70 px-2.5 py-1.5 text-xs leading-relaxed"
                       />
                     </label>
 
-                    {gayaCerita === "dokumenter" || a.promptVisual ? (
+                    {gayaCerita === "dokumenter" ? (
                       <label className="grid gap-1">
-                        <span className="text-[10px] text-amber-200/80">
-                          Prompt Visual Ilustrasi AI (Inggris — dipakai worker membuat gambar latar 9:16)
+                        <span className="text-[10px] text-muted-foreground">
+                          Kata Kunci Disorot Emas/Kuning (pisah koma · kosongkan untuk otomatis)
                         </span>
-                        <textarea
-                          rows={2}
-                          value={a.promptVisual ?? ""}
-                          onChange={(e) => ubahAdeganDraf(idx, { promptVisual: e.target.value })}
-                          placeholder="Contoh: Warm stylized 2D animation of 13th-century Yemeni mountain valley at sunrise, red coffee berries on wild shrubs, golden light, clean vertical composition, no text"
-                          className="w-full rounded-lg border border-amber-400/25 bg-background/70 px-2.5 py-1.5 text-xs leading-relaxed"
+                        <input
+                          type="text"
+                          value={(a.kataSorot ?? []).join(",")}
+                          onChange={(e) =>
+                            ubahAdeganDraf(idx, {
+                              kataSorot: e.target.value ? e.target.value.split(",") : [],
+                            })
+                          }
+                          placeholder="mis. kopi, doa, malam, Mokha"
+                          className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
                         />
                       </label>
+                    ) : null}
+
+                    {gayaCerita === "dokumenter" || a.promptVisual ? (
+                      a.jenisMotion === "peta" ? (
+                        <p className="rounded-lg border border-amber-400/20 bg-amber-500/5 px-2.5 py-1.5 text-[11px] text-amber-200/80">
+                          Adegan Peta Kuno dirender otomatis sebagai peta vektor animasi tajam (tanpa gambar AI).
+                        </p>
+                      ) : (
+                        <label className="grid gap-1">
+                          <span className="text-[10px] text-amber-200/80">
+                            Prompt Visual Ilustrasi AI (Inggris · opsional, kosongkan agar AI otomatis menggambar dari narasi)
+                          </span>
+                          <textarea
+                            rows={2}
+                            value={a.promptVisual ?? ""}
+                            onChange={(e) => ubahAdeganDraf(idx, { promptVisual: e.target.value })}
+                            placeholder="Contoh: Atmospheric dark 2D painterly illustration of 15th-century Yemeni mountain cave with warm lantern light, vertical 9:16, no text"
+                            className="w-full rounded-lg border border-amber-400/25 bg-background/70 px-2.5 py-1.5 text-xs leading-relaxed"
+                          />
+                        </label>
+                      )
                     ) : null}
                   </div>
                 );
@@ -1683,7 +1873,9 @@ export function PanelSerialKartun({
           </div>
           <p className="text-[11px] text-muted-foreground">
             Pilih Voice ID favorit dari tab Sambungan untuk tiap tokoh agar suara konsisten antar episode (atau
-            biarkan Otomatis agar sistem membedakan suara pria &amp; wanita).
+            biarkan Otomatis agar sistem membedakan suara pria &amp; wanita). Jika akun ElevenLabs paket Free menolak
+            voice komunitas (Voice Library) lewat API, mesin otomatis memakai voice bawaan ElevenLabs yang sesuai
+            gender (Pria/Wanita) agar sinkron teks tetap jalan.
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {(

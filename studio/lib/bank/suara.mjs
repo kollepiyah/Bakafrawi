@@ -464,11 +464,11 @@ async function mintaElevenLabs(teks, keluar, profil, opsi = {}) {
       `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
       { method: 'POST', headers, body: badan, signal: AbortSignal.timeout(60_000) },
     )
-    if (!rPolos.ok) throw new Error(`ElevenLabs TTS ${rPolos.status}: ${(await rPolos.text().catch(() => '')).slice(0, 200)}`)
+    if (!rPolos.ok) throw new Error(`ElevenLabs TTS ${rPolos.status}: ${(await rPolos.text().catch(() => '')).slice(0, 320)}`)
     await writeFile(keluar, Buffer.from(await rPolos.arrayBuffer()))
     return { kata: [], voiceId }
   }
-  throw new Error(`ElevenLabs TTS ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
+  throw new Error(`ElevenLabs TTS ${r.status}: ${(await r.text().catch(() => '')).slice(0, 320)}`)
 }
 
 async function elevenlabs(teks, keluar, profil, opsi = {}) {
@@ -562,8 +562,11 @@ const BAWAAN_VOICE_TOKOH = {
   mas_pelanggan: 'JBFqnCBsd6RMkjVDRZzb',
   pak_tetangga: 'pNInz6obpgDQGcFmaJgB',
   mbak_pelanggan: 'EXAVITQu4vr4xnSDxMaL',
-  narator: 'XB0fDUnXU5powFXDhCwa',
+  narator: 'pNInz6obpgDQGcFmaJgB',
 }
+
+const PREMADE_ELEVEN_PRIA = 'pNInz6obpgDQGcFmaJgB'
+const PREMADE_ELEVEN_WANITA = 'EXAVITQu4vr4xnSDxMaL'
 
 const URUTAN_INDEX_TOKOH = {
   mas_barista: 0,
@@ -575,17 +578,17 @@ const URUTAN_INDEX_TOKOH = {
 
 /**
  * Pilih Voice ID ElevenLabs khusus per tokoh serial kartun agar dialog antar karakter
- * memakai suara berbeda & konsisten lintas adegan. Murni.
+ * memakai suara berbeda & konsisten lintas adegan serta selalu selaras gender. Murni.
  */
 export function pilihVoicePerTokoh(
   pembicara,
-  { suaraTokoh = {}, daftarVoice = [], envNilai = ELEVENLABS_VOICE_ID() } = {},
+  { suaraTokoh = {}, daftarVoice = [], gender = null, envNilai = ELEVENLABS_VOICE_ID() } = {},
 ) {
   const peran = String(pembicara || 'narator').trim().toLowerCase()
   const manual = String(suaraTokoh?.[peran] ?? '').trim()
   if (POLA_VOICE_ID.test(manual)) return manual
 
-  const adalahWanita = peran === 'mbak_pelanggan'
+  const adalahWanita = gender ? gender === 'wanita' : peran === 'mbak_pelanggan'
   const objekFav = Array.isArray(daftarVoice)
     ? daftarVoice.filter((item) => item && typeof item === 'object' && POLA_VOICE_ID.test(String(item.id ?? '').trim()))
     : []
@@ -596,7 +599,7 @@ export function pilihVoicePerTokoh(
         .filter((item) => NAMA_SUARA_WANITA.test(String(item.nama ?? '')))
         .map((item) => String(item.id).trim())
       if (kolamWanita.length) return kolamWanita[0]
-    } else if (peran !== 'narator') {
+    } else {
       const kolamPria = objekFav
         .filter((item) => !NAMA_SUARA_WANITA.test(String(item.nama ?? '')))
         .map((item) => String(item.id).trim())
@@ -604,8 +607,6 @@ export function pilihVoicePerTokoh(
         const idx = URUTAN_INDEX_TOKOH[peran] ?? 0
         return kolamPria[idx % kolamPria.length]
       }
-    } else {
-      return String(objekFav[0].id).trim()
     }
   }
 
@@ -616,16 +617,19 @@ export function pilihVoicePerTokoh(
   }
   if (kolamEnv.length === 1 && peran === 'mas_barista') return kolamEnv[0]
 
-  return BAWAAN_VOICE_TOKOH[peran] ?? BAWAAN_VOICE_TOKOH.narator
+  if (peran === 'narator') return adalahWanita ? PREMADE_ELEVEN_WANITA : PREMADE_ELEVEN_PRIA
+  return BAWAAN_VOICE_TOKOH[peran] ?? (adalahWanita ? PREMADE_ELEVEN_WANITA : PREMADE_ELEVEN_PRIA)
 }
 
-function profilUntukTokoh(pembicara) {
+function profilUntukTokoh(pembicara, gender = null) {
   const p = String(pembicara || 'narator').toLowerCase()
+  const adalahWanita = gender ? gender === 'wanita' : p === 'mbak_pelanggan'
   if (p === 'mbak_pelanggan') return { kode: 'santai_indo', ...PROFIL_SUARA.santai_indo }
   if (p === 'pak_tetangga') return { kode: 'jawa_timur', ...PROFIL_SUARA.jawa_timur }
   if (p === 'mas_pelanggan') return { kode: 'iklan_energik', ...PROFIL_SUARA.iklan_energik }
   if (p === 'mas_barista') return { kode: 'jawa_timur', ...PROFIL_SUARA.jawa_timur }
-  return { kode: 'storytelling_hangat', ...PROFIL_SUARA.storytelling_hangat }
+  if (adalahWanita) return { kode: 'storytelling_hangat', ...PROFIL_SUARA.storytelling_hangat }
+  return { kode: 'narator_sinematik', ...PROFIL_SUARA.narator_sinematik }
 }
 
 /**
@@ -657,10 +661,11 @@ export async function suaraDialogSerial(daftarItem = [], folder, opsi = {}) {
     }
 
     const gender = item?.gender || (pembicara === 'mbak_pelanggan' ? 'wanita' : 'pria')
-    const profil = profilUntukTokoh(pembicara)
+    const profil = profilUntukTokoh(pembicara, gender)
     const voiceId = pilihVoicePerTokoh(pembicara, {
       suaraTokoh: opsi.suaraTokoh,
       daftarVoice: opsi.daftarVoice,
+      gender,
       envNilai: opsi.envNilai,
     })
 
@@ -671,7 +676,7 @@ export async function suaraDialogSerial(daftarItem = [], folder, opsi = {}) {
         const berkas = path.join(folder, `dialog_${i}_${pembicara}.${EKSTENSI[j] ?? 'mp3'}`)
         const r = await buat(teks, berkas, j, { profil, voiceId, gender, pembicara })
         if (galatPertama) {
-          catatanSet.add(`suara tokoh ${pembicara} beralih ke ${j} (${jalurAwal} gagal: ${galatPertama})`)
+          catatanSet.add(`suara tokoh ${pembicara} (${gender}) beralih ke ${j} (${jalurAwal} gagal: ${galatPertama})`)
         }
         selesaiItem = {
           berkas,
@@ -681,7 +686,34 @@ export async function suaraDialogSerial(daftarItem = [], folder, opsi = {}) {
         }
         break
       } catch (e) {
-        if (!galatPertama) galatPertama = String(e?.message ?? e).slice(0, 100)
+        const pesanGalat = String(e?.message ?? e).slice(0, 260)
+        // Jika Voice ID ElevenLabs pilihan ditolak (mis. Voice Library di paket Free), coba voice bawaan ElevenLabs sesuai gender dulu agar timestamps tetap jalan
+        const voiceCadangan = gender === 'wanita' ? PREMADE_ELEVEN_WANITA : PREMADE_ELEVEN_PRIA
+        const bolehCobaPremade =
+          j === 'elevenlabs' &&
+          voiceId !== voiceCadangan &&
+          /400|402|404|bad_request|invalid_request|voice|library/i.test(pesanGalat)
+
+        if (bolehCobaPremade) {
+          try {
+            const berkas = path.join(folder, `dialog_${i}_${pembicara}.${EKSTENSI[j] ?? 'mp3'}`)
+            const rCadangan = await buat(teks, berkas, j, { profil, voiceId: voiceCadangan, gender, pembicara })
+            catatanSet.add(
+              `suara ElevenLabs ${pembicara} (${voiceId}) ditolak (${pesanGalat}), dialihkan ke voice bawaan ${gender} (${voiceCadangan})`,
+            )
+            selesaiItem = {
+              berkas,
+              kata: Array.isArray(rCadangan?.kata) ? rCadangan.kata : [],
+              jalur: 'elevenlabs',
+              voiceId: rCadangan?.voiceId || voiceCadangan,
+            }
+            break
+          } catch (e2) {
+            if (!galatPertama) galatPertama = `${pesanGalat} | cadangan premade: ${String(e2?.message ?? e2).slice(0, 140)}`
+          }
+        } else if (!galatPertama) {
+          galatPertama = pesanGalat
+        }
         if (j === urutan.at(-1)) throw e
       }
     }

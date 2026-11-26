@@ -6,6 +6,9 @@ export type GayaKartunLatar = "ceria_hangat" | "santai_sore";
 export type FormatSuaraSerial = "dialog" | "narator" | "campuran";
 export type PanjangSerial = "ringkas" | "sedang" | "panjang";
 export type GayaCeritaSerial = "kedai" | "dokumenter";
+export type TemaVisualMotion = "malam" | "perkamen";
+export type JenisAdeganMotion = "pembuka" | "perkamen" | "peta" | "ilustrasi" | "penutup";
+export type GenderNaratorSerial = "pria" | "wanita";
 export type MenuRingkasSerial = { nama: string; harga?: number; kategori?: string };
 export type TokohKartunId =
   | "mas_barista"
@@ -419,6 +422,12 @@ export type AdeganDrafSerial = {
   namaPembicara: string;
   dialog: string;
   promptVisual?: string;
+  /** Khusus mode Dokumenter / CeritaMotion: jenis tata letak adegan. */
+  jenisMotion?: JenisAdeganMotion;
+  /** Judul kartu pembuka / gulungan perkamen / peta / penutup. */
+  judulKartu?: string;
+  /** Kata kunci yang disorot warna emas/kuning pada subtitle kinetik. */
+  kataSorot?: string[];
   sfx: "pop" | "whoosh" | "tanpa";
 };
 
@@ -437,6 +446,7 @@ const EKSPRESI_SAH = new Set(["senyum", "ketawa", "kaget", "mikir", "cemberut", 
 const PROPERTI_SAH = new Set(["tanpa", "es_kopi", "kopi_panas", "matcha_latte", "hp", "uang", "jempol", "tunjuk"]);
 const EFEK_SAH = new Set(["tanpa", "tanda_tanya", "tanda_seru", "keringat", "hati", "lampu_ide", "tawa"]);
 const KAMERA_SAH = new Set(["diam", "zoom_masuk", "zoom_keluar", "geser_kiri", "geser_kanan", "goyang_kaget"]);
+const JENIS_MOTION_SAH = new Set<JenisAdeganMotion>(["pembuka", "perkamen", "peta", "ilustrasi", "penutup"]);
 const NAMA_TOKOH_PETA: Record<string, string> = {
   mas_barista: "Mas Lek",
   mas_pelanggan: "Mas Danu",
@@ -524,6 +534,9 @@ export const SKEMA_NASKAH_DRAF_SERIAL = {
           namaPembicara: { type: "string" },
           dialog: { type: "string" },
           promptVisual: { type: "string" },
+          jenisMotion: { type: "string", enum: ["pembuka", "perkamen", "peta", "ilustrasi", "penutup"] },
+          judulKartu: { type: "string" },
+          kataSorot: { type: "array", items: { type: "string" } },
           sfx: { type: "string", enum: ["pop", "whoosh", "tanpa"] },
         },
       },
@@ -686,6 +699,7 @@ export function buatAdeganKosongSerial(
   nomor: number,
   latarKode = "outdoor",
   gayaCerita: GayaCeritaSerial = "kedai",
+  temaVisual: TemaVisualMotion = "malam",
 ): AdeganDrafSerial {
   const dokumenter = gayaCerita === "dokumenter";
   return {
@@ -698,8 +712,99 @@ export function buatAdeganKosongSerial(
     pembicara: "narator",
     namaPembicara: "Narator",
     dialog: "",
-    ...(dokumenter ? { promptVisual: "" } : {}),
+    ...(dokumenter
+      ? {
+          promptVisual: "",
+          jenisMotion: temaVisual === "perkamen" ? "perkamen" : "ilustrasi",
+          judulKartu: "",
+          kataSorot: [],
+        }
+      : {}),
     sfx: "tanpa",
+  };
+}
+
+/**
+ * Buat kerangka draf naskah kosong siap ketik manual per bagian (tanpa AI mengubah teks Kyai). Murni.
+ */
+export function buatDrafManualSerial({
+  judulEpisode = "",
+  nomorEpisode = 1,
+  gayaCerita = "dokumenter",
+  temaVisual = "malam",
+  latarKode = "outdoor",
+}: {
+  judulEpisode?: string;
+  nomorEpisode?: number;
+  gayaCerita?: GayaCeritaSerial;
+  temaVisual?: TemaVisualMotion;
+  latarKode?: string;
+} = {}): NaskahDrafSerial {
+  const ep = Math.max(1, Math.round(Number(nomorEpisode) || 1));
+  const judul = String(judulEpisode ?? "").trim().slice(0, 88) || `Episode ${ep}`;
+  if (gayaCerita === "dokumenter") {
+    const tengah: JenisAdeganMotion = temaVisual === "perkamen" ? "perkamen" : "ilustrasi";
+    return {
+      judulEpisode: judul,
+      ringkasanEpisode: "",
+      tema: temaVisual === "perkamen" ? "Sejarah Perkamen" : "Dokumenter Sinematik",
+      adegan: [
+        {
+          ...buatAdeganKosongSerial(1, "sejarah", "dokumenter", temaVisual),
+          jenisMotion: "pembuka",
+          judulKartu: judul,
+          kartuWaktu: `Bagian ${ep}`,
+          dialog: "",
+          kataSorot: [],
+          promptVisual: "",
+        },
+        {
+          ...buatAdeganKosongSerial(2, "sejarah", "dokumenter", temaVisual),
+          jenisMotion: tengah,
+          judulKartu: "",
+          kartuWaktu: "",
+          dialog: "",
+          kataSorot: [],
+          promptVisual: "",
+        },
+        {
+          ...buatAdeganKosongSerial(3, "sejarah", "dokumenter", temaVisual),
+          jenisMotion: temaVisual === "perkamen" ? "peta" : tengah,
+          judulKartu: "",
+          kartuWaktu: "",
+          dialog: "",
+          kataSorot: [],
+          promptVisual: "",
+        },
+        {
+          ...buatAdeganKosongSerial(4, "sejarah", "dokumenter", temaVisual),
+          jenisMotion: "penutup",
+          judulKartu: "",
+          kartuWaktu: "",
+          kamera: "zoom_keluar",
+          dialog: "",
+          kataSorot: [],
+          promptVisual: "",
+        },
+      ],
+      pertanyaanPenutup: "Simpan & bagikan kisah ini jika bermanfaat.",
+      caption: "",
+      hashtag: ["sejarahkopi", "qahwah", "lekkopi"],
+    };
+  }
+
+  return {
+    judulEpisode: judul,
+    ringkasanEpisode: "",
+    tema: "Cerita Kedai",
+    adegan: [
+      buatAdeganKosongSerial(1, latarKode, "kedai"),
+      buatAdeganKosongSerial(2, latarKode, "kedai"),
+      buatAdeganKosongSerial(3, latarKode, "kedai"),
+    ],
+    pertanyaanPenutup: "Menurutmu gimana cerita kali ini? Komen ya!",
+    caption: "",
+    hashtag: ["lekkopi", "ceritalekkopi"],
   };
 }
 
@@ -804,6 +909,7 @@ export function buatPromptNaskahDrafSerial({
   panjangNaskah = "sedang",
   bersambung = false,
   gayaCerita = "kedai",
+  temaVisual = "malam",
   hasilRiset = "",
   ide = "",
   kataKunci = "",
@@ -818,6 +924,7 @@ export function buatPromptNaskahDrafSerial({
   panjangNaskah?: PanjangSerial;
   bersambung?: boolean;
   gayaCerita?: GayaCeritaSerial;
+  temaVisual?: TemaVisualMotion;
   hasilRiset?: string;
   ide?: string;
   kataKunci?: string;
@@ -843,17 +950,22 @@ export function buatPromptNaskahDrafSerial({
   const risetBersih = String(hasilRiset ?? "").trim().slice(0, 2800);
 
   if (gayaCerita === "dokumenter") {
+    const gayaGambar =
+      temaVisual === "perkamen"
+        ? "flat vintage editorial historical illustration with warm parchment paper grain, cream ochre terracotta umber palette, clean upper sky space for scroll title, vertical 9:16, no text, no watermark"
+        : "atmospheric dark 2D painterly gouache illustration with subtle paper grain, deep indigo-charcoal shadows and warm glowing amber light, darkened lower third for typography, vertical 9:16, no text, no watermark";
     return {
       system:
         `Kamu penulis naskah film dokumenter & kisah sejarah sinematik (Reels 9:16) yang mengutamakan akurasi fakta dan adab keilmuan. ` +
         `Bahasa Indonesia baku-hangat yang puitis namun tetap jelas, berwibawa, dan enak didengar sebagai voice-over dokumenter. ` +
-        `ATURAN KETAT DOKUMENTER MURNI:\n` +
+        `ATURAN KETAT DOKUMENTER MURNI (CERITA MOTION — tema ${temaVisual}):\n` +
         `1) Set \`tokohKiri: null\` dan \`tokohKanan: null\` di SELURUH adegan (tidak boleh memunculkan tokoh barista/pelanggan komedi kedai).\n` +
         `2) DILARANG KERAS memakai kata gaul/logat daerah ("lho", "rek", "cak", "nih", "sih"), DILARANG menyebut kasir, mesin espresso modern, atau daftar harga menu kafe.\n` +
         `3) Gunakan \`pembicara: "narator"\` (boleh isi \`namaPembicara: "Narator"\` atau nama tokoh saat menukil doa/perkataan singkat yang terverifikasi, sementara narator tetap membacakannya).\n` +
-        `4) WAJIB isi \`promptVisual\` berbahasa Inggris pada setiap adegan untuk menghasilkan ilustrasi AI 9:16 yang realistis & selaras zaman (mis. "warm cinematic stylized historical animation illustration, painterly lighting, Middle Eastern rocky valley at dawn, vertical 9:16, no text, no watermark").`,
+        `4) WAJIB isi \`jenisMotion\` ("pembuka" untuk adegan 1, "${temaVisual === "perkamen" ? "perkamen" : "ilustrasi"}" untuk adegan isi, boleh "peta" 1x jika membahas penyebaran rute Mokha/dunia, dan "penutup" untuk adegan terakhir), \`judulKartu\` singkat 2–5 kata, dan \`kataSorot\` (2–4 kata kunci penting dari dialog untuk disorot warna emas/kuning).\n` +
+        `5) WAJIB isi \`promptVisual\` berbahasa Inggris pada setiap adegan non-peta dengan adegan visual konkret selaras zaman dan akhiri dengan: "${gayaGambar}".`,
       prompt:
-        `Susun draf naskah DOKUMENTER MURNI untuk "${judulSerial}" EPISODE ${nomorEpisode} berisi **${spek.rentangAdegan}** (target durasi **${spek.durasiLabel}**).\n` +
+        `Susun draf naskah DOKUMENTER MURNI (CeritaMotion · tema ${temaVisual}) untuk "${judulSerial}" EPISODE ${nomorEpisode} berisi **${spek.rentangAdegan}** (target durasi **${spek.durasiLabel}**).\n` +
         `Gunakan \`latarKode: "sejarah"\` atau kode deskriptif singkat per adegan (mis. "gua", "lembah", "majelis", "mokha").` +
         (risetBersih
           ? `\n\nHASIL RISET FAKTA TERVERIFIKASI (WAJIB JADI ACUAN UTAMA — DILARANG MENGARANG DI LUAR FAKTA INI):\n${risetBersih}`
@@ -863,9 +975,10 @@ export function buatPromptNaskahDrafSerial({
         arahanBersambung +
         `\n\nAturan narasi & visual per adegan:` +
         `\n- Panjang narasi per adegan: **${spek.kataPerAdegan}** (${spek.durasiAdegan}) — kalimat utuh, runtut secara kronologis, dan terasa hidup sebagai film dokumenter.` +
-        `\n- Adegan 1 dibuka dengan hook sinematik yang kuat.` +
+        `\n- Adegan 1 (\`jenisMotion: "pembuka"\`) dibuka dengan hook sinematik yang kuat + \`judulKartu\` singkat.` +
         `\n- Isi \`kartuWaktu\` singkat saat berganti era, tempat, atau babak cerita (mis. "YAMAN · ABAD KE-15", "MAJELIS QAHWAH · MOKHA").` +
-        `\n- Isi \`promptVisual\` (Bahasa Inggris, 15–35 kata) pada SETIAP adegan dengan adegan visual konkret (bukan abstrak) + wajib akhiri dengan gaya hangat sinematik tanpa teks ("warm cinematic stylized historical illustration, painterly lighting, vertical 9:16, no text, no watermark").`,
+        `\n- Isi \`kataSorot\` (2–4 kata kunci yang persis ada di \`dialog\`) agar subtitle kinetik menyorot kata penting dengan emas/kuning.` +
+        `\n- Isi \`promptVisual\` (Bahasa Inggris, 15–35 kata) pada SETIAP adegan dengan adegan visual konkret + gaya "${gayaGambar}".`,
     };
   }
 
@@ -959,6 +1072,18 @@ export function normalisasiNaskahDrafSerial(
     const kamera = String(a.kamera ?? "zoom_masuk").trim();
     const sfxMentah = String(a.sfx ?? "tanpa").trim();
     const promptVisual = String(a.promptVisual ?? a.visual ?? "").trim().slice(0, 420);
+    const jenisMentah = String(a.jenisMotion ?? "").trim().toLowerCase() as JenisAdeganMotion;
+    const jenisMotion = JENIS_MOTION_SAH.has(jenisMentah) ? jenisMentah : undefined;
+    const judulKartu = String(a.judulKartu ?? "").trim().slice(0, 80);
+    const calonSorot = Array.isArray(a.kataSorot)
+      ? a.kataSorot
+      : typeof a.kataSorot === "string"
+      ? a.kataSorot.split(/[,;]+/)
+      : [];
+    const kataSorot = calonSorot
+      .map((k) => String(k ?? "").trim().slice(0, 32))
+      .filter(Boolean)
+      .slice(0, 8);
 
     return {
       nomor: Number(a.nomor) || idx + 1,
@@ -973,6 +1098,9 @@ export function normalisasiNaskahDrafSerial(
         (adalahDokumenter ? "Narator" : NAMA_TOKOH_PETA[idPembicara ?? "narator"] || "Lek Kopi"),
       dialog: String(a.dialog ?? a.narasi ?? a.teks ?? "").trim().slice(0, 650),
       ...(promptVisual ? { promptVisual } : {}),
+      ...(jenisMotion ? { jenisMotion } : {}),
+      ...(judulKartu ? { judulKartu } : {}),
+      ...(kataSorot.length ? { kataSorot } : {}),
       sfx: sfxMentah === "pop" || sfxMentah === "whoosh" ? sfxMentah : "tanpa",
     };
   });

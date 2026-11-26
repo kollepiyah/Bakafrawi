@@ -11,6 +11,12 @@ import {
   hitungDurasiSerialKartun,
   SerialKartun,
 } from './SerialKartun';
+import {
+  CeritaMotion,
+  contohCeritaMotion,
+  FPS_MOTION,
+  hitungDurasiCeritaMotion,
+} from './CeritaMotion';
 
 // Props bawaan = naskah contoh + narasi hasil `npm run siapkan` (bila sudah dibuat). Mesin Studio
 // menimpa seluruhnya lewat --props; durasi selalu dihitung ulang dari naskah + suara.
@@ -57,6 +63,16 @@ export const Root: React.FC = () => (
       durationInFrames={hitungDurasiSerialKartun(contohSerialKartun).total}
       defaultProps={contohSerialKartun}
       calculateMetadata={({ props }) => ({ durationInFrames: hitungDurasiSerialKartun(props).total })}
+    />
+    <Composition
+      id="CeritaMotion"
+      component={CeritaMotion}
+      width={1080}
+      height={1920}
+      fps={FPS_MOTION}
+      durationInFrames={hitungDurasiCeritaMotion(contohCeritaMotion).total}
+      defaultProps={contohCeritaMotion}
+      calculateMetadata={({ props }) => ({ durationInFrames: hitungDurasiCeritaMotion(props).total })}
     />
   </>
 );

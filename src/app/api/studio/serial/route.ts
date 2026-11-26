@@ -96,6 +96,8 @@ export async function POST(req: Request) {
     panjangNaskah?: PanjangSerial;
     bersambung?: boolean;
     gayaCerita?: GayaCeritaSerial;
+    temaVisual?: "malam" | "perkamen";
+    genderNarator?: "pria" | "wanita";
     hasilRiset?: string;
     risetGoogle?: boolean;
     modeJadwal?: "persetujuan" | "prime19" | "custom";
@@ -293,6 +295,7 @@ export async function POST(req: Request) {
       const panjangNaskah: PanjangSerial =
         isi.panjangNaskah === "ringkas" || isi.panjangNaskah === "panjang" ? isi.panjangNaskah : "sedang";
       const gayaCerita: GayaCeritaSerial = isi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
+      const temaVisual = isi.temaVisual === "perkamen" ? "perkamen" : "malam";
 
       let teksRisetFinal = String(isi.hasilRiset ?? "").trim();
       let risetOtomatis: RisetCeritaSerial | null = null;
@@ -329,6 +332,7 @@ export async function POST(req: Request) {
         panjangNaskah,
         bersambung: Boolean(isi.bersambung),
         gayaCerita,
+        temaVisual,
         hasilRiset: teksRisetFinal,
         ide: isi.ide,
         kataKunci: isi.kataKunci,
@@ -362,6 +366,8 @@ export async function POST(req: Request) {
 
     if (isi.aksi === "buat-episode") {
       const gayaCerita: GayaCeritaSerial = isi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
+      const temaVisual = isi.temaVisual === "perkamen" ? "perkamen" : "malam";
+      const genderNarator = isi.genderNarator === "wanita" ? "wanita" : "pria";
       const naskahBersih =
         isi.naskahJadi && Array.isArray(isi.naskahJadi.adegan) && isi.naskahJadi.adegan.length > 0
           ? normalisasiNaskahDrafSerial(isi.naskahJadi, undefined, { gayaCerita })
@@ -376,6 +382,8 @@ export async function POST(req: Request) {
         panjangNaskah,
         bersambung: Boolean(isi.bersambung),
         gayaCerita,
+        temaVisual,
+        genderNarator,
         hasilRiset: isi.hasilRiset,
         modeJadwal: isi.modeJadwal,
         jadwal: isi.jadwal,

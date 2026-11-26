@@ -1,5 +1,12 @@
 # CHANGELOG — bakafrawi.com
 
+## CeritaMotion (Malam Sinematik & Perkamen Sejarah), Tulis Manual per Bagian, & Perbaikan Suara (26 Nov)
+- Menambahkan komposisi Remotion baru `CeritaMotion` (`studio/remotion/src/CeritaMotion.tsx` & `studio/remotion/src/data/cerita-motion.ts`) yang mendukung 2 tema visual: **Malam Sinematik** (ala `@waktunya.malam`) dan **Perkamen Sejarah** dengan gulungan perkamen animasi, pita era, peta kuno SVG rute bercahaya, serta subtitle kinetik sorot kata kunci (ala `@motionformat`).
+- Menambahkan tombol **Tulis Manual per Bagian** di [studio-serial.tsx](src/components/admin/studio-serial.tsx) + helper `buatDrafManualSerial` di `src/lib/serial-kartun-murni.ts` agar narasi, tampilan bagian (`pembuka`/`ilustrasi`/`perkamen`/`peta`/`penutup`), judul kartu, pita era, kata kunci sorot emas/kuning, dan prompt visual bisa ditulis manual tanpa diubah AI.
+- Menghubungkan worker `studio/lib/serial-kartun.mjs` untuk merender mode `dokumenter` melalui `CeritaMotion` dengan prompt gambar AI seragam per tema, melewati generate gambar untuk adegan `peta`, serta melarang mode dokumenter jatuh ke templat komedi kedai saat LLM gagal.
+- Memperbaiki bug gender & fallback suara di `studio/lib/bank/suara.mjs`: narator pria tidak lagi mengambil suara wanita saat otomatis (`objekFav[0]`) maupun saat jatuh ke Gemini/Edge (`Charon`/`id-ID-ArdiNeural`), menambahkan cadangan otomatis ke voice bawaan ElevenLabs sesuai gender saat Voice Library ditolak API (`400`/`402`), dan memperluas catatan galat hingga 260–320 karakter.
+- Menghapus model NVIDIA yang sudah pensiun (`mistralai/mistral-large-2-instruct`, `410 Gone`) dari `studio/lib/router-worker.mjs`.
+
 ## Mode Dokumenter Murni & Riset Google Otomatis Serial Konten (25 Nov)
 - Menambahkan pilihan **Gaya Cerita: Dokumenter Murni (Riset Google)** di panel Admin [studio-serial.tsx](src/components/admin/studio-serial.tsx), terpisah dari mode **Komedi / Cerita Kedai** agar cerita sejarah/edukasi tidak lagi dipaksakan memakai tokoh barista Panjunan, logat gaul, atau daftar harga menu kedai.
 - Menambahkan tombol **Riset Fakta di Google Dulu**, opsi riset Google otomatis sebelum menyusun naskah, kotak sunting **Hasil Riset Fakta & Sumber**, serta kolom **Prompt Visual Ilustrasi AI (Inggris)** per adegan.

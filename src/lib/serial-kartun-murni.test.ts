@@ -4,6 +4,7 @@ import {
   bangunPromptKartunkanFoto,
   bersihkanKodeLokasi,
   buatAdeganKosongSerial,
+  buatDrafManualSerial,
   buatPromptNaskahDrafSerial,
   buatPromptRisetCeritaSerial,
   buatPromptSaranCeritaSerial,
@@ -354,4 +355,47 @@ test("normalisasiNaskahDrafSerial mode dokumenter dan buatAdeganKosongSerial men
   assert.equal(draf.adegan[0].namaPembicara, "Narator");
   assert.equal(draf.adegan[0].latarKode, "gua");
   assert.match(draf.adegan[0].promptVisual ?? "", /Yemeni mountain cave/);
+});
+
+test("buatDrafManualSerial dan normalisasiNaskahDrafSerial menjaga metadata CeritaMotion per bagian", () => {
+  const manualPerkamen = buatDrafManualSerial({
+    judulEpisode: "Qahwah dari Mokha",
+    nomorEpisode: 2,
+    gayaCerita: "dokumenter",
+    temaVisual: "perkamen",
+  });
+  assert.equal(manualPerkamen.adegan.length, 4);
+  assert.equal(manualPerkamen.adegan[0].jenisMotion, "pembuka");
+  assert.equal(manualPerkamen.adegan[1].jenisMotion, "perkamen");
+  assert.equal(manualPerkamen.adegan[2].jenisMotion, "peta");
+  assert.equal(manualPerkamen.adegan[3].jenisMotion, "penutup");
+
+  const manualMalam = buatDrafManualSerial({
+    judulEpisode: "Malam di Lembah",
+    nomorEpisode: 1,
+    gayaCerita: "dokumenter",
+    temaVisual: "malam",
+  });
+  assert.equal(manualMalam.adegan[1].jenisMotion, "ilustrasi");
+
+  const rapih = normalisasiNaskahDrafSerial(
+    {
+      judulEpisode: "Jejak Qahwah",
+      adegan: [
+        {
+          nomor: 1,
+          jenisMotion: "perkamen",
+          judulKartu: "Buah Merah di Lereng Yaman",
+          kartuWaktu: "YAMAN · ABAD KE-15",
+          dialog: "Para ulama menyeduh biji merah untuk menjaga dzikir.",
+          kataSorot: "ulama, biji, merah, dzikir",
+        },
+      ],
+    },
+    1,
+    { gayaCerita: "dokumenter" },
+  );
+  assert.equal(rapih.adegan[0].jenisMotion, "perkamen");
+  assert.equal(rapih.adegan[0].judulKartu, "Buah Merah di Lereng Yaman");
+  assert.deepEqual(rapih.adegan[0].kataSorot, ["ulama", "biji", "merah", "dzikir"]);
 });

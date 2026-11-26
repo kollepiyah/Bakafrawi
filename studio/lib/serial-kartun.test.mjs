@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { gabungRiwayatEpisode, siapkanPropsSerialKartun } from './serial-kartun.mjs';
+import { gabungRiwayatEpisode, siapkanPropsCeritaMotion, siapkanPropsSerialKartun } from './serial-kartun.mjs';
 import { KANDIDAT_MODEL_WORKER, urutanPenyediaWorker } from './router-worker.mjs';
 import { pilihVoicePerTokoh, suaraDialogSerial } from './bank/suara.mjs';
 import {
@@ -14,6 +14,7 @@ import {
   FPS_SERIAL,
   hitungDurasiSerialKartun,
 } from '../remotion/src/data/serial-waktu.ts';
+import { hitungDurasiCeritaMotion } from '../remotion/src/data/cerita-motion.ts';
 
 test('siapkanPropsSerialKartun menormalisasi adegan, tokoh, latar & durasi', () => {
   const props = siapkanPropsSerialKartun(
@@ -282,9 +283,116 @@ test('urutanPenyediaWorker mendahulukan AI gratis, memisahkan vision & mematikan
   }).map((p) => p.nama);
   assert.ok(!viaEnv.includes('claude'));
 
-  // Pastikan daftar model aktif worker bebas dari model NVIDIA EOL (meta/llama-3.1-70b-instruct)
+  // Pastikan daftar model aktif worker bebas dari model NVIDIA EOL (meta/llama-3.1-70b-instruct & mistral-large-2)
   assert.ok(!KANDIDAT_MODEL_WORKER.nvidia.includes('meta/llama-3.1-70b-instruct'));
+  assert.ok(!KANDIDAT_MODEL_WORKER.nvidia.includes('mistralai/mistral-large-2-instruct'));
   assert.ok(KANDIDAT_MODEL_WORKER.nvidia.includes('meta/llama-3.3-70b-instruct'));
   assert.equal(KANDIDAT_MODEL_WORKER.gemini[0], 'gemini-2.5-flash');
   assert.ok(KANDIDAT_MODEL_WORKER.cloudflare.includes('@cf/meta/llama-4-scout-17b-16e-instruct'));
+});
+
+test('siapkanPropsCeritaMotion memetakan adegan pembuka/perkamen/peta/penutup dan timestamps ElevenLabs', () => {
+  const props = siapkanPropsCeritaMotion(
+    {
+      judulEpisode: 'Qahwah',
+      pertanyaanPenutup: 'Simpan & bagikan kisah ini',
+      adegan: [
+        {
+          nomor: 1,
+          jenisMotion: 'pembuka',
+          judulKartu: 'Qahwah',
+          kartuWaktu: 'Bagian 1',
+          dialog: 'Kopi lahir dari doa di sunyinya malam.',
+          kataSorot: ['kopi', 'doa'],
+        },
+        {
+          nomor: 2,
+          jenisMotion: 'perkamen',
+          judulKartu: 'Buah Merah di Lereng Yaman',
+          kartuWaktu: 'YAMAN · ABAD KE-15',
+          dialog: 'Para ulama menyeduh biji merah hingga fajar.',
+        },
+        {
+          nomor: 3,
+          jenisMotion: 'peta',
+          judulKartu: 'MOKHA',
+          kartuWaktu: 'Abad ke-15 · Pelabuhan Mokha, Yaman',
+          dialog: 'Dari Mokha, Qahwah berlayar menembus dunia.',
+        },
+        {
+          nomor: 4,
+          jenisMotion: 'penutup',
+          dialog: 'Di balik cangkir hangat ada ketekunan abadi.',
+        },
+      ],
+    },
+    {
+      judulSerial: 'Jejak Sufi di Lembah Yaman',
+      nomorEpisode: 1,
+      temaVisual: 'perkamen',
+      petaVisualAi: { 0: 'dok-0.png', 1: 'dok-1.png', 2: 'seharusnya-diabaikan.png', 3: 'dok-3.png' },
+      suaraHasil: [
+        { berkas: '/tmp/vo1.mp3', kata: [{ teks: 'Kopi', mulai: 0.1, selesai: 0.4 }] },
+        { berkas: '/tmp/vo2.mp3', kata: [] },
+        { berkas: '/tmp/vo3.mp3', kata: [] },
+        { berkas: '/tmp/vo4.mp3', kata: [] },
+      ],
+      durasiSuara: [4.0, 5.0, 5.5, 4.2],
+    },
+  );
+
+  assert.equal(props.temaBawaan, 'perkamen');
+  assert.equal(props.adegan.length, 4);
+  assert.equal(props.adegan[0].jenis, 'pembuka');
+  assert.equal(props.adegan[0].gambarBerkas, 'dok-0.png');
+  assert.deepEqual(props.adegan[0].kata, [{ kata: 'Kopi', mulai: 0.1, selesai: 0.4 }]);
+  assert.equal(props.adegan[1].judulKartu, 'Buah Merah di');
+  assert.equal(props.adegan[1].judulBarisKedua, 'Lereng Yaman');
+  assert.equal(props.adegan[1].pitaEra, 'YAMAN · ABAD KE-15');
+  assert.equal(props.adegan[2].jenis, 'peta');
+  assert.equal(props.adegan[2].gambarBerkas, undefined);
+  assert.equal(props.adegan[2].plakatTahun, 'Abad ke-15');
+  assert.equal(props.adegan[2].plakatTempat, 'Pelabuhan Mokha, Yaman');
+  assert.equal(props.adegan[3].jenis, 'penutup');
+  assert.ok(hitungDurasiCeritaMotion(props).total > 500);
+});
+
+test('narator pria tidak jatuh ke suara wanita saat otomatis maupun saat ElevenLabs menolak Voice Library', async () => {
+  const daftarFav = [
+    { id: 'm6elNOMAsoqePTs244dg', nama: 'Mbak Indah' },
+    { id: 'R86jddkroI9bJwXFfjsr', nama: 'Mas Jowo' },
+  ];
+
+  // Mode otomatis narator pria harus memilih Mas Jowo, BUKAN Mbak Indah (urutan pertama)
+  assert.equal(pilihVoicePerTokoh('narator', { daftarVoice: daftarFav, gender: 'pria' }), 'R86jddkroI9bJwXFfjsr');
+  assert.equal(pilihVoicePerTokoh('narator', { daftarVoice: daftarFav, gender: 'wanita' }), 'm6elNOMAsoqePTs244dg');
+
+  // Saat Voice Library ditolak ElevenLabs (400 bad_request), coba voice premade pria ElevenLabs dulu agar timestamps tetap jalan
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'suara-gender-'));
+  try {
+    const panggilan = [];
+    const hasil = await suaraDialogSerial(
+      [{ teks: 'Kisah Qahwah dari Yaman.', pembicara: 'narator', gender: 'pria' }],
+      dir,
+      {
+        jalur: 'elevenlabs',
+        suaraTokoh: { narator: '1k39YpzqXZn52BgyLyGO' },
+        buat: async (_t, _k, j, info) => {
+          panggilan.push({ j, voiceId: info.voiceId, geminiSuara: info.profil?.geminiSuara });
+          if (j === 'elevenlabs' && info.voiceId === '1k39YpzqXZn52BgyLyGO') {
+            throw new Error('ElevenLabs TTS 400: {"detail":{"code":"bad_request","message":"You need to upgrade to use library voices"}}');
+          }
+          return { kata: [{ teks: 'Kisah', mulai: 0.1, selesai: 0.4 }], voiceId: info.voiceId };
+        },
+      },
+    );
+
+    assert.equal(hasil.item[0].jalur, 'elevenlabs');
+    assert.equal(hasil.item[0].voiceId, 'pNInz6obpgDQGcFmaJgB');
+    assert.equal(hasil.item[0].kata.length, 1);
+    assert.equal(panggilan[0].geminiSuara, 'Charon');
+    assert.match(hasil.catatan[0] ?? '', /You need to upgrade to use library voices/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

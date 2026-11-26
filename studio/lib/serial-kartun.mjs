@@ -12,6 +12,7 @@ import { buatMusikKafe, buatSfxOpening } from './opening-audio.mjs';
 import { panggilRouterWorkerJson, urutanPenyediaWorker } from './router-worker.mjs';
 import { pilihMusik } from './video.mjs';
 import { hitungDurasiSerialKartun } from '../remotion/src/data/serial-waktu.ts';
+import { FPS_MOTION, hitungDurasiCeritaMotion } from '../remotion/src/data/cerita-motion.ts';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const REMOTION = path.join(DIR, '..', 'remotion');
@@ -56,6 +57,9 @@ export const SkemaNaskahSerial = z.object({
         namaPembicara: z.string().describe('Nama tokoh/narator yang bicara, mis. "Narator", "Mas Lek", "Mas Danu", "Mbak Rara", "Pak Budi", atau "Cerita Lek Kopi"'),
         dialog: z.string().describe('Kalimat dialog/narasi lisan natural Indonesia (12–48 kata sesuai target panjang episode, boleh 2–3 kalimat utuh)'),
         promptVisual: z.string().optional().describe('Prompt visual Inggris untuk ilustrasi sinematik 9:16 khusus mode dokumenter'),
+        jenisMotion: z.enum(['pembuka', 'perkamen', 'peta', 'ilustrasi', 'penutup']).optional(),
+        judulKartu: z.string().optional(),
+        kataSorot: z.array(z.string()).optional(),
         sfx: z.enum(['pop', 'whoosh', 'tanpa']),
       }),
     )
@@ -184,6 +188,7 @@ export async function buatNaskahSerialKartun({
   panjangNaskah = 'sedang',
   bersambung = false,
   gayaCerita = 'kedai',
+  temaVisual = 'malam',
   hasilRiset = '',
   ide = '',
   riwayatEpisode = [],
@@ -191,6 +196,11 @@ export async function buatNaskahSerialKartun({
   daftarMenu = [],
 }) {
   if (!urutanPenyediaWorker({ adaGambar: false }).length) {
+    if (gayaCerita === 'dokumenter') {
+      throw new Error(
+        'Belum ada penyedia AI teks yang aktif di mesin Studio untuk menyusun naskah dokumenter. Gunakan tombol Tulis Manual atau buat Draf Naskah dulu sebelum render.',
+      );
+    }
     return naskahTemplatSerial({ judulSerial, nomorEpisode, mood, ide });
   }
 
@@ -213,17 +223,22 @@ export async function buatNaskahSerialKartun({
   let prompt;
 
   if (gayaCerita === 'dokumenter') {
+    const gayaGambar =
+      temaVisual === 'perkamen'
+        ? 'flat vintage editorial historical illustration with warm parchment paper grain, cream ochre terracotta umber palette, clean upper sky space for scroll title, vertical 9:16, no text, no watermark'
+        : 'atmospheric dark 2D painterly gouache illustration with subtle paper grain, deep indigo-charcoal shadows and warm glowing amber light, darkened lower third for typography, vertical 9:16, no text, no watermark';
     system =
       'Kamu penulis naskah film dokumenter & kisah sejarah sinematik (Instagram Reels 9:16) yang mengutamakan akurasi fakta dan adab keilmuan. ' +
       'Bahasa Indonesia baku-hangat yang puitis namun tetap jelas, berwibawa, dan enak didengar sebagai voice-over dokumenter. ' +
-      'ATURAN KETAT DOKUMENTER MURNI: ' +
+      `ATURAN KETAT DOKUMENTER MURNI (CERITA MOTION · tema ${temaVisual}): ` +
       '(1) Set `tokohKiri: null` dan `tokohKanan: null` di SELURUH adegan (tidak boleh memunculkan karakter barista/pelanggan komedi kedai). ' +
       '(2) DILARANG kata gaul/logat daerah ("lho", "rek", "cak", "nih", "sih"), DILARANG menyebut kasir, mesin espresso modern, atau daftar harga menu kafe. ' +
       '(3) Gunakan `pembicara: "narator"` (`namaPembicara: "Narator"` atau nama tokoh saat menukil perkataan singkat). ' +
-      '(4) WAJIB isi `promptVisual` berbahasa Inggris pada setiap adegan untuk menghasilkan ilustrasi AI 9:16 yang realistis dan selaras zaman.';
+      '(4) Isi `jenisMotion` ("pembuka", "perkamen" atau "ilustrasi", boleh "peta" 1x jika membahas rute Mokha/sebaran wilayah, dan "penutup"), `judulKartu` singkat 2-5 kata, dan `kataSorot` (2-4 kata kunci penting). ' +
+      `(5) WAJIB isi \`promptVisual\` berbahasa Inggris pada setiap adegan non-peta dan akhiri dengan: "${gayaGambar}".`;
 
     prompt = [
-      `Buat naskah DOKUMENTER MURNI untuk "${judulSerial}" — EPISODE ${nomorEpisode} (${spek.rentangAdegan}, total durasi ${spek.durasiLabel}).`,
+      `Buat naskah DOKUMENTER MURNI (CeritaMotion · tema ${temaVisual}) untuk "${judulSerial}" — EPISODE ${nomorEpisode} (${spek.rentangAdegan}, total durasi ${spek.durasiLabel}).`,
       'Gunakan `latarKode: "sejarah"` atau kode tempat singkat per adegan (mis. "gua", "lembah", "majelis", "mokha").',
       risetBersih
         ? `HASIL RISET FAKTA TERVERIFIKASI (WAJIB JADI ACUAN UTAMA — DILARANG MENGARANG DI LUAR FAKTA INI):\n${risetBersih}`
@@ -232,9 +247,10 @@ export async function buatNaskahSerialKartun({
       ideBersih ? `Topik / bahan cerita dari pemilik:\n${ideBersih}` : 'Topik bebas: kisah inspiratif sejarah kopi dan peradaban.',
       arahanBersambung,
       'Aturan wajib:',
-      '- Adegan 1 langsung hook sinematik yang kuat + isi `kartuWaktu` saat berpindah era/tempat/bab (mis. "YAMAN · ABAD KE-15").',
+      '- Adegan 1 (`jenisMotion: "pembuka"`) langsung hook sinematik yang kuat + isi `kartuWaktu` saat berpindah era/tempat/bab (mis. "YAMAN · ABAD KE-15").',
       `- Panjang narasi per adegan: ${spek.kataPerAdegan} (${spek.durasiAdegan}) — runtut kronologis, bernyawa, dan jelas.`,
-      '- Isi `promptVisual` (Bahasa Inggris, 15–35 kata) pada SETIAP adegan dengan visual historis konkret dan akhiri dengan "warm cinematic stylized historical illustration, painterly lighting, vertical 9:16, no text, no watermark".',
+      '- Isi `kataSorot` (2–4 kata kunci penting dari `dialog`) agar teks kinetik menyorot kata kunci.',
+      `- Isi \`promptVisual\` (Bahasa Inggris, 15–35 kata) pada SETIAP adegan non-peta dengan visual historis konkret + "${gayaGambar}".`,
     ]
       .filter(Boolean)
       .join('\n\n');
@@ -316,6 +332,11 @@ export async function buatNaskahSerialKartun({
       pemakaian: r.pemakaian,
     };
   } catch (e) {
+    if (gayaCerita === 'dokumenter') {
+      throw new Error(
+        `Semua penyedia AI gagal menyusun naskah dokumenter (${String(e.message).slice(0, 220)}). Silakan pakai tombol Tulis Manual atau buat Draf Naskah dulu sebelum render.`,
+      );
+    }
     console.error('Semua penyedia naskah serial gagal, memakai templat:', e.message);
     return {
       ...naskahTemplatSerial({ judulSerial, nomorEpisode, mood, ide }),
@@ -428,6 +449,175 @@ export function siapkanPropsSerialKartun(naskah, konteks = {}) {
   };
 }
 
+const JENIS_MOTION_SAH = ['pembuka', 'perkamen', 'peta', 'ilustrasi', 'penutup'];
+const KAMERA_MOTION_SAH = ['zoom_masuk', 'zoom_keluar', 'geser_kanan', 'geser_kiri'];
+const STOPWORD_SOROT = new Set([
+  'yang', 'dengan', 'untuk', 'dalam', 'adalah', 'sebagai', 'seperti', 'ketika', 'karena',
+  'namun', 'tetapi', 'hingga', 'sampai', 'setiap', 'bahwa', 'mereka', 'beliau', 'semua',
+  'telah', 'sudah', 'akan', 'bisa', 'dapat', 'tidak', 'bukan', 'hanya', 'sangat', 'lebih',
+  'paling', 'saat', 'dari', 'pada', 'oleh', 'atau', 'juga', 'para', 'akan', 'hari', 'ini',
+]);
+
+function pilihKataSorotOtomatis(teks) {
+  const kata = String(teks ?? '')
+    .split(/\s+/)
+    .map((k) => k.replace(/^[^a-zA-Z0-9\u00c0-\u024f]+|[^a-zA-Z0-9\u00c0-\u024f]+$/g, ''))
+    .filter((k) => k.length >= 5 && !STOPWORD_SOROT.has(k.toLowerCase()));
+  const unik = [];
+  for (const k of kata) {
+    if (!unik.some((u) => u.toLowerCase() === k.toLowerCase())) unik.push(k);
+    if (unik.length >= 3) break;
+  }
+  return unik;
+}
+
+function pecahJudulPerkamen(judul) {
+  const kata = String(judul ?? '').trim().split(/\s+/).filter(Boolean);
+  if (kata.length <= 2) return { barisSatu: kata.join(' '), barisDua: undefined };
+  const tengah = Math.ceil(kata.length / 2);
+  return {
+    barisSatu: kata.slice(0, tengah).join(' '),
+    barisDua: kata.slice(tengah).join(' '),
+  };
+}
+
+/**
+ * Konversi naskah dokumenter / manual + ilustrasi AI + audio ElevenLabs/Gemini
+ * menjadi props komposisi Remotion `CeritaMotion`. Murni.
+ */
+export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
+  const temaBawaan = konteks.temaVisual === 'perkamen' ? 'perkamen' : 'malam';
+  const petaLatar = konteks.petaLatar ?? {};
+  const petaVisualAi = konteks.petaVisualAi ?? {};
+  const fallbackBerkas = Object.values(petaLatar)[0] || undefined;
+  const daftarSuara = Array.isArray(konteks.suaraHasil) ? konteks.suaraHasil : [];
+  const durasiSuara = Array.isArray(konteks.durasiSuara) ? konteks.durasiSuara : [];
+  const nomorEpisode = Math.max(1, Math.round(Number(konteks.nomorEpisode) || 1));
+  const judulEpisode = String(naskah?.judulEpisode || `Episode ${nomorEpisode}`).trim().slice(0, 88);
+  const judulSerial = String(konteks.judulSerial || 'Jejak Cerita').trim().slice(0, 60);
+
+  const sumberAdegan = (naskah?.adegan ?? []).slice(0, 16);
+  const adegan = sumberAdegan.map((a, idx) => {
+    const jenisEksplisit = String(a?.jenisMotion ?? '').trim().toLowerCase();
+    const jenis = JENIS_MOTION_SAH.includes(jenisEksplisit)
+      ? jenisEksplisit
+      : idx === 0
+      ? 'pembuka'
+      : idx === sumberAdegan.length - 1 && sumberAdegan.length >= 2
+      ? 'penutup'
+      : temaBawaan === 'perkamen'
+      ? 'perkamen'
+      : 'ilustrasi';
+
+    const kodeMentah = String(a?.latarKode ?? 'sejarah').trim().toLowerCase();
+    const gambarBerkas = jenis === 'peta' ? undefined : petaVisualAi[idx] || petaLatar[kodeMentah] || fallbackBerkas;
+
+    const narasi = String(a?.dialog ?? a?.narasi ?? '').trim();
+    const itemSuara = daftarSuara[idx] ?? {};
+    const detikAudio = Number(durasiSuara[idx]) || 0;
+    const jumlahKata = narasi.split(/\s+/).filter(Boolean).length;
+    const perkiraanBaca = Math.max(3.4, Math.min(24.0, jumlahKata * 0.46 + 1.2));
+    const durasi = detikAudio > 0 ? Math.max(3.0, Math.min(28.0, Number((detikAudio + 0.55).toFixed(2)))) : perkiraanBaca;
+
+    const kataTimeline = Array.isArray(itemSuara.kata) && itemSuara.kata.length
+      ? itemSuara.kata
+          .map((k) => ({
+            kata: String(k?.kata ?? k?.teks ?? '').trim(),
+            mulai: Number(k?.mulai) || 0,
+            selesai: Number(k?.selesai) || Number(k?.mulai) || 0,
+          }))
+          .filter((k) => k.kata)
+      : undefined;
+
+    const sorotManual = Array.isArray(a?.kataSorot)
+      ? a.kataSorot.map((k) => String(k ?? '').trim()).filter(Boolean).slice(0, 8)
+      : [];
+    const kataSorot = sorotManual.length ? sorotManual : pilihKataSorotOtomatis(narasi);
+
+    const kartuWaktu = String(a?.kartuWaktu ?? '').trim().slice(0, 48);
+    const judulKartuAsli = String(a?.judulKartu ?? '').trim().slice(0, 80);
+    let judulKartu = judulKartuAsli || undefined;
+    let judulBarisKedua;
+    let subjudulKartu;
+    let lencanaBagian;
+    let pitaEra;
+    let plakatTahun;
+    let plakatTempat;
+
+    if (jenis === 'pembuka') {
+      lencanaBagian = kartuWaktu || `Bagian ${nomorEpisode}`;
+      judulKartu = judulKartuAsli || judulEpisode;
+      subjudulKartu = judulSerial && judulSerial.toLowerCase() !== judulKartu.toLowerCase() ? judulSerial : undefined;
+    } else if (jenis === 'perkamen') {
+      if (judulKartuAsli) {
+        const pecah = pecahJudulPerkamen(judulKartuAsli);
+        judulKartu = pecah.barisSatu;
+        judulBarisKedua = pecah.barisDua;
+      }
+      pitaEra = kartuWaktu || undefined;
+    } else if (jenis === 'peta') {
+      judulKartu = judulKartuAsli || 'MOKHA';
+      subjudulKartu = 'Jejak Perjalanan Sejarah';
+      if (kartuWaktu.includes('·')) {
+        const [bag1, ...sisa] = kartuWaktu.split('·').map((s) => s.trim());
+        plakatTahun = bag1 || 'Abad ke-15';
+        plakatTempat = sisa.join(' · ') || 'Pelabuhan Mokha, Yaman';
+      } else {
+        plakatTahun = kartuWaktu || 'Abad ke-15';
+        plakatTempat = 'Pelabuhan Mokha, Yaman';
+      }
+    } else if (jenis === 'penutup') {
+      judulKartu = judulKartuAsli || judulEpisode;
+      subjudulKartu = String(naskah?.pertanyaanPenutup ?? '').trim().slice(0, 120) || undefined;
+    } else {
+      // ilustrasi tengah tema malam
+      pitaEra = kartuWaktu || judulKartuAsli || undefined;
+    }
+
+    const kamera = KAMERA_MOTION_SAH.includes(a?.kamera)
+      ? a.kamera
+      : jenis === 'penutup'
+      ? 'zoom_keluar'
+      : idx % 2 === 0
+      ? 'zoom_masuk'
+      : 'geser_kanan';
+
+    return {
+      nomor: Number(a?.nomor) || idx + 1,
+      jenis,
+      tema: temaBawaan,
+      durasi,
+      ...(gambarBerkas ? { gambarBerkas } : {}),
+      ...(lencanaBagian ? { lencanaBagian } : {}),
+      ...(judulKartu ? { judulKartu } : {}),
+      ...(judulBarisKedua ? { judulBarisKedua } : {}),
+      ...(subjudulKartu ? { subjudulKartu } : {}),
+      ...(pitaEra ? { pitaEra } : {}),
+      ...(plakatTahun ? { plakatTahun } : {}),
+      ...(plakatTempat ? { plakatTempat } : {}),
+      narasi,
+      kataSorot,
+      ...(itemSuara.berkas ? { suaraBerkas: path.basename(itemSuara.berkas) } : {}),
+      ...(kataTimeline ? { kata: kataTimeline } : {}),
+      kamera,
+    };
+  });
+
+  return {
+    judulSerial,
+    nomorEpisode,
+    judulEpisode,
+    akun: konteks.akun || '@lekkopi.id',
+    temaBawaan,
+    kreditPenutup: konteks.kreditPenutup || 'Lek Kopi · Panjunan, Waru',
+    ajakanPenutup: String(naskah?.pertanyaanPenutup || 'Simpan & bagikan jejak sejarah ini').slice(0, 120),
+    musik: konteks.musik || null,
+    musikVolume: konteks.musikVolume ?? 0.16,
+    sfxWhoosh: konteks.sfx?.whoosh || null,
+    adegan,
+  };
+}
+
 /**
  * Gabungkan ringkasan episode baru ke `profil.serial_kartun` secara idempoten (untuk memori Episode N+1). Murni.
  */
@@ -500,6 +690,8 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
   const panjangNaskah = metaTugas.panjangNaskah || 'sedang';
   const bersambung = Boolean(metaTugas.bersambung);
   const gayaCerita = metaTugas.gayaCerita === 'dokumenter' ? 'dokumenter' : 'kedai';
+  const temaVisual = metaTugas.temaVisual === 'perkamen' ? 'perkamen' : 'malam';
+  const genderNarator = metaTugas.genderNarator === 'wanita' ? 'wanita' : 'pria';
   const hasilRiset = String(metaTugas.hasilRiset ?? '').trim();
   const suaraTokoh = metaTugas.suaraTokoh || serialObj.suaraTokoh || {};
   const daftarLatar = Array.isArray(konfig.latar) ? konfig.latar : [];
@@ -528,6 +720,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
         panjangNaskah,
         bersambung,
         gayaCerita,
+        temaVisual,
         hasilRiset,
         ide: metaTugas.ide || tugas?.arahan || '',
         riwayatEpisode,
@@ -561,17 +754,22 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
     }
   }
 
-  // 1b. Khusus mode Dokumenter Murni: buat ilustrasi AI sinematik per adegan (maks 12 gambar)
+  // 1b. Khusus mode Dokumenter / CeritaMotion: buat ilustrasi AI seragam per adegan non-peta (maks 12 gambar)
   const petaVisualAi = {};
   let jumlahVisualAi = 0;
   if (gayaCerita === 'dokumenter' && adaGambarAi()) {
+    const gayaGambarBawaan =
+      temaVisual === 'perkamen'
+        ? 'flat vintage editorial historical illustration with warm parchment paper grain, cream ochre terracotta umber palette, clean upper sky space for scroll title, vertical 9:16 composition, no text, no watermark'
+        : 'atmospheric dark 2D painterly gouache illustration with subtle paper grain, deep indigo-charcoal shadows and warm glowing amber light, darkened lower third for typography, vertical 9:16 composition, no text, no watermark';
     for (const [idx, a] of (naskah.adegan ?? []).slice(0, 12).entries()) {
+      if (String(a?.jenisMotion ?? '').trim().toLowerCase() === 'peta') continue;
       const promptAsli = String(a?.promptVisual ?? '').trim();
-      const deskripsiFallback = [a?.kartuWaktu, a?.dialog].filter(Boolean).join('. ').slice(0, 180);
+      const deskripsiFallback = [a?.judulKartu, a?.kartuWaktu, a?.dialog].filter(Boolean).join('. ').slice(0, 180);
       const promptVisual =
         promptAsli ||
         (deskripsiFallback
-          ? `Warm cinematic stylized historical illustration depicting: ${deskripsiFallback}, painterly lighting, vertical 9:16 composition, no text, no watermark`
+          ? `Stylized historical scene depicting: ${deskripsiFallback}. ${gayaGambarBawaan}`
           : '');
       if (!promptVisual) continue;
       try {
@@ -587,7 +785,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
     }
   }
 
-  // 2. Buat audio multi-tokoh (ElevenLabs dengan timestamps untuk lip-sync + fallback berjenjang)
+  // 2. Buat audio multi-tokoh (ElevenLabs dengan timestamps untuk lip-sync/kinetik + fallback berjenjang)
   const daftarVoice = Array.isArray(merekBakafrawi?.profil?.suara_elevenlabs)
     ? merekBakafrawi.profil.suara_elevenlabs
     : [];
@@ -596,7 +794,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
       return {
         teks: a.pembicara === 'tanpa' ? '' : a.dialog,
         pembicara: 'narator',
-        gender: 'pria',
+        gender: genderNarator,
       };
     }
     const p = a.pembicara;
@@ -624,18 +822,32 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
 
   // 3. Siapkan SFX & musik latar
   const sfx = await buatSfxOpening(publik).catch(() => ({ pop: null, whoosh: null, chime: null }));
-  const propsSementara = siapkanPropsSerialKartun(naskah, {
-    judulSerial,
-    nomorEpisode,
-    mood,
-    gayaCerita,
-    petaLatar,
-    petaVisualAi,
-    suaraHasil: suaraHasil.item,
-    durasiSuara,
-    sfx,
-  });
-  const totalDetikPerkiraan = hitungDurasiSerialKartun(propsSementara).totalDetik;
+  const pakaiCeritaMotion = gayaCerita === 'dokumenter';
+  const propsSementara = pakaiCeritaMotion
+    ? siapkanPropsCeritaMotion(naskah, {
+        judulSerial,
+        nomorEpisode,
+        temaVisual,
+        petaLatar,
+        petaVisualAi,
+        suaraHasil: suaraHasil.item,
+        durasiSuara,
+        sfx,
+      })
+    : siapkanPropsSerialKartun(naskah, {
+        judulSerial,
+        nomorEpisode,
+        mood,
+        gayaCerita,
+        petaLatar,
+        petaVisualAi,
+        suaraHasil: suaraHasil.item,
+        durasiSuara,
+        sfx,
+      });
+  const totalDetikPerkiraan = pakaiCeritaMotion
+    ? hitungDurasiCeritaMotion(propsSementara).total / FPS_MOTION
+    : hitungDurasiSerialKartun(propsSementara).totalDetik;
 
   let musikNama = null;
   const dirMusik = path.join(DIR, '..', 'aset', 'musik');
@@ -646,7 +858,11 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
     if (existsSync(path.join(publik, namaSalin))) musikNama = namaSalin;
   }
   if (!musikNama) {
-    const gayaMusik = mood === 'komedi_ceria' ? 'terang-modern' : 'hangat-kafe';
+    const gayaMusik = pakaiCeritaMotion
+      ? 'minimalis-gelap'
+      : mood === 'komedi_ceria'
+      ? 'terang-modern'
+      : 'hangat-kafe';
     const hariEpoch = Math.floor(Date.now() / 86_400_000) + nomorEpisode;
     await buatMusikKafe({
       gaya: gayaMusik,
@@ -658,16 +874,19 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
   }
 
   const propsFinal = { ...propsSementara, musik: musikNama };
-  const propsPath = path.join(folder, 'props-serial.json');
+  const propsPath = path.join(folder, pakaiCeritaMotion ? 'props-motion.json' : 'props-serial.json');
   await writeFile(propsPath, JSON.stringify(propsFinal));
 
-  const durasiInfo = hitungDurasiSerialKartun(propsFinal);
+  const totalDetikFinal = pakaiCeritaMotion
+    ? hitungDurasiCeritaMotion(propsFinal).total / FPS_MOTION
+    : hitungDurasiSerialKartun(propsFinal).totalDetik;
+  const komposisiId = pakaiCeritaMotion ? 'CeritaMotion' : 'SerialKartun';
   const videoKeluar = path.join(folder, 'serial-kartun.mp4');
-  log(`🎬 Remotion SerialKartun EP ${nomorEpisode}: ${propsFinal.adegan.length} adegan, ${durasiInfo.totalDetik.toFixed(1)} dtk`);
+  log(`🎬 Remotion ${komposisiId} EP ${nomorEpisode}: ${propsFinal.adegan.length} adegan, ${totalDetikFinal.toFixed(1)} dtk`);
 
   await jalankan(
     process.execPath,
-    [CLI, 'render', 'src/index.ts', 'SerialKartun', videoKeluar, `--props=${propsPath}`, `--public-dir=${publik}`, '--log=error'],
+    [CLI, 'render', 'src/index.ts', komposisiId, videoKeluar, `--props=${propsPath}`, `--public-dir=${publik}`, '--log=error'],
     { cwd: REMOTION },
   );
 
@@ -675,7 +894,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
   await ffmpeg(['-y', '-ss', '1.2', '-i', videoKeluar, '-frames:v', '1', '-q:v', '3', sampul]).catch(() => null);
 
   const hasil = [
-    { jenis: 'video', rasio: 'story', durasi: Math.round(durasiInfo.totalDetik), url: await simpan(videoKeluar, 'video/mp4') },
+    { jenis: 'video', rasio: 'story', durasi: Math.round(totalDetikFinal), url: await simpan(videoKeluar, 'video/mp4') },
   ];
   if (existsSync(sampul)) {
     hasil.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(sampul, 'image/jpeg') });
@@ -704,7 +923,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
   ].join('\n');
 
   const catatan = [
-    `serial: ${serialId} · episode ${nomorEpisode} (${gayaCerita})`,
+    `serial: ${serialId} · episode ${nomorEpisode} (${gayaCerita}${pakaiCeritaMotion ? `:${temaVisual} · ${komposisiId} · narator ${genderNarator}` : ''})`,
     `latar foto terpakai: ${Object.keys(petaLatar).length}`,
     ...(jumlahVisualAi > 0 ? [`ilustrasi AI dokumenter: ${jumlahVisualAi}`] : []),
     ...suaraHasil.catatan,
@@ -729,6 +948,8 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
         panjangNaskah,
         bersambung,
         gayaCerita,
+        temaVisual,
+        genderNarator,
       },
       catatan,
       ...(Array.isArray(naskah.pemakaian) ? { pemakaian: naskah.pemakaian } : {}),

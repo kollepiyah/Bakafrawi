@@ -1008,6 +1008,8 @@ export async function buatTugasSerialKartun(opsi: {
   panjangNaskah?: PanjangSerial;
   bersambung?: boolean;
   gayaCerita?: GayaCeritaSerial;
+  temaVisual?: "malam" | "perkamen";
+  genderNarator?: "pria" | "wanita";
   hasilRiset?: string;
   modeJadwal?: "persetujuan" | "prime19" | "custom";
   jadwal?: string | null;
@@ -1031,6 +1033,8 @@ export async function buatTugasSerialKartun(opsi: {
     opsi.panjangNaskah === "ringkas" || opsi.panjangNaskah === "panjang" ? opsi.panjangNaskah : "sedang";
   const bersambung = Boolean(opsi.bersambung);
   const gayaCerita: GayaCeritaSerial = opsi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
+  const temaVisual: "malam" | "perkamen" = opsi.temaVisual === "perkamen" ? "perkamen" : "malam";
+  const genderNarator: "pria" | "wanita" = opsi.genderNarator === "wanita" ? "wanita" : "pria";
   const hasilRisetBersih = String(opsi.hasilRiset ?? "").trim().slice(0, 2500);
   const ideBersih = String(opsi.ide ?? "").trim().slice(0, 4000);
   const naskahJadi = opsi.naskahJadi && opsi.naskahJadi.adegan?.length > 0 ? opsi.naskahJadi : null;
@@ -1047,7 +1051,7 @@ export async function buatTugasSerialKartun(opsi: {
   const sasaran = opsi.sasaran ? normalisasiSasaran(opsi.sasaran) : undefined;
   const judulSementara = naskahJadi?.judulEpisode?.trim() || `${serial.judul} — Episode ${nomorEpisode}`;
   const arahan = [
-    `[Serial: ${serial.id} · Ep ${nomorEpisode} · ${mood} · ${formatSuara} · ${panjangNaskah}${gayaCerita === "dokumenter" ? " · dokumenter" : ""}${bersambung ? " · bersambung" : ""}]`,
+    `[Serial: ${serial.id} · Ep ${nomorEpisode} · ${mood} · ${formatSuara} · ${panjangNaskah}${gayaCerita === "dokumenter" ? ` · dokumenter:${temaVisual}` : ""}${bersambung ? " · bersambung" : ""}]`,
     ideBersih ? ideBersih.slice(0, 280) : `Lanjutkan kisah hangat dan lucu "${serial.judul}" episode ${nomorEpisode} di Lek Kopi.`,
   ].join(" ");
 
@@ -1070,6 +1074,8 @@ export async function buatTugasSerialKartun(opsi: {
         panjangNaskah,
         bersambung,
         gayaCerita,
+        temaVisual,
+        genderNarator,
         ...(hasilRisetBersih ? { hasilRiset: hasilRisetBersih } : {}),
         ide: ideBersih,
         suaraTokoh: serial.suaraTokoh ?? {},
