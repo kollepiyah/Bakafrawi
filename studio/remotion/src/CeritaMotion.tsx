@@ -24,6 +24,7 @@ import {
   type KataWaktuMotion,
   type PropsCeritaMotion,
 } from './data/cerita-motion';
+import { PanggungKarakterCerita } from './components/KarakterCerita';
 
 export { FPS_MOTION, contohCeritaMotion, hitungDurasiCeritaMotion, type PropsCeritaMotion };
 
@@ -251,25 +252,7 @@ const TeksKinetik: React.FC<{
         });
         const disorot = setSorot.has(bersihkanKata(item.kata));
 
-        if (!sudahMulai) {
-          return (
-            <span
-              key={`${indeksKelompok}-${idx}`}
-              style={{
-                fontFamily: FONT_SANS,
-                fontSize: ukuranFont,
-                fontWeight: 800,
-                lineHeight: 1.24,
-                opacity: 0,
-                color: '#FFFFFF',
-                padding: gaya === 'perkamen' && disorot ? '3px 14px 5px' : '0px 2px',
-                display: 'inline-block',
-              }}
-            >
-              {item.kata}
-            </span>
-          );
-        }
+        if (!sudahMulai) return null;
 
         const y = interpolate(p, [0, 1], [14, 0]);
         const skala = sedangDiucap ? interpolate(p, [0, 1], [0.92, 1.05]) : 1.0;
@@ -518,6 +501,16 @@ const AdeganPembuka: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numbe
       <BingkaiSinematik gelap />
       <WatermarkAkun akun={akun} terang />
 
+      {/* Animasi karakter 2D berjalan / berakting di panggung tengah */}
+      {adegan.karakter ? (
+        <PanggungKarakterCerita
+          konfig={adegan.karakter}
+          durasiBingkai={durasiBingkai}
+          tema="malam"
+          bottomLantai={810}
+        />
+      ) : null}
+
       {/* Hook teks kinetik di atas kartu judul dengan jarak aman anti-tabrakan */}
       <TeksKinetik
         narasi={adegan.narasi}
@@ -632,6 +625,16 @@ const AdeganPerkamen: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numb
       <BingkaiSinematik gelap={false} />
       <WatermarkAkun akun={akun} terang={false} />
 
+      {/* Animasi karakter 2D berjalan / memeriksa arsip / dialog di bawah gulungan perkamen */}
+      {adegan.karakter ? (
+        <PanggungKarakterCerita
+          konfig={adegan.karakter}
+          durasiBingkai={durasiBingkai}
+          tema="perkamen"
+          bottomLantai={500}
+        />
+      ) : null}
+
       {punyaJudul ? (
         <GulunganPerkamen
           barisSatu={adegan.judulKartu || 'Kisah Sejarah'}
@@ -717,6 +720,16 @@ const AdeganIlustrasi: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: num
       />
       <BingkaiSinematik gelap />
       <WatermarkAkun akun={akun} terang />
+
+      {/* Animasi karakter 2D berjalan / memeriksa arsip / dialog */}
+      {adegan.karakter ? (
+        <PanggungKarakterCerita
+          konfig={adegan.karakter}
+          durasiBingkai={durasiBingkai}
+          tema="malam"
+          bottomLantai={510}
+        />
+      ) : null}
 
       {eraTeks ? (
         <div
@@ -1306,6 +1319,159 @@ const AdeganPetaKuno: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numb
   );
 };
 
+/** Adegan Close-Up Arsip / Dokumen Kuno dengan stempel merah animasi ala @unrealunfold. */
+const AdeganArsip: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: number; akun: string }> = ({
+  adegan,
+  durasiBingkai,
+  akun,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pKertas = pegasHalus(frame, fps, 4, 15, 108);
+  const pStempel = pegasHalus(frame, fps, 24, 10, 210);
+  const miring = interpolate(frame, [0, durasiBingkai], [-1.4, 0.8], { extrapolateRight: 'clamp' });
+
+  // Pecah narasi menjadi 2–3 baris kutipan singkat pada lembar arsip
+  const kalimat = String(adegan.narasi ?? '')
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const judulDok = (adegan.judulKartu || 'CATATAN ARSIP').toUpperCase();
+  const stempel = (adegan.stempelArsip || adegan.pitaEra || 'TERCATAT').toUpperCase().slice(0, 24);
+
+  return (
+    <AbsoluteFill style={{ background: '#07090B' }}>
+      <LatarIlustrasi
+        berkas={adegan.gambarBerkas}
+        kamera={adegan.kamera ?? 'zoom_masuk'}
+        durasiBingkai={durasiBingkai}
+        warnaCadangan="#07090B"
+      />
+      <AbsoluteFill
+        style={{
+          background:
+            'radial-gradient(ellipse at 50% 44%, rgba(28,22,15,0.45) 0%, rgba(7,9,11,0.88) 65%, #060709 100%)',
+        }}
+      />
+      <PartikelCahaya warna="#F5CA6A" jumlah={12} intensitas={0.35} />
+      <WatermarkAkun akun={akun} terang />
+
+      {/* Lembar dokumen / arsip kuno di tengah layar */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 112,
+          right: 112,
+          top: 450,
+          transform: `translateY(${interpolate(pKertas, [0, 1], [65, 0])}px) rotate(${miring}deg) scale(${interpolate(
+            pKertas,
+            [0, 1],
+            [0.92, 1],
+          )})`,
+          opacity: pKertas,
+          background: 'linear-gradient(165deg, #F6EED9 0%, #E7DAB8 100%)',
+          borderRadius: 8,
+          padding: '54px 56px 64px',
+          boxShadow: '0 28px 70px rgba(0,0,0,0.75), inset 0 0 42px rgba(122,86,44,0.22)',
+          border: '2px solid rgba(112,78,42,0.42)',
+        }}
+      >
+        <div
+          style={{
+            fontFamily: FONT_SERIF,
+            fontSize: 44,
+            fontWeight: 800,
+            color: '#1E1610',
+            textAlign: 'center',
+            letterSpacing: '0.07em',
+            lineHeight: 1.12,
+          }}
+        >
+          {judulDok}
+        </div>
+        {adegan.pitaEra ? (
+          <div
+            style={{
+              marginTop: 10,
+              fontFamily: FONT_SANS,
+              fontSize: 22,
+              fontWeight: 700,
+              color: '#5B4631',
+              textAlign: 'center',
+              letterSpacing: '0.14em',
+            }}
+          >
+            {adegan.pitaEra}
+          </div>
+        ) : null}
+
+        <div
+          style={{
+            height: 2,
+            background: 'rgba(84,60,36,0.45)',
+            margin: '26px 0 32px',
+          }}
+        />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {kalimat.map((baris, i) => (
+            <div
+              key={i}
+              style={{
+                fontFamily: i === 0 ? FONT_SERIF : FONT_SERIF_ITALIC,
+                fontSize: i === 0 ? 34 : 31,
+                fontWeight: i === 0 ? 700 : 500,
+                color: '#2A1E15',
+                lineHeight: 1.38,
+              }}
+            >
+              {baris}
+            </div>
+          ))}
+        </div>
+
+        {/* Stempel merah berbingkai menghantam dengan pegas */}
+        <div
+          style={{
+            marginTop: 40,
+            display: 'flex',
+            justifyContent: 'center',
+            opacity: interpolate(pStempel, [0, 1], [0, 0.9]),
+            transform: `rotate(-4deg) scale(${interpolate(pStempel, [0, 1], [1.65, 1])})`,
+          }}
+        >
+          <div
+            style={{
+              border: '5px solid #B53126',
+              borderRadius: 6,
+              padding: '10px 30px',
+              fontFamily: FONT_SERIF,
+              fontSize: 32,
+              fontWeight: 800,
+              letterSpacing: '0.14em',
+              color: '#B53126',
+              boxShadow: 'inset 0 0 0 2px rgba(181,49,38,0.22)',
+            }}
+          >
+            {stempel}
+          </div>
+        </div>
+      </div>
+
+      <TeksKinetik
+        narasi={adegan.narasi}
+        durasiDetik={adegan.durasi}
+        kata={adegan.kata}
+        kataSorot={adegan.kataSorot}
+        gaya="malam"
+        bottom={220}
+        ukuranFont={48}
+      />
+    </AbsoluteFill>
+  );
+};
+
 /** Adegan 4: Penutup Sinematik + Kredit Brand. */
 const AdeganPenutup: React.FC<{
   adegan: AdeganCeritaMotion;
@@ -1335,6 +1501,16 @@ const AdeganPenutup: React.FC<{
       />
       <BingkaiSinematik gelap />
       <WatermarkAkun akun={akun} terang />
+
+      {/* Animasi karakter 2D penutup sinematik */}
+      {adegan.karakter ? (
+        <PanggungKarakterCerita
+          konfig={adegan.karakter}
+          durasiBingkai={durasiBingkai}
+          tema="malam"
+          bottomLantai={740}
+        />
+      ) : null}
 
       <TeksKinetik
         narasi={adegan.narasi}
@@ -1464,6 +1640,8 @@ export const CeritaMotion: React.FC<PropsCeritaMotion> = (props) => {
                 <AdeganPerkamen adegan={adegan} durasiBingkai={slot.durasi} akun={props.akun} />
               ) : adegan.jenis === 'peta' ? (
                 <AdeganPetaKuno adegan={adegan} durasiBingkai={slot.durasi} akun={props.akun} />
+              ) : adegan.jenis === 'arsip' ? (
+                <AdeganArsip adegan={adegan} durasiBingkai={slot.durasi} akun={props.akun} />
               ) : adegan.jenis === 'penutup' ? (
                 <AdeganPenutup
                   adegan={adegan}

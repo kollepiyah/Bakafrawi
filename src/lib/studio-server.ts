@@ -23,6 +23,7 @@ import {
   type NaskahDrafSerial,
   type PanjangSerial,
 } from "./serial-kartun-murni";
+import { normalisasiDaftarWebCustom, type WebCustomStudio } from "./web-custom-murni";
 import { ambilMenuLekKopi } from "./naskah-bank";
 
 // Aksi Studio di sisi server, dipakai bersama oleh panel admin (/api/studio/*) dan bot Telegram
@@ -366,6 +367,27 @@ export async function simpanAsetStudio(daftar: AsetStudio[]): Promise<AsetStudio
   return bersih;
 }
 
+export async function daftarWebCustomStudio(): Promise<WebCustomStudio[]> {
+  const m = (await daftarMerek()).find((x) => x.slug === "bakafrawi");
+  return normalisasiDaftarWebCustom(m?.profil?.web_custom);
+}
+
+/** Simpan daftar Web Custom (mis. almansur.id) ke `studio_merek.profil.web_custom` tanpa menimpa field lain. */
+export async function simpanWebCustomStudio(daftar: WebCustomStudio[]): Promise<WebCustomStudio[]> {
+  const bersih = normalisasiDaftarWebCustom(daftar);
+  const m = (await daftarMerek()).find((x) => x.slug === "bakafrawi");
+  if (!m) throw new Error("Profil Studio utama tidak ditemukan.");
+  await rest("studio_merek?slug=eq.bakafrawi", {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      profil: { ...(m.profil ?? {}), web_custom: bersih },
+      diubah: new Date().toISOString(),
+    }),
+  });
+  return bersih;
+}
+
 export async function aturAktifMerek(slug: string, aktif: boolean) {
   await rest(`studio_merek?slug=eq.${encodeURIComponent(slug)}`, {
     method: "PATCH",
@@ -400,6 +422,7 @@ export async function buatTugas(isi: {
   merek?: string;
   jadwal_tayang?: string | null;
   sasaran?: SasaranTayang | string | null;
+  webCustom?: Partial<WebCustomStudio> | null;
 }) {
   let jadwalIso: string | null = null;
   if (isi.jadwal_tayang && String(isi.jadwal_tayang).trim()) {
@@ -414,6 +437,7 @@ export async function buatTugas(isi: {
     latar: isi.latar,
     arahan: isi.arahan ?? "",
     ...(isi.merek ? { merek: isi.merek } : {}),
+    ...(isi.webCustom?.url ? { naskah: { webCustom: isi.webCustom } } : {}),
     ...(jadwalIso ? { status_tayang: "dijadwalkan", jadwal_tayang: jadwalIso } : {}),
     ...(sasaran && sasaran !== "otomatis" ? { tayang: { sasaran } } : {}),
   };
@@ -498,16 +522,24 @@ export async function buatTugasUnggahManual(isi: {
 }
 
 export async function buatUlang(id: string) {
-  const [lama] = (await rest(`studio_tugas?id=eq.${id}&select=produk_slug,jenis,latar,arahan,merek`)) as {
+  const [lama] = (await rest(`studio_tugas?id=eq.${id}&select=produk_slug,jenis,latar,arahan,merek,naskah`)) as {
     produk_slug: string;
     jenis: "gambar" | "video";
     latar: "polos" | "ai";
     arahan: string;
     merek?: string;
+    naskah?: { webCustom?: Partial<WebCustomStudio> } | null;
   }[];
   if (!lama) throw new Error("Tugas asal tidak ditemukan.");
   await aturTayang(id, "tolak").catch(() => {});
-  return buatTugas(lama);
+  return buatTugas({
+    produk_slug: lama.produk_slug,
+    jenis: lama.jenis,
+    latar: lama.latar,
+    arahan: lama.arahan,
+    merek: lama.merek,
+    webCustom: lama.naskah?.webCustom ?? null,
+  });
 }
 
 // ------------------------------------------------------------ jadwal rutin jam buka (Story Opening)

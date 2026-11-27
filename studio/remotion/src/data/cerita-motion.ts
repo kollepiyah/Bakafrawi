@@ -1,11 +1,14 @@
 // Data, tipe, dan penghitung durasi untuk komposisi Remotion `CeritaMotion`
-// (memadukan gaya Sejarah Perkamen ala @motionformat dan Malam Sinematik ala @waktunya.malam).
+// (memadukan gaya Sejarah Perkamen, Malam Sinematik, & animasi karakter 2D berjalan ala @unrealunfold).
+import type { KonfigPanggungKarakter } from '../components/KarakterCerita.tsx';
+
+export type { KonfigPanggungKarakter };
 
 export const FPS_MOTION = 30;
 
 export type TemaVisualMotion = 'perkamen' | 'malam';
 
-export type JenisAdeganMotion = 'pembuka' | 'perkamen' | 'peta' | 'ilustrasi' | 'penutup';
+export type JenisAdeganMotion = 'pembuka' | 'perkamen' | 'peta' | 'ilustrasi' | 'arsip' | 'penutup';
 
 export type KataWaktuMotion = {
   kata: string;
@@ -58,10 +61,14 @@ export type AdeganCeritaMotion = {
   kataSorot?: string[];
   /** Berkas audio voice-over adegan (opsional). */
   suaraBerkas?: string;
-  /** Penanda waktu tiap kata dari ElevenLabs atau estimasi proporsional. */
+  /** Penanda waktu tiap kata dari ElevenLabs / Edge TTS atau estimasi proporsional. */
   kata?: KataWaktuMotion[];
   /** Gerak kamera perlahan. */
   kamera?: 'zoom_masuk' | 'zoom_keluar' | 'geser_kanan' | 'geser_kiri';
+  /** Konfigurasi karakter kartun 2D berjalan / memeriksa arsip / dialog di panggung. */
+  karakter?: KonfigPanggungKarakter;
+  /** Teks stempel merah miring untuk adegan close-up `arsip` (opsional). */
+  stempelArsip?: string;
 };
 
 export type PropsCeritaMotion = {
@@ -142,6 +149,7 @@ export const contohCeritaMotion: PropsCeritaMotion = {
       narasi: 'Tahukah kamu, minuman kopi lahir dari doa di sunyinya malam?',
       kataSorot: ['kopi', 'doa', 'malam'],
       kamera: 'zoom_masuk',
+      karakter: { aksi: 'jalan_kanan', tokohUtama: 'santri', properti: 'lentera' },
     },
     {
       nomor: 2,
@@ -154,9 +162,22 @@ export const contohCeritaMotion: PropsCeritaMotion = {
       narasi: 'Para ulama Syadziliyah menyeduh biji merah untuk menjaga dzikir hingga fajar.',
       kataSorot: ['Syadziliyah', 'biji', 'merah', 'dzikir', 'fajar'],
       kamera: 'zoom_masuk',
+      karakter: { aksi: 'dialog_dua', tokohUtama: 'santri', tokohKedua: 'petualang', properti: 'arsip' },
     },
     {
       nomor: 3,
+      jenis: 'arsip',
+      tema: 'malam',
+      durasi: 4.8,
+      judulKartu: 'CATATAN PELABUHAN',
+      pitaEra: 'BANTEN · ABAD KE-17',
+      stempelArsip: 'ARSIP DAGANG',
+      narasi: 'Di pelabuhan Banten, catatan kapal dagang menyimpan jejak pertama biji kopi Nusantara.',
+      kataSorot: ['Banten', 'catatan', 'kopi', 'Nusantara'],
+      kamera: 'zoom_masuk',
+    },
+    {
+      nomor: 4,
       jenis: 'peta',
       tema: 'perkamen',
       durasi: 5.4,
@@ -169,7 +190,7 @@ export const contohCeritaMotion: PropsCeritaMotion = {
       kamera: 'zoom_masuk',
     },
     {
-      nomor: 4,
+      nomor: 5,
       jenis: 'penutup',
       tema: 'malam',
       durasi: 4.4,
@@ -178,6 +199,7 @@ export const contohCeritaMotion: PropsCeritaMotion = {
       narasi: 'Di balik setiap cangkir hangat hari ini, ada kisah ketekunan yang abadi.',
       kataSorot: ['cangkir', 'hangat', 'ketekunan', 'abadi'],
       kamera: 'zoom_keluar',
+      karakter: { aksi: 'berdiri_tenang', tokohUtama: 'petualang', properti: 'cangkir' },
     },
   ],
 };

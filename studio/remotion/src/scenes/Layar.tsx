@@ -47,27 +47,29 @@ export const Layar: React.FC<P> = ({ a, merek, durasi, layar }) => {
   const pitaY = h.pita.y + (h.gulir - gulirKini);
   const kiriPita = HP.x + HP.tepi, kananPita = HP.x + HP.w - HP.tepi;
   return (
-    <div style={{ position: 'relative', width: 940, height: 900, fontFamily: SANS }}>
-      {/* HP */}
-      <div style={{ position: 'absolute', left: HP.x, top: HP.y, width: HP.w, height: HP.h, borderRadius: 64, background: '#0B0B0F', padding: HP.tepi, boxShadow: bayangan, opacity: hp, transform: `translateY(${(1 - hp) * 120}px) rotate(${(1 - hp) * -6}deg)` }}>
-        <div style={{ width: h.lebar, height: h.tinggi, borderRadius: 50, overflow: 'hidden', position: 'relative', background: '#fff' }}>
+    <div style={{ position: 'relative', width: 940, height: 900, fontFamily: SANS, perspective: 1600 }}>
+      {/* HP Bezel Titanium Modern + Dynamic Island */}
+      <div style={{ position: 'absolute', left: HP.x, top: HP.y, width: HP.w, height: HP.h, borderRadius: 64, background: 'linear-gradient(145deg, #334155 0%, #0B0E14 52%, #1E293B 100%)', border: '2px solid rgba(255,255,255,0.22)', padding: HP.tepi, boxShadow: `${bayangan}, 0 0 42px ${merek.kedua}22`, opacity: hp, transform: `translateY(${(1 - hp) * 110}px) rotateY(${(1 - hp) * -10 + 4}deg) rotate(${(1 - hp) * -5}deg)` }}>
+        <div style={{ width: h.lebar, height: h.tinggi, borderRadius: 50, overflow: 'hidden', position: 'relative', background: '#0B0F17' }}>
+          <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', width: 108, height: 26, borderRadius: 99, background: '#05070B', zIndex: 15 }} />
           <Img src={src} style={{ position: 'absolute', left: 0, top: -gulirKini, width: h.lebar, height: h.tinggiGambar }} />
         </div>
       </div>
-      {/* Bingkai sorot: baris yang akan diperbesar, selebar layar HP */}
-      <div style={{ position: 'absolute', left: kiriPita - 6, top: pitaY - 6, width: kananPita - kiriPita + 12, height: h.pita.h + 12, borderRadius: 22, border: `5px solid ${merek.kedua}`, boxShadow: `0 0 24px ${merek.kedua}66`, opacity: sorot, transform: `scale(${1.08 - 0.08 * sorot})` }} />
-      {/* Garis penghubung bingkai → kotak */}
+      {/* Bingkai sorot bercahaya */}
+      <div style={{ position: 'absolute', left: kiriPita - 6, top: pitaY - 6, width: kananPita - kiriPita + 12, height: h.pita.h + 12, borderRadius: 22, border: `4px solid ${merek.kedua}`, boxShadow: `0 0 28px ${merek.kedua}88`, opacity: sorot, transform: `scale(${1.06 - 0.06 * sorot})` }} />
+      {/* Garis penghubung halus */}
       <svg width="940" height="900" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        <line x1={kananPita + 6} y1={pitaY + h.pita.h / 2} x2={KOTAK.x + 10} y2={h.kotakY + KOTAK.h / 2} stroke={merek.kedua} strokeWidth="5" strokeLinecap="round" strokeDasharray="10 10" opacity={garis} />
+        <line x1={kananPita + 6} y1={pitaY + h.pita.h / 2} x2={KOTAK.x + 10} y2={h.kotakY + KOTAK.h / 2} stroke={merek.kedua} strokeWidth="4" strokeLinecap="round" opacity={garis * 0.85} />
+        <circle cx={kananPita + 6} cy={pitaY + h.pita.h / 2} r="7" fill={merek.kedua} opacity={garis} />
       </svg>
-      {/* Kotak perbesaran: pita yang sama, selebar layar penuh */}
-      <div style={{ position: 'absolute', left: KOTAK.x, top: h.kotakY, width: KOTAK.w, height: KOTAK.h, borderRadius: 30, overflow: 'hidden', background: '#fff', border: `5px solid ${merek.kedua}`, boxShadow: bayangan, opacity: kotak, transform: `scale(${0.6 + 0.4 * kotak}) rotate(${(1 - kotak) * 6 + 1.5}deg)`, transformOrigin: 'left center' }}>
+      {/* Kotak perbesaran Glassmorphism */}
+      <div style={{ position: 'absolute', left: KOTAK.x, top: h.kotakY, width: KOTAK.w, height: KOTAK.h, borderRadius: 30, overflow: 'hidden', background: '#0B0F17', border: `4px solid ${merek.kedua}`, boxShadow: `${bayangan}, 0 0 42px ${merek.kedua}44`, opacity: kotak, transform: `scale(${0.66 + 0.34 * kotak}) rotate(${(1 - kotak) * 5 + 1}deg)`, transformOrigin: 'left center' }}>
         <Img src={src} style={{ position: 'absolute', left: 0, top: -h.atasPita * h.zoom, width: KOTAK.w, height: h.tinggiGambar * h.zoom }} />
       </div>
       {/* Label sorotan */}
       {a.sorotan ? (
-        <div style={{ position: 'absolute', left: KOTAK.x + 30, top: h.kotakY - 78, background: merek.utama, color: '#fff', borderRadius: 18, padding: '14px 26px', fontWeight: 800, fontSize: 34, boxShadow: bayangan, opacity: label, transform: `translateY(${(1 - label) * 30}px) rotate(-2deg)` }}>
-          {a.sorotan}
+        <div style={{ position: 'absolute', left: KOTAK.x + 24, top: h.kotakY - 76, background: `linear-gradient(120deg, ${merek.utama} 0%, ${merek.kedua} 100%)`, color: '#061014', borderRadius: 18, padding: '12px 26px', fontWeight: 900, fontSize: 32, boxShadow: `0 16px 36px ${merek.kedua}55`, opacity: label, transform: `translateY(${(1 - label) * 28}px) rotate(-1.5deg)` }}>
+          ✦ {a.sorotan}
         </div>
       ) : null}
     </div>

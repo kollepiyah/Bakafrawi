@@ -122,3 +122,150 @@ async function jalankan(hal, l) {
   }
   await tidur((Number(l.detik) || 1.5) * 1000);
 }
+
+/**
+ * Potret website publik untuk komposisi `WebShowcase`:
+ * - Desktop 1440×900 (full-page scroll + hero + tengah halaman)
+ * - Mobile 390×844 (tall scroll + hero)
+ * - Auto-scan metadata halaman (title, deskripsi, heading, navigasi, warna tema) agar AI menulis naskah dari isi ASLI web.
+ */
+export async function potretWebShowcase(
+  peramban,
+  { url, folder, maksTinggiDesktop = 5000, maksTinggiMobile = 3000, tunggu = 2600 },
+) {
+  const domain = (() => {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      return String(url).replace(/^https?:\/\//i, '').split('/')[0] || 'website';
+    }
+  })();
+
+  let info = { domain, url, title: '', deskripsi: '', heading: [], navigasi: [], warnaAksen: '' };
+  let desktopFull = null;
+  let desktopHero = null;
+  let desktopMid = null;
+  let mobileFull = null;
+  let mobileHero = null;
+
+  // 1. DESKTOP (1440×900, DPR 2 → tajam untuk scroll 3D & zoom)
+  const ctxDesk = await peramban.newContext({
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 2,
+    locale: 'id-ID',
+  });
+  const halDesk = await ctxDesk.newPage();
+  try {
+    await halDesk.goto(url, { waitUntil: 'networkidle', timeout: 45000 }).catch(() =>
+      halDesk.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
+    );
+    await tidur(tunggu);
+
+    // Gulir bertahap agar lazy-load gambar & animasi reveal muncul penuh, lalu kembali ke atas.
+    const tinggiTotal = await halDesk.evaluate(async () => {
+      const maks = Math.min(document.documentElement.scrollHeight || document.body.scrollHeight || 900, 5200);
+      for (let y = 0; y <= maks; y += 520) {
+        window.scrollTo(0, y);
+        await new Promise((r) => setTimeout(r, 180));
+      }
+      window.scrollTo(0, 0);
+      await new Promise((r) => setTimeout(r, 350));
+      return Math.max(900, document.documentElement.scrollHeight || document.body.scrollHeight || 900);
+    }).catch(() => 900);
+
+    // Pindai konten asli situs (judul, deskripsi, heading, menu navigasi, warna tema)
+    info = await halDesk.evaluate((dom) => {
+      const bersih = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+      const title = bersih(document.title).slice(0, 120);
+      const deskMeta =
+        document.querySelector('meta[name="description"]')?.getAttribute('content') ||
+        document.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
+        '';
+      const deskripsi = bersih(deskMeta).slice(0, 260);
+      const heading = [...document.querySelectorAll('h1, h2, h3')]
+        .map((el) => bersih(el.textContent))
+        .filter((t) => t.length >= 4 && t.length <= 120)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 8);
+      const navigasi = [...document.querySelectorAll('header a, nav a')]
+        .map((el) => bersih(el.textContent))
+        .filter((t) => t.length >= 2 && t.length <= 28)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 8);
+      const themeColor = bersih(document.querySelector('meta[name="theme-color"]')?.getAttribute('content') || '');
+      const warnaAksen = /^#[0-9a-fA-F]{6}$/.test(themeColor) ? themeColor : '';
+      return { domain: dom, url: location.href, title, deskripsi, heading, navigasi, warnaAksen };
+    }, domain).catch(() => info);
+
+    // Hero desktop (1440×900)
+    const pHero = path.join(folder, 'web-desktop-hero.jpg');
+    await halDesk.screenshot({ path: pHero, type: 'jpeg', quality: 90 });
+    desktopHero = { berkas: pHero, lebar: 2880, tinggi: 1800 };
+
+    // Full-page desktop (tinggi dibatasi agar ringan & mulus di Remotion)
+    const tinggiClip = Math.min(Math.max(900, tinggiTotal), maksTinggiDesktop);
+    const pFull = path.join(folder, 'web-desktop-full.jpg');
+    await halDesk.screenshot({
+      path: pFull,
+      type: 'jpeg',
+      quality: 88,
+      clip: { x: 0, y: 0, width: 1440, height: tinggiClip },
+    });
+    desktopFull = { berkas: pFull, lebar: 2880, tinggi: tinggiClip * 2 };
+
+    // Bagian tengah desktop (untuk adegan Spotlight)
+    const yMid = Math.max(0, Math.min(tinggiTotal - 900, Math.round(tinggiClip * 0.36)));
+    await halDesk.evaluate((y) => window.scrollTo(0, y), yMid).catch(() => {});
+    await tidur(450);
+    const pMid = path.join(folder, 'web-desktop-mid.jpg');
+    await halDesk.screenshot({ path: pMid, type: 'jpeg', quality: 90 });
+    desktopMid = { berkas: pMid, lebar: 2880, tinggi: 1800 };
+  } finally {
+    await ctxDesk.close();
+  }
+
+  // 2. MOBILE (390×844, DPR 2 → untuk adegan Responsive Desktop + HP)
+  const ctxMob = await peramban.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    locale: 'id-ID',
+  });
+  const halMob = await ctxMob.newPage();
+  try {
+    await halMob.goto(url, { waitUntil: 'networkidle', timeout: 45000 }).catch(() =>
+      halMob.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
+    );
+    await tidur(Math.min(tunggu, 2200));
+
+    const tinggiMob = await halMob.evaluate(async () => {
+      const maks = Math.min(document.documentElement.scrollHeight || document.body.scrollHeight || 844, 3200);
+      for (let y = 0; y <= maks; y += 450) {
+        window.scrollTo(0, y);
+        await new Promise((r) => setTimeout(r, 140));
+      }
+      window.scrollTo(0, 0);
+      await new Promise((r) => setTimeout(r, 300));
+      return Math.max(844, document.documentElement.scrollHeight || document.body.scrollHeight || 844);
+    }).catch(() => 844);
+
+    const pMobHero = path.join(folder, 'web-mobile-hero.jpg');
+    await halMob.screenshot({ path: pMobHero, type: 'jpeg', quality: 90 });
+    mobileHero = { berkas: pMobHero, lebar: 780, tinggi: 1688 };
+
+    const tinggiClipMob = Math.min(Math.max(844, tinggiMob), maksTinggiMobile);
+    const pMobFull = path.join(folder, 'web-mobile-full.jpg');
+    await halMob.screenshot({
+      path: pMobFull,
+      type: 'jpeg',
+      quality: 86,
+      clip: { x: 0, y: 0, width: 390, height: tinggiClipMob },
+    });
+    mobileFull = { berkas: pMobFull, lebar: 780, tinggi: tinggiClipMob * 2 };
+  } finally {
+    await ctxMob.close();
+  }
+
+  return { info, desktopFull, desktopHero, desktopMid, mobileFull, mobileHero };
+}

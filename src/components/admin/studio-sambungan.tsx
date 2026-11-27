@@ -174,7 +174,7 @@ export function Sambungan({ sesi, onSuaraBerubah }: { sesi: Session | null; onSu
             <h3 className="flex items-center gap-2 font-semibold"><Volume2 className="size-4 text-emas" /> Suara Favorit ElevenLabs</h3>
             <p className="text-xs text-redup">
               Simpan beberapa Voice ID favorit agar bisa dipilih langsung di <b>Buat Konten AI</b> atau dirotasi otomatis saat pilih <b>Otomatis</b>.{" "}
-              (<code>ELEVENLABS_API_KEY</code> tetap disimpan aman di GitHub Secrets, bukan di sini.)
+              (<code>ELEVENLABS_API_KEY</code> tetap disimpan aman di GitHub Secrets, bukan di sini. Catatan: akun ElevenLabs <b>Free</b> tidak bisa memakai ID dari <i>Voice Library</i> lewat API — bila ditolak 402, Studio otomatis beralih ke suara <b>Indonesia natural (Edge TTS Ardi/Gadis)</b> sesuai gender cerita.)
             </p>
             {daftarSuara.length > 0 ? (
               <ul className="grid gap-1.5">

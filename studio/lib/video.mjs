@@ -10,7 +10,9 @@ import { adaGambarAi, buatGambarAi, rapikanHasil } from './bank/gambar-ai.mjs';
 import { suaraAdegan } from './bank/suara.mjs';
 import { musikContoh, suaraKata } from './iklan.mjs';
 import { hapusLatar, hapusLatarProduk, videoTransparan } from './latar.mjs';
+import { buatSfxOpening } from './opening-audio.mjs';
 import { FPS, hitungWaktu } from '../remotion/src/data/script.ts';
+import { FPS_SHOWCASE, hitungDurasiWebShowcase } from '../remotion/src/data/web-showcase.ts';
 
 export const REMOTION = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'remotion');
 const CLI = path.join(REMOTION, 'node_modules', '@remotion', 'cli', 'remotion-cli.js');
@@ -574,4 +576,160 @@ export async function renderSinematikRemotion({
   const detikSampul = Math.min(1.2, Math.max(0.3, totalDetik * 0.15));
   await ffmpeg(['-y', '-ss', detikSampul.toFixed(2), '-i', keluar, '-frames:v', '1', '-q:v', '3', sampul]).catch(() => null);
   return { berkas: keluar, sampul: existsSync(sampul) ? sampul : null, durasi: totalDetik };
+}
+
+/**
+ * Render video showcase website & aplikasi custom kelas agency lewat Remotion komposisi `WebShowcase`.
+ * Menggabungkan tangkapan layar asli Desktop Full-Page + Mobile, animasi ketik URL, kursor klik,
+ * narasi ElevenLabs/Gemini/Edge + timestamp kata, SFX transisi, dan musik latar ducking otomatis.
+ * → { berkas, sampul, durasi, catatanSuara }
+ */
+export async function renderWebShowcase({
+  naskah,
+  merekInfo,
+  media = null,
+  logo = null,
+  musik = null,
+  suara = undefined,
+  opsiSuara = {},
+  folder,
+  keluar,
+  log = console.log,
+}) {
+  const publik = path.join(folder, 'publik-showcase');
+  await mkdir(publik, { recursive: true });
+
+  const salin = async (sumber, namaDasar) => {
+    if (!sumber || !existsSync(sumber)) return undefined;
+    const ext = path.extname(sumber) || '.jpg';
+    const nama = `${namaDasar}${ext}`;
+    await copyFile(sumber, path.join(publik, nama));
+    return nama;
+  };
+
+  const logoNama = await salin(logo, 'logo');
+  const desktopFullNama = await salin(media?.desktopFull?.berkas, 'desktop-full');
+  const desktopHeroNama = await salin(media?.desktopHero?.berkas, 'desktop-hero');
+  const desktopMidNama = await salin(media?.desktopMid?.berkas, 'desktop-mid');
+  const mobileFullNama = await salin(media?.mobileFull?.berkas, 'mobile-full');
+  const mobileHeroNama = await salin(media?.mobileHero?.berkas, 'mobile-hero');
+
+  const teksBabak = [
+    naskah.hook?.narasi || '',
+    naskah.browser?.narasi || '',
+    naskah.responsive?.narasi || '',
+    naskah.spotlight?.narasi || '',
+    naskah.penutup?.narasi || '',
+  ];
+
+  const perkirakanKata = (kalimat, durasi) => {
+    const k = String(kalimat ?? '').split(/\s+/).filter(Boolean);
+    const total = k.reduce((acc, w) => acc + w.length + 2, 0) || 1;
+    let t = 0;
+    return k.map((teks) => {
+      const d = ((teks.length + 2) / total) * Math.max(1.5, durasi);
+      const item = { teks, mulai: t, selesai: t + d };
+      t += d;
+      return item;
+    });
+  };
+
+  const suaraBabak = [];
+  let catatanSuara = '';
+  let pakaiSuaraBaru = false;
+  try {
+    const hasilSuara = await suaraAdegan(teksBabak, folder, opsiSuara);
+    if (hasilSuara.berkas?.length === teksBabak.length) {
+      for (let i = 0; i < teksBabak.length; i++) {
+        const sumber = hasilSuara.berkas[i];
+        const ext = path.extname(sumber) || '.mp3';
+        const nama = `vo-${i}${ext}`;
+        await copyFile(sumber, path.join(publik, nama));
+        const info = await probe(sumber).catch(() => ({ durasi: 4.5 }));
+        const durasi = Number(info.durasi) || 4.5;
+        const kata = hasilSuara.kata?.[i]?.length ? hasilSuara.kata[i] : perkirakanKata(teksBabak[i], durasi);
+        suaraBabak.push({ berkas: nama, durasi, kata });
+      }
+      catatanSuara = `suara: ${hasilSuara.jalur}${hasilSuara.voiceId ? ` (${hasilSuara.voiceId.slice(0, 8)})` : ''}`;
+      pakaiSuaraBaru = true;
+    }
+  } catch (e) {
+    log(`Suara WebShowcase fallback ke edge-tts: ${String(e?.message ?? e).slice(0, 120)}`);
+  }
+
+  if (!pakaiSuaraBaru) {
+    for (let i = 0; i < teksBabak.length; i++) {
+      try {
+        const s = await suaraKata(teksBabak[i], path.join(publik, `vo-${i}.mp3`), suara ? { suara } : {});
+        suaraBabak.push({ berkas: `vo-${i}.mp3`, durasi: s.durasi, kata: s.kata });
+      } catch {
+        suaraBabak.push({ berkas: null, durasi: 4.5, kata: perkirakanKata(teksBabak[i], 4.5) });
+      }
+    }
+    catatanSuara = 'suara: edge-tts';
+  }
+
+  const sfx = await buatSfxOpening(publik).catch(() => ({ whoosh: null, pop: null, chime: null }));
+
+  const propsData = {
+    merek: {
+      nama: merekInfo.nama || 'Bakafrawi Project',
+      domain: merekInfo.domain || 'bakafrawi.com',
+      url: merekInfo.url || `https://${merekInfo.domain || 'bakafrawi.com'}`,
+      aksen: merekInfo.aksen || '#18B4A8',
+      aksenKedua: merekInfo.aksenKedua || '#34E0CD',
+      ...(logoNama ? { logo: logoNama } : {}),
+      info: merekInfo.info || 'bakafrawi.com',
+      situsBakafrawi: merekInfo.situsBakafrawi || 'bakafrawi.com',
+    },
+    media: {
+      ...(desktopFullNama
+        ? {
+            desktopFull: desktopFullNama,
+            desktopFullLebar: media?.desktopFull?.lebar || 2880,
+            desktopFullTinggi: media?.desktopFull?.tinggi || 7200,
+          }
+        : {}),
+      ...(desktopHeroNama ? { desktopHero: desktopHeroNama } : {}),
+      ...(desktopMidNama ? { desktopMid: desktopMidNama } : {}),
+      ...(mobileFullNama
+        ? {
+            mobileFull: mobileFullNama,
+            mobileFullLebar: media?.mobileFull?.lebar || 780,
+            mobileFullTinggi: media?.mobileFull?.tinggi || 2600,
+          }
+        : {}),
+      ...(mobileHeroNama ? { mobileHero: mobileHeroNama } : {}),
+    },
+    hook: naskah.hook,
+    browser: naskah.browser,
+    responsive: naskah.responsive,
+    spotlight: naskah.spotlight,
+    penutup: naskah.penutup,
+    suara: suaraBabak,
+    musik: null,
+    sfx,
+  };
+
+  const totalDetik = hitungDurasiWebShowcase(propsData).total / FPS_SHOWCASE;
+  if (musik && existsSync(musik)) {
+    propsData.musik = await salin(musik, 'musik');
+  } else {
+    await musikContoh(path.join(publik, 'musik.mp3'), totalDetik + 1.5, 98);
+    propsData.musik = 'musik.mp3';
+  }
+
+  const propsPath = path.join(folder, 'props-showcase.json');
+  await writeFile(propsPath, JSON.stringify(propsData));
+  log(`🎬 Remotion WebShowcase (${propsData.merek.domain}): 5 babak, ${totalDetik.toFixed(1)} dtk`);
+  await jalankan(
+    process.execPath,
+    [CLI, 'render', 'src/index.ts', 'WebShowcase', keluar, `--props=${propsPath}`, `--public-dir=${publik}`, '--log=error'],
+    { cwd: REMOTION },
+  );
+
+  const sampul = path.join(folder, 'sampul-showcase.jpg');
+  const detikSampul = Math.min(2.0, Math.max(0.8, totalDetik * 0.08));
+  await ffmpeg(['-y', '-ss', detikSampul.toFixed(2), '-i', keluar, '-frames:v', '1', '-q:v', '3', sampul]).catch(() => null);
+  return { berkas: keluar, sampul: existsSync(sampul) ? sampul : null, durasi: totalDetik, catatanSuara };
 }

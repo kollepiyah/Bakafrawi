@@ -6,7 +6,7 @@
 //   • gemini     — Gemini TTS lewat kunci GEMINI_API_KEY (AI Studio, free tier tanpa kartu).
 //   • azure      — Azure AI Speech, kalau AZURE_SPEECH_KEY & REGION diisi.
 //   • edge       — edge-tts (paket msedge-tts, TIDAK resmi, tanpa akun). Cadangan terakhir bila jalur lain gagal.
-import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { tidur, ulangi } from './alat.mjs'
@@ -125,6 +125,31 @@ async function azure(teks, keluar, profil) {
   await writeFile(keluar, Buffer.from(await r.arrayBuffer()))
 }
 
+/**
+ * Konversi metadata `WordBoundary` dari msedge-tts (Offset & Duration dalam satuan 100 nanodetik)
+ * menjadi daftar kata `[{ teks, mulai, selesai }]` (detik) untuk subtitle kinetik & lip-sync. Murni.
+ */
+export function kataDariMetadataEdge(metaJson) {
+  const daftar = Array.isArray(metaJson?.Metadata)
+    ? metaJson.Metadata
+    : Array.isArray(metaJson)
+    ? metaJson
+    : []
+  const hasil = []
+  for (const item of daftar) {
+    if (item?.Type !== 'WordBoundary') continue
+    const data = item?.Data ?? {}
+    const teks = String(data?.text?.Text ?? data?.Text ?? '').trim()
+    const offset = Number(data?.Offset)
+    const duration = Number(data?.Duration)
+    if (!teks || !Number.isFinite(offset)) continue
+    const mulai = Number((offset / 10_000_000).toFixed(3))
+    const selesai = Number(((offset + (Number.isFinite(duration) ? duration : 1_500_000)) / 10_000_000).toFixed(3))
+    hasil.push({ teks, mulai, selesai: Math.max(mulai + 0.05, selesai) })
+  }
+  return hasil
+}
+
 // edge-tts sering memutus sesaat — dicoba sampai 4 kali (ulangi) sebelum menyerah.
 const edge = (teks, keluar, profil) => ulangi(() => edgeSekali(teks, keluar, profil))
 
@@ -134,11 +159,23 @@ async function edgeSekali(teks, keluar, profil) {
   const tts = new MsEdgeTTS()
   const dir = await mkdtemp(path.join(os.tmpdir(), 'lekkopi-suara-'))
   try {
-    await tts.setMetadata(p.edgeSuara, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3)
-    const { audioFilePath } = await tts.toFile(dir, aman(teks), { rate: p.laju })
+    await tts.setMetadata(p.edgeSuara, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3, {
+      wordBoundaryEnabled: true,
+    })
+    const { audioFilePath, metadataFilePath } = await tts.toFile(dir, aman(teks), { rate: p.laju })
     await copyFile(audioFilePath, keluar)
+    let kata = []
+    if (metadataFilePath) {
+      try {
+        const mentah = await readFile(metadataFilePath, 'utf8')
+        kata = kataDariMetadataEdge(JSON.parse(mentah))
+      } catch {
+        kata = []
+      }
+    }
+    return { kata, voiceId: p.edgeSuara }
   } catch (e) {
-    throw new Error(`Suara edge-tts (tidak resmi) gagal: ${e?.message ?? e}. Kalau terus gagal, isi GEMINI_API_KEY di .env Studio.`)
+    throw new Error(`Suara edge-tts gagal: ${e?.message ?? e}.`)
   } finally {
     try { tts.close() } catch { /* sudah tertutup */ }
     await rm(dir, { recursive: true, force: true })
@@ -507,7 +544,7 @@ export async function suaraAdegan(teks, folder, opsi = {}) {
     const kata = []
     for (const [i, t] of teks.entries()) {
       const r = await buat(t, berkas[i], j, { profil, voiceId })
-      if (j === 'elevenlabs' && Array.isArray(r?.kata)) kata[i] = r.kata
+      if (Array.isArray(r?.kata) && r.kata.length) kata[i] = r.kata
     }
     return { berkas, ...(kata.length ? { kata } : {}) }
   }
@@ -621,26 +658,53 @@ export function pilihVoicePerTokoh(
   return BAWAAN_VOICE_TOKOH[peran] ?? (adalahWanita ? PREMADE_ELEVEN_WANITA : PREMADE_ELEVEN_PRIA)
 }
 
+const POLA_CERITA_WANITA =
+  /\b(mbak|mba|ibu|bunda|umi|ning|nisa|aisyah|siti|putri|ayu|dewi|rina|sari|indah|rara|gadis|wanita|perempuan|santriwati|kakaknya perempuan|ibuku|ibunya|seorang perempuan|seorang gadis|seorang wanita)\b/i
+const POLA_CERITA_PRIA =
+  /\b(lek\s+\w+|mas\s+\w+|pak\s+\w+|bapak|syekh|syeikh|kyai|kiai|gus|ustadz|ustaz|santri putra|pemuda|pria|lelaki|laki-laki|arga|danu|budi|ahmad|abdul|abu\s+\w+|pedagang pria)\b/i
+
+/**
+ * Deteksi gender cerita/narator ('pria' | 'wanita') dari teks bila tidak dikunci secara eksplisit. Murni.
+ * Jika `genderEksplisit` valid ('pria' | 'wanita'), nilai eksplisit tetap diprioritaskan.
+ */
+export function deteksiGenderCerita(teks, genderEksplisit = null) {
+  const eksp = String(genderEksplisit ?? '').trim().toLowerCase()
+  if (eksp === 'pria' || eksp === 'wanita') return eksp
+  const s = String(teks ?? '')
+  const cocokWanita = (s.match(new RegExp(POLA_CERITA_WANITA.source, 'gi')) ?? []).length
+  const cocokPria = (s.match(new RegExp(POLA_CERITA_PRIA.source, 'gi')) ?? []).length
+  if (cocokWanita > cocokPria && cocokWanita > 0) return 'wanita'
+  return 'pria'
+}
+
 function profilUntukTokoh(pembicara, gender = null) {
   const p = String(pembicara || 'narator').toLowerCase()
   const adalahWanita = gender ? gender === 'wanita' : p === 'mbak_pelanggan'
-  if (p === 'mbak_pelanggan') return { kode: 'santai_indo', ...PROFIL_SUARA.santai_indo }
-  if (p === 'pak_tetangga') return { kode: 'jawa_timur', ...PROFIL_SUARA.jawa_timur }
-  if (p === 'mas_pelanggan') return { kode: 'iklan_energik', ...PROFIL_SUARA.iklan_energik }
-  if (p === 'mas_barista') return { kode: 'jawa_timur', ...PROFIL_SUARA.jawa_timur }
-  if (adalahWanita) return { kode: 'storytelling_hangat', ...PROFIL_SUARA.storytelling_hangat }
-  return { kode: 'narator_sinematik', ...PROFIL_SUARA.narator_sinematik }
+  if (p === 'mbak_pelanggan') return { kode: 'santai_indo', ...PROFIL_SUARA.santai_indo, laju: '+4%' }
+  if (p === 'pak_tetangga') return { kode: 'jawa_timur', ...PROFIL_SUARA.jawa_timur, laju: '-5%' }
+  if (p === 'mas_pelanggan') return { kode: 'iklan_energik', ...PROFIL_SUARA.iklan_energik, laju: '+7%' }
+  if (p === 'mas_barista') return { kode: 'jawa_timur', ...PROFIL_SUARA.jawa_timur, laju: '+3%' }
+  if (adalahWanita) return { kode: 'storytelling_hangat', ...PROFIL_SUARA.storytelling_hangat, laju: '-2%' }
+  return { kode: 'narator_sinematik', ...PROFIL_SUARA.narator_sinematik, laju: '-3%' }
+}
+
+function apakahVoiceLibraryDitolak(pesan) {
+  return /402|payment_required|paid_plan_required|library voice|upgrade.*subscription|upgrade.*use library/i.test(
+    String(pesan ?? ''),
+  )
 }
 
 /**
- * Buat audio per adegan serial kartun dengan dukungan multi-tokoh & alignment kata ElevenLabs.
+ * Buat audio per adegan serial kartun dengan dukungan multi-tokoh & timestamps kata (ElevenLabs / Edge TTS).
  * Adegan bisu / hanya tag aksi (`[meong]`) dikembalikan dengan `berkas: null`.
+ * Bila Voice Library ElevenLabs ditolak 402 (paket Free), otomatis beralih bersih ke suara Indonesia natural
+ * (Gemini TTS → Edge TTS `id-ID-ArdiNeural` / `id-ID-GadisNeural`) sesuai gender pria/wanita tanpa mengulang error di tiap adegan.
  */
 export async function suaraDialogSerial(daftarItem = [], folder, opsi = {}) {
   const hasil = []
   const catatanSet = new Set()
   const jalurAwal = opsi.jalur ?? jalurSuara()
-  const urutan =
+  const urutanDasar =
     jalurAwal === 'elevenlabs'
       ? ['elevenlabs', ...(process.env.GEMINI_API_KEY ? ['gemini'] : []), 'edge']
       : jalurAwal === 'gemini'
@@ -651,6 +715,11 @@ export async function suaraDialogSerial(daftarItem = [], folder, opsi = {}) {
 
   const buat = opsi.buat ?? ((t, k, j, info) => buatSuara(t, k, j, info.profil, { voiceId: info.voiceId, gender: info.gender }))
 
+  // Cache penolakan per render agar error 402/401/429 tidak dicoba ulang di setiap adegan
+  const voiceElevenDitolak = new Set()
+  let elevenGagalAkun = false
+  let geminiGagalAkun = false
+
   for (const [i, item] of daftarItem.entries()) {
     const teks = String(item?.teks ?? '').replace(/\s+/g, ' ').trim()
     const pembicara = String(item?.pembicara || 'narator').trim().toLowerCase()
@@ -660,7 +729,11 @@ export async function suaraDialogSerial(daftarItem = [], folder, opsi = {}) {
       continue
     }
 
-    const gender = item?.gender || (pembicara === 'mbak_pelanggan' ? 'wanita' : 'pria')
+    const gender = item?.gender
+      ? (String(item.gender).toLowerCase() === 'wanita' ? 'wanita' : 'pria')
+      : pembicara === 'mbak_pelanggan'
+      ? 'wanita'
+      : deteksiGenderCerita(teks, null)
     const profil = profilUntukTokoh(pembicara, gender)
     const voiceId = pilihVoicePerTokoh(pembicara, {
       suaraTokoh: opsi.suaraTokoh,
@@ -669,50 +742,50 @@ export async function suaraDialogSerial(daftarItem = [], folder, opsi = {}) {
       envNilai: opsi.envNilai,
     })
 
+    const urutan = urutanDasar.filter((j) => {
+      if (j === 'elevenlabs' && (elevenGagalAkun || voiceElevenDitolak.has(voiceId))) return false
+      if (j === 'gemini' && geminiGagalAkun) return false
+      return true
+    })
+    if (!urutan.length) urutan.push('edge')
+
     let selesaiItem = null
-    let galatPertama = null
+    let alasanPindah = null
     for (const j of urutan) {
       try {
         const berkas = path.join(folder, `dialog_${i}_${pembicara}.${EKSTENSI[j] ?? 'mp3'}`)
         const r = await buat(teks, berkas, j, { profil, voiceId, gender, pembicara })
-        if (galatPertama) {
-          catatanSet.add(`suara tokoh ${pembicara} (${gender}) beralih ke ${j} (${jalurAwal} gagal: ${galatPertama})`)
+        const labelVoice =
+          j === 'edge'
+            ? profil.edgeSuara
+            : j === 'gemini'
+            ? profil.geminiSuara
+            : (r?.voiceId || voiceId)
+        if (alasanPindah) {
+          catatanSet.add(
+            `suara ${pembicara} (${gender}) memakai ${j} natural (${labelVoice}) — ${alasanPindah}`,
+          )
         }
         selesaiItem = {
           berkas,
-          kata: j === 'elevenlabs' && Array.isArray(r?.kata) ? r.kata : [],
+          kata: Array.isArray(r?.kata) ? r.kata : [],
           jalur: j,
-          voiceId: j === 'elevenlabs' ? (r?.voiceId || voiceId) : null,
+          voiceId: labelVoice || null,
         }
         break
       } catch (e) {
-        const pesanGalat = String(e?.message ?? e).slice(0, 260)
-        // Jika Voice ID ElevenLabs pilihan ditolak (mis. Voice Library di paket Free), coba voice bawaan ElevenLabs sesuai gender dulu agar timestamps tetap jalan
-        const voiceCadangan = gender === 'wanita' ? PREMADE_ELEVEN_WANITA : PREMADE_ELEVEN_PRIA
-        const bolehCobaPremade =
-          j === 'elevenlabs' &&
-          voiceId !== voiceCadangan &&
-          /400|402|404|bad_request|invalid_request|voice|library/i.test(pesanGalat)
-
-        if (bolehCobaPremade) {
-          try {
-            const berkas = path.join(folder, `dialog_${i}_${pembicara}.${EKSTENSI[j] ?? 'mp3'}`)
-            const rCadangan = await buat(teks, berkas, j, { profil, voiceId: voiceCadangan, gender, pembicara })
-            catatanSet.add(
-              `suara ElevenLabs ${pembicara} (${voiceId}) ditolak (${pesanGalat}), dialihkan ke voice bawaan ${gender} (${voiceCadangan})`,
-            )
-            selesaiItem = {
-              berkas,
-              kata: Array.isArray(rCadangan?.kata) ? rCadangan.kata : [],
-              jalur: 'elevenlabs',
-              voiceId: rCadangan?.voiceId || voiceCadangan,
-            }
-            break
-          } catch (e2) {
-            if (!galatPertama) galatPertama = `${pesanGalat} | cadangan premade: ${String(e2?.message ?? e2).slice(0, 140)}`
+        const pesanGalat = String(e?.message ?? e).slice(0, 220)
+        if (j === 'elevenlabs') {
+          if (apakahVoiceLibraryDitolak(pesanGalat)) {
+            voiceElevenDitolak.add(voiceId)
+            alasanPindah = `Voice Library ElevenLabs (${voiceId}) butuh paket berbayar`
+          } else {
+            if (/401|403|429|quota|limit|unauthorized/i.test(pesanGalat)) elevenGagalAkun = true
+            alasanPindah = `ElevenLabs gagal (${pesanGalat.slice(0, 100)})`
           }
-        } else if (!galatPertama) {
-          galatPertama = pesanGalat
+        } else if (j === 'gemini') {
+          if (/400|401|403|404|429|quota|not_found/i.test(pesanGalat)) geminiGagalAkun = true
+          if (!alasanPindah) alasanPindah = `Gemini TTS gagal (${pesanGalat.slice(0, 100)})`
         }
         if (j === urutan.at(-1)) throw e
       }

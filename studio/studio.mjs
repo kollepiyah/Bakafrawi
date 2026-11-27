@@ -13,12 +13,12 @@ import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } fr
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
 import { ffmpeg, probe } from './lib/bank/alat.mjs';
-import { ASET_LOKAL, deteksiGenderKarakter, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihKolamGayaDenganEvaluasi, pilihMusik, renderIklan, renderSinematikRemotion, salinAsetDrive, salinAsetSupabase, SUARA, suaraKarakter, uraiPilihanKarakter, WARNA } from './lib/video.mjs';
-import { buatNaskah, buatNaskahVideo, buatNaskahVideoFullAi } from './lib/naskah.mjs';
+import { ASET_LOKAL, deteksiGenderKarakter, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihKolamGayaDenganEvaluasi, pilihMusik, renderIklan, renderSinematikRemotion, renderWebShowcase, salinAsetDrive, salinAsetSupabase, SUARA, suaraKarakter, uraiPilihanKarakter, WARNA } from './lib/video.mjs';
+import { buatNaskah, buatNaskahVideo, buatNaskahVideoFullAi, buatNaskahWebShowcase } from './lib/naskah.mjs';
 import { suaraAdegan, uraiPilihanSuara } from './lib/bank/suara.mjs';
 import { renderOpeningAI } from './lib/opening-ai.mjs';
 import { gabungRiwayatEpisode, renderSerialKartun } from './lib/serial-kartun.mjs';
-import { bukaPeramban, potret, potretLayar } from './lib/peramban.mjs';
+import { bukaPeramban, potret, potretLayar, potretWebShowcase } from './lib/peramban.mjs';
 import { adaTelegram, kirimHasil, kirimMediaTayang, kirimTeks } from './lib/telegram.mjs';
 import { htmlPoster, temaMerek, UKURAN } from './lib/templat.mjs';
 
@@ -159,15 +159,81 @@ const LABEL_FOKUS_LEKKOPI = {
   'lekkopi-story': 'Cerita Kopi',
 };
 
-function bangunProdukMerek(tugas, situs, merek) {
+const SEKTOR_WEB_LABEL = {
+  pesantren: 'Pesantren & Lembaga Islam',
+  pendidikan: 'Pendidikan & Yayasan',
+  umkm: 'UMKM & Bisnis Lokal',
+  perusahaan: 'Company Profile & Usaha',
+  custom: 'Website Custom',
+};
+
+function bangunProdukMerek(tugas, situs, merek, merekBakafrawi = null) {
+  // 1. Cek apakah tugas ini untuk Web Custom (mis. almansur.id) dari naskah.webCustom atau profil.web_custom
+  const daftarWeb = Array.isArray(merekBakafrawi?.profil?.web_custom) ? merekBakafrawi.profil.web_custom : [];
+  const webCustom =
+    tugas.naskah?.webCustom?.url
+      ? tugas.naskah.webCustom
+      : daftarWeb.find((w) => w && w.slug === tugas.produk_slug && w.url);
+  if (webCustom && merek?.slug !== 'lekkopi') {
+    const url = /^https?:\/\//i.test(String(webCustom.url)) ? String(webCustom.url) : `https://${webCustom.url}`;
+    const domain = (() => {
+      try {
+        return new URL(url).hostname.replace(/^www\./, '');
+      } catch {
+        return String(webCustom.domain || webCustom.url).replace(/^https?:\/\//i, '').split('/')[0];
+      }
+    })();
+    const sektor = SEKTOR_WEB_LABEL[webCustom.kategori] || 'Website Custom';
+    const nama = String(webCustom.nama || domain).trim();
+    const fiturBawaan =
+      webCustom.kategori === 'pesantren'
+        ? [
+            { judul: 'Profil Lembaga Terpercaya', isi: 'Menampilkan sejarah, visi misi, dan unit pendidikan pesantren secara rapi.' },
+            { judul: 'Info Pendaftaran Santri', isi: 'Memudahkan calon wali santri mencari syarat dan mendaftar dari HP.' },
+            { judul: 'Berita & Galeri Kegiatan', isi: 'Update kegiatan pondok dan pengumuman resmi mudah dikelola admin.' },
+            { judul: 'Responsif HP & Laptop', isi: 'Ringan dibuka di semua perangkat dan siap muncul di Google.' },
+          ]
+        : [
+            { judul: 'Desain Custom Eksklusif', isi: 'Dirancang khusus mengikuti identitas lembaga atau bisnis Anda.' },
+            { judul: 'Cepat & Responsif di HP', isi: 'Tampilan otomatis rapi di layar laptop maupun HP pengunjung.' },
+            { judul: 'Mudah Dikelola Admin', isi: 'Pembaruan konten, berita, dan layanan praktis tanpa ribet.' },
+            { judul: 'Siap Tampil di Google', isi: 'Struktur rapi untuk meningkatkan kepercayaan calon klien.' },
+          ];
+    return {
+      adalahSoftware: true,
+      adalahWebCustom: true,
+      produk: {
+        slug: tugas.produk_slug || `web-${domain.replace(/[^a-z0-9]+/gi, '-')}`,
+        nama,
+        klien: nama,
+        kategori: 'pesanan',
+        label: sektor,
+        sektorLabel: sektor,
+        urlWeb: url,
+        domainWeb: domain,
+        aksenWeb: webCustom.aksen || '',
+        judul: `Website Custom ${nama} (${domain})`,
+        deskripsi:
+          String(webCustom.deskripsi || '').trim() ||
+          `Website custom profesional (${domain}) untuk sektor ${sektor.toLowerCase()}, dibangun khusus oleh Bakafrawi Project.`,
+        platform: ['Website Desktop', 'Mobile Responsive', 'SEO Ready'],
+        fitur: fiturBawaan,
+        tautan: [{ url, label: `Kunjungi ${domain}`, utama: true }],
+        layarHp: [],
+        layarDesktop: [],
+      },
+    };
+  }
+
   const temu = situs.produk.find((p) => p.slug === tugas.produk_slug);
   if (temu && merek?.slug !== 'lekkopi') {
-    return { produk: temu, adalahSoftware: true };
+    return { produk: temu, adalahSoftware: true, adalahWebCustom: false };
   }
   const namaMerek = merek?.nama || 'Lek Kopi';
   const labelFokus = LABEL_FOKUS_LEKKOPI[tugas.produk_slug] || 'Kedai Kopi Waru';
   return {
     adalahSoftware: false,
+    adalahWebCustom: false,
     produk: {
       slug: tugas.produk_slug || (merek?.slug ?? 'lekkopi'),
       nama: namaMerek,
@@ -192,7 +258,14 @@ function bangunProdukMerek(tugas, situs, merek) {
 
 /** merek: baris studio_merek tugas ini (identitas tampilan, gaya naskah, WA bila beda dari situs). */
 async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
-  const { produk, adalahSoftware } = bangunProdukMerek(tugas, situs, merek);
+  const dbAktif = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
+  const merekBakafrawi =
+    merek?.slug === 'bakafrawi'
+      ? merek
+      : dbAktif
+      ? await bacaMerek('bakafrawi').catch(() => null)
+      : null;
+  const { produk, adalahSoftware, adalahWebCustom } = bangunProdukMerek(tugas, situs, merek, merekBakafrawi);
   const adalahLekKopi = !adalahSoftware && merek?.slug === 'lekkopi';
   const tema = temaMerek(merek);
   const kontak = {
@@ -211,15 +284,8 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
   const pilihanKarakter = uraiPilihanKarakter(tugas.arahan);
   const arahanNaskah = pilihanKarakter.bersih.replace(/\[(?:Gaya|Suara):\s*[A-Za-z0-9_-]+\]\s*/gi, '').trim();
   const pakaiAi = tugas.latar === 'ai' || gayaPilihan === 'photo-floating';
-  const dbAktif = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY);
 
   const dirMaskot = path.join(ASET_LOKAL, 'maskot'), dirMusik = path.join(ASET_LOKAL, 'musik');
-  const merekBakafrawi =
-    merek?.slug === 'bakafrawi'
-      ? merek
-      : dbAktif
-      ? await bacaMerek('bakafrawi').catch(() => null)
-      : null;
   if (tugas.jenis === 'video') {
     await salinAsetDrive().catch(() => {});
     await salinAsetSupabase(merekBakafrawi?.profil?.aset_studio ?? []).catch(() => {});
@@ -250,14 +316,16 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
 
   const evalMerek = merek?.profil?.evaluasi_mingguan ?? null;
 
-  // Gaya video Bakafrawi: editorial-scroll & clean-ui tidak masuk rotasi otomatis; bila karakter/suara bergender diminta, pilih gaya bermaskot.
+  // Gaya video Bakafrawi: Web Custom otomatis memakai `web-showcase` 3D Agency; produk lain mendukung `web-showcase` manual maupun rotasi.
   const GAYA_SOFTWARE_KARAKTER = ['dark-keynote', 'split-hook', 'pov-chat'];
   const GAYA_SOFTWARE_AUTO = ['dark-keynote', 'split-hook', 'pov-chat', 'sinematik-ai'];
-  const GAYA_SOFTWARE_MANUAL = [...GAYA_SOFTWARE_AUTO, 'editorial-scroll', 'clean-ui'];
+  const GAYA_SOFTWARE_MANUAL = [...GAYA_SOFTWARE_AUTO, 'web-showcase', 'editorial-scroll', 'clean-ui'];
   let gayaVideo = '';
   if (tugas.jenis === 'video' && adalahSoftware) {
     if (GAYA_SOFTWARE_MANUAL.includes(gayaPilihan)) {
       gayaVideo = gayaPilihan;
+    } else if (adalahWebCustom) {
+      gayaVideo = 'web-showcase';
     } else {
       const kolamDasar = mintaKarakter ? GAYA_SOFTWARE_KARAKTER : GAYA_SOFTWARE_AUTO;
       const kolamGaya = pilihKolamGayaDenganEvaluasi(kolamDasar, evalMerek);
@@ -277,9 +345,72 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     if (referensiMerek.length) catatan.push(`referensi aktif: ${referensiMerek.length}`);
   }
 
+  const adalahWebShowcase = tugas.jenis === 'video' && adalahSoftware && gayaVideo === 'web-showcase';
   const adalahSinematikSoftware = tugas.jenis === 'video' && adalahSoftware && gayaVideo === 'sinematik-ai';
   const adalahEditorialSoftware = tugas.jenis === 'video' && adalahSoftware && gayaVideo === 'editorial-scroll';
-  const butuhLayarSoftware = tugas.jenis === 'video' && adalahSoftware && !adalahSinematikSoftware;
+  const butuhLayarSoftware = tugas.jenis === 'video' && adalahSoftware && !adalahSinematikSoftware && !adalahWebShowcase;
+
+  // JALUR BARU: Komposisi `WebShowcase` 3D Agency (Desktop Full-Page Scroll + Mobile Responsive + Kursor + Auto-Scan Web)
+  if (adalahWebShowcase) {
+    const urlShowcase =
+      produk.urlWeb ||
+      produk.demo?.url ||
+      produk.tautan?.find((t) => t.utama)?.url ||
+      produk.tautan?.[0]?.url ||
+      situs.urlSitus;
+    let potretWeb = null;
+    if (urlShowcase) {
+      try {
+        console.log(`🌐 Memindai & memotret Desktop + HP: ${urlShowcase}`);
+        potretWeb = await potretWebShowcase(peramban, { url: urlShowcase, folder });
+        if (potretWeb?.info?.title) catatan.push(`scan web: ${potretWeb.info.title.slice(0, 60)}`);
+      } catch (e) {
+        catatan.push(`potret web gagal (${String(e?.message ?? e).slice(0, 120)})`);
+      }
+    }
+    const arahanShowcase = evalMerek?.saranHook
+      ? `${arahanNaskah}${arahanNaskah ? '\n' : ''}(Saran hook minggu ini: ${String(evalMerek.saranHook).slice(0, 140)})`
+      : arahanNaskah;
+    const naskahShowcase = await buatNaskahWebShowcase(produk, situs, arahanShowcase, merek, potretWeb?.info ?? null, referensiMerek);
+    if (tugas.naskah?.webCustom) naskahShowcase.webCustom = tugas.naskah.webCustom;
+
+    const tagIntiBakafrawi = ['bakafrawi', 'bakafrawiproject', 'jasapembuatanwebsite', 'websitecustom', 'softwarehouseindonesia', 'websitessidoarjo'];
+    const tagGabung = [...new Set([...tagIntiBakafrawi, ...(naskahShowcase.hashtag ?? [])].map((h) => String(h).replace(/^#+/, '').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()).filter(Boolean))].slice(0, 10);
+    const tujuan = [`WA ${kontak.whatsappTampil}`, tema.situs].filter(Boolean).join(' · ');
+    const captionShowcase = `${naskahShowcase.caption}\n\n💬 ${naskahShowcase.ajakan || 'Konsultasi gratis'} → ${tujuan}\n\n${tagGabung.map((h) => `#${h}`).join(' ')}`;
+
+    const berkas = (n) => path.join(folder, n);
+    const logo = merek?.profil?.logo ?? LOGO;
+    const logoVideo = await ambilLokal(logo.startsWith('file:') ? logo : mutlak(logo, situs), berkas('logo-sumber'));
+    const lagu = pilihMusik(await readdir(dirMusik).catch(() => []));
+    const musik = process.env.STUDIO_MUSIK || (lagu && path.join(dirMusik, lagu));
+    const domainWeb = potretWeb?.info?.domain || produk.domainWeb || urlShowcase.replace(/^https?:\/\//i, '').split('/')[0];
+    const aksenUtama = produk.aksenWeb || potretWeb?.info?.warnaAksen || '#18B4A8';
+
+    const r = await renderWebShowcase({
+      naskah: naskahShowcase,
+      merekInfo: {
+        nama: produk.nama,
+        domain: domainWeb,
+        url: urlShowcase,
+        aksen: aksenUtama,
+        aksenKedua: '#34E0CD',
+        info: tujuan,
+        situsBakafrawi: tema.situs || 'bakafrawi.com',
+      },
+      media: potretWeb,
+      logo: logoVideo,
+      musik,
+      opsiSuara,
+      folder,
+      keluar: berkas('video.mp4'),
+    });
+    if (r.catatanSuara) catatan.push(r.catatanSuara);
+    if (catatan.length) naskahShowcase.catatan = catatan;
+    const hasilShowcase = [{ jenis: 'video', rasio: 'story', durasi: Math.round(r.durasi), url: await simpan(r.berkas, 'video/mp4') }];
+    if (r.sampul) hasilShowcase.push({ jenis: 'gambar', rasio: 'sampul', url: await simpan(r.sampul, 'image/jpeg') });
+    return { naskah: naskahShowcase, caption: captionShowcase, hasil: hasilShowcase, namaProduk: produk.nama };
+  }
 
   const layarApp = butuhLayarSoftware ? await kumpulkanLayar(produk, situs, peramban, folder, catatan) : [];
   if (butuhLayarSoftware && !adalahEditorialSoftware && !layarApp.length) {
@@ -321,9 +452,22 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     caption = `${naskah.caption}\n\n💬 ${naskah.ajakan || 'Konsultasi gratis'} → ${tujuan}\n\n${tagGabung.map((h) => `#${h}`).join(' ')}`;
   }
 
-  const layar = adalahSoftware ? (produk.layarHp?.[0]?.src ?? produk.layarDesktop?.[0]?.src) : null;
+  let layar = adalahSoftware ? (produk.layarHp?.[0]?.src ?? produk.layarDesktop?.[0]?.src) : null;
+  // Khusus poster Web Custom: potret langsung tampilan situs asli sebagai visual utama poster.
+  if (tugas.jenis === 'gambar' && adalahWebCustom && produk.urlWeb && !layar) {
+    try {
+      const potretPoster = await potretWebShowcase(peramban, { url: produk.urlWeb, folder, tunggu: 2200 });
+      const sumberPoster = potretPoster?.mobileHero?.berkas || potretPoster?.desktopHero?.berkas;
+      if (sumberPoster) layar = berkasUrl(sumberPoster);
+    } catch (e) {
+      catatan.push(`screenshot poster web custom dilewati: ${String(e?.message ?? e).slice(0, 100)}`);
+    }
+  }
   const gambar = adalahSoftware ? (layar ?? produk.logo?.src) : null;
   const logo = merek?.profil?.logo ?? (merek?.slug === 'bakafrawi' || !merek ? LOGO : '');
+  if (tugas.naskah?.webCustom && naskah && typeof naskah === 'object') {
+    naskah.webCustom = tugas.naskah.webCustom;
+  }
   const umum = { naskah, produk, logo, kontak, tema };
   const hasil = [];
   const berkas = (n) => path.join(folder, n);
@@ -332,10 +476,11 @@ async function kerjakan(tugas, situs, peramban, folder, simpan, merek) {
     const gayaBawaan = !adalahSoftware && pakaiAi ? 'photo-floating' : 'modern-clean';
     const gayaPoster = ['modern-clean', 'before-after', 'bold-typo', 'photo-floating'].includes(gayaPilihan) ? gayaPilihan : gayaBawaan;
     if (gayaPoster !== 'modern-clean') catatan.push(`gaya poster: ${gayaPoster}`);
+    const gambarHref = gambar ? (gambar.startsWith('file:') ? gambar : mutlak(gambar, situs)) : null;
     for (const rasio of ['feed', 'potret', 'story']) {
       const foto = pakaiAi ? await fotoAi(naskah.adegan?.[0], RASIO_AI[rasio], berkas(`latar-${rasio}.png`), catatan) : null;
       const keluar = berkas(`poster-${rasio}.jpg`);
-      await potret(peramban, { ...UKURAN[rasio], keluar, html: htmlPoster({ ...umum, rasio, foto, gaya: gayaPoster, gambar: gambar && mutlak(gambar, situs), gambarIkon: !layar }) });
+      await potret(peramban, { ...UKURAN[rasio], keluar, html: htmlPoster({ ...umum, rasio, foto, gaya: gayaPoster, gambar: gambarHref, gambarIkon: !layar }) });
       hasil.push({ jenis: 'gambar', rasio, url: await simpan(keluar, 'image/jpeg') });
     }
   } else if (!adalahSoftware || adalahSinematikSoftware || adalahEditorialSoftware) {

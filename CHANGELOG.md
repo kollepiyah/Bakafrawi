@@ -1,5 +1,22 @@
 # CHANGELOG — bakafrawi.com
 
+## Animasi Karakter 2D Berjalan di CeritaMotion & Suara Indonesia Natural Sesuai Gender (27 Nov)
+- **Animasi Karakter 2D Berjalan & Berakting (`studio/remotion/src/components/KarakterCerita.tsx`, `studio/remotion/src/CeritaMotion.tsx`, `studio/remotion/src/data/cerita-motion.ts`):**
+  - Membangun komponen `SosokCerita2D` & `PanggungKarakterCerita` bergaya siluet full-body tampak samping ber-rimlight emas hangat dengan sendi pinggul/lutut/bahu: mendukung berjalan melintas layar (`jalan_kanan`/`jalan_kiri`), membungkuk memeriksa arsip (`periksa_arsip`), menunjukkan dokumen/lentera/kopi (`tunjuk_arsip`), dialog 2 tokoh berhadapan (`dialog_dua`), serta tipe tokoh adaptif (`pria`, `wanita`, `petualang`, `santri`).
+  - Menambahkan variasi adegan **`AdeganArsip`** (close-up lembar dokumen/catatan kuno + stempel merah animasi spring) dan otomatisasi pemilihan aksi karakter per adegan (`pilihKarakterCeritaOtomatis`) di `studio/lib/serial-kartun.mjs`.
+- **Suara Natural Bahasa Indonesia + Timestamps Kata Gratis (`studio/lib/bank/suara.mjs`, `studio/lib/serial-kartun.mjs`, `src/components/admin/studio-sambungan.tsx`):**
+  - Mengaktifkan `wordBoundaryEnabled` pada `msedge-tts` + `kataDariMetadataEdge()` agar suara Indonesia natural (`id-ID-ArdiNeural` untuk pria & `id-ID-GadisNeural` untuk wanita) menghasilkan timestamps kata-per-kata akurat untuk subtitle kinetik & lip-sync.
+  - Memperbaiki penanganan `ElevenLabs TTS 402 paid_plan_required`: bila Voice Library ditolak pada akun Free, Studio tidak lagi jatuh ke suara bawaan beraksen Inggris (`Adam`/`Sarah`) dan tidak mengulang request gagal di tiap adegan (di-cache per render), melainkan langsung beralih bersih ke jalur suara Indonesia natural sesuai gender (`deteksiGenderCerita`).
+
+## Web Custom Studio (almansur.id, dll.) + Komposisi Remotion WebShowcase 3D Agency & Poles Iklan (27 Nov)
+- **Daftar Web Custom Studio (`src/lib/web-custom-murni.ts`, `src/app/api/studio/web-custom/route.ts`, `src/lib/studio-server.ts`, `src/components/admin/studio.tsx`):**
+  - Menambahkan dukungan proyek Website Custom (mis. `almansur.id` untuk pesantren, sekolah, UMKM, company profile) di tab **Buat AI** yang tersimpan terpisah di `studio_merek.profil.web_custom` (tidak tampil di katalog publik `bakafrawi.com`), lengkap dengan form tambah/ubah/hapus dan input URL bebas.
+- **Auto-Scan Website & Screenshot Desktop Full-Page + Mobile (`studio/lib/peramban.mjs`, `studio/lib/naskah.mjs`, `studio/studio.mjs`):**
+  - Menambahkan `potretWebShowcase()` untuk memotret tampilan Desktop `1440×900` (full-page scroll, hero, dan tengah halaman) sekaligus Mobile `390×844` serta memindai judul, deskripsi meta, heading utama, navigasi, dan warna tema asli halaman web sebagai bahan naskah AI (`buatNaskahWebShowcase()`).
+- **Komposisi Remotion Baru `WebShowcase` & Poles `Iklan` (`studio/remotion/src/WebShowcase.tsx`, `studio/remotion/src/data/web-showcase.ts`, `studio/remotion/src/Root.tsx`, `studio/lib/video.mjs`, `studio/remotion/src/Iklan.tsx`, `Bingkai.tsx`, `Caption.tsx`, `Layar.tsx`):**
+  - Membangun komposisi `WebShowcase` (1080×1920, 30 FPS) 5 babak bergaya agency: Kinetic Hook + animasi ketik URL di address bar + kursor klik → 3D Browser full-page live scroll web asli → Dual-Device Desktop + iPhone Responsive → Spotlight fitur + ripple klik → Penutup CTA Bakafrawi + subtitle kinetik modern & SFX transisi.
+  - Memoles komposisi `Iklan` lama: orb aurora bergerak halus di latar gelap, transisi panggung spring slide-up, glass pill modern pada subtitle mode gelap, serta bezel titanium + Dynamic Island pada adegan `Layar`.
+
 ## Perbaikan Gagal Buat Naskah AI & Jadwal Tayang Otomatis Mati (27 Nov)
 - **Perbaikan Jadwal Tayang Otomatis yang Selalu Tergeser ke Besok (`src/lib/jadwal-tayang-murni.ts`, `src/lib/studio-server.ts`, `src/lib/agenda-server.ts`):**
   - Menemukan akar masalah jadwal buka otomatis `rutin-buka` tidak pernah tayang: cron 5 menit `detakAgenda()` memanggil `pastikanSemuaJadwalRutin()` → `sinkronTugasJadwalRutin()` **sebelum** `picuStudioJikaAdaKerja()`. Mulai 2 menit sebelum jam buka (08:58 WIB), `jamBukaBerikutnya()` sudah melompat ke hari esok dan `sinkronTugasJadwalRutin()` langsung menimpa `jadwal_tayang` baris hari ini menjadi besok sebelum sempat jatuh tempo.

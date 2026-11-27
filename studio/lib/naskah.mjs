@@ -380,3 +380,235 @@ export function naskahTemplat(produk, situs, merek = null) {
       : ['Owner of a small Indonesian coffee shop serving a customer at the counter, warm evening light', 'Indonesian shop owner smiling while checking a smartphone behind a tidy counter'],
   };
 }
+
+// ------------------------------------------------------------ naskah WebShowcase 3D Agency
+
+export const SkemaWebShowcase = z.object({
+  judul: z.string(),
+  hook: z.object({
+    badge: z.string(),
+    judul: z.string(),
+    sorotKata: z.string(),
+    sub: z.string(),
+    narasi: z.string(),
+    kataSorot: z.array(z.string()),
+  }),
+  browser: z.object({
+    judulBagian: z.string(),
+    chips: z.array(z.string()).min(1).max(4),
+    narasi: z.string(),
+    kataSorot: z.array(z.string()),
+  }),
+  responsive: z.object({
+    badge: z.string(),
+    judul: z.string(),
+    poin: z.array(z.string()).min(1).max(3),
+    narasi: z.string(),
+    kataSorot: z.array(z.string()),
+  }),
+  spotlight: z.object({
+    badge: z.string(),
+    judul: z.string(),
+    labelKlik: z.string(),
+    daftar: z.array(z.string()).min(1).max(3),
+    narasi: z.string(),
+    kataSorot: z.array(z.string()),
+  }),
+  penutup: z.object({
+    judul: z.string(),
+    tombol: z.string(),
+    narasi: z.string(),
+    kataSorot: z.array(z.string()),
+  }),
+  ajakan: z.string(),
+  caption: z.string(),
+  hashtag: z.array(z.string()),
+});
+
+const PETUNJUK_JSON_SHOWCASE = `\n\nJawab HANYA dengan JSON valid (tanpa markdown) berstruktur:\n{"judul":"...","hook":{"badge":"JASA WEB CUSTOM","judul":"...","sorotKata":"...","sub":"...","narasi":"...","kataSorot":["..."]},"browser":{"judulBagian":"...","chips":["...","...","..."],"narasi":"...","kataSorot":["..."]},"responsive":{"badge":"DESKTOP + MOBILE","judul":"...","poin":["...","...","..."],"narasi":"...","kataSorot":["..."]},"spotlight":{"badge":"FITUR UNGGULAN","judul":"...","labelKlik":"...","daftar":["...","...","..."],"narasi":"...","kataSorot":["..."]},"penutup":{"judul":"...","tombol":"Konsultasi Gratis","narasi":"...","kataSorot":["..."]},"ajakan":"Konsultasi gratis sekarang","caption":"...","hashtag":["bakafrawi","jasawebsite"]}`;
+
+export function naskahWebShowcaseTemplat(produk, situs, infoWeb = null) {
+  const domain = infoWeb?.domain || produk.urlWeb?.replace(/^https?:\/\//i, '').split('/')[0] || produk.nama;
+  const nama = produk.nama || domain;
+  const sektor = produk.sektorLabel || (produk.kategori === 'pesanan' ? 'Website Custom' : 'Aplikasi Digital');
+  const headingAsli = (infoWeb?.heading ?? []).slice(0, 3);
+  const navAsli = (infoWeb?.navigasi ?? []).slice(0, 3);
+  const chips = navAsli.length >= 2
+    ? navAsli
+    : ['Tampilan Profesional', 'Akses Cepat', 'Mudah Dikelola'];
+  const daftar = headingAsli.length >= 2
+    ? headingAsli.map((h) => h.slice(0, 42))
+    : produk.fitur.slice(0, 3).map((f) => f.judul);
+
+  return {
+    judul: `Showcase ${nama}`,
+    hook: {
+      badge: `JASA WEB CUSTOM · ${sektor.toUpperCase().slice(0, 22)}`,
+      judul: `WEBSITE MODERN SEPERTI ${domain.toUpperCase()}`,
+      sorotKata: domain.toUpperCase(),
+      sub: `Contoh karya web custom dari Bakafrawi Project untuk ${sektor.toLowerCase()}.`,
+      narasi: `Ingin lembaga atau bisnis Anda punya website sekeren ${domain}? Lihat hasil karya custom dari Bakafrawi Project ini.`,
+      kataSorot: [domain, 'Bakafrawi'],
+    },
+    browser: {
+      judulBagian: `Tampilan Lengkap ${nama}`,
+      chips,
+      narasi: `Desainnya bersih, profesional, dan langsung menampilkan informasi penting dengan rapi saat pengunjung membuka halaman utama.`,
+      kataSorot: ['bersih', 'profesional', 'rapi'],
+    },
+    responsive: {
+      badge: '100% RESPONSIF',
+      judul: 'Rapi di Laptop Maupun HP',
+      poin: ['Cepat dibuka di HP', 'Navigasi jelas & nyaman', 'Siap ditemukan di Google'],
+      narasi: `Baik dibuka lewat laptop maupun lewat HP, seluruh tampilan dan menunya otomatis menyesuaikan layar dengan ringan dan cepat.`,
+      kataSorot: ['laptop', 'HP', 'cepat'],
+    },
+    spotlight: {
+      badge: 'FITUR & STRUKTUR NYATA',
+      judul: 'Dibuat Sesuai Kebutuhan Anda',
+      labelKlik: 'Jelajahi Fitur',
+      daftar: daftar.length ? daftar : ['Profil lembaga terpercaya', 'Info layanan & pendaftaran online', 'Panel admin mudah diperbarui'],
+      narasi: `Setiap halaman dirancang khusus sesuai kebutuhan Anda, bukan templat kaku. Mau tambah fitur pendaftaran, berita, atau sistem khusus? Semua bisa.`,
+      kataSorot: ['dirancang', 'khusus', 'bisa'],
+    },
+    penutup: {
+      judul: `Mau Website Seperti ${domain}?`,
+      tombol: 'Konsultasi Gratis',
+      narasi: `Yuk konsultasi gratis bareng Bakafrawi Project sekarang. Klik link di bio atau hubungi WhatsApp kami!`,
+      kataSorot: ['konsultasi', 'gratis', 'Bakafrawi'],
+    },
+    ajakan: 'Konsultasi gratis sekarang',
+    caption: `Contoh website custom karya Bakafrawi Project (${domain}). Dirancang rapi, cepat di HP maupun desktop, dan menyesuaikan penuh kebutuhan lembaga maupun bisnis Anda.`,
+    hashtag: ['bakafrawi', 'jasawebsite', 'websitepesantren', 'webcustom', 'softwarehouse'],
+    narasi: [],
+    sumber: 'templat-web-showcase',
+  };
+}
+
+/** Susun naskah 5 babak untuk komposisi Remotion `WebShowcase` (3D Agency) berbasis hasil auto-scan web asli. */
+export async function buatNaskahWebShowcase(produk, situs, arahan, merek = null, infoWeb = null, referensi = []) {
+  const templat = naskahWebShowcaseTemplat(produk, situs, infoWeb);
+  templat.narasi = [
+    templat.hook.narasi,
+    templat.browser.narasi,
+    templat.responsive.narasi,
+    templat.spotlight.narasi,
+    templat.penutup.narasi,
+  ];
+  if (!urutanPenyediaWorker({ adaGambar: false }).length) return templat;
+
+  const domain = infoWeb?.domain || produk.urlWeb?.replace(/^https?:\/\//i, '').split('/')[0] || produk.nama;
+  const blokScan = infoWeb
+    ? [
+        `URL Asli: ${infoWeb.url || produk.urlWeb || ''}`,
+        `Domain: ${domain}`,
+        infoWeb.title ? `Title Halaman: ${infoWeb.title}` : '',
+        infoWeb.deskripsi ? `Deskripsi Meta: ${infoWeb.deskripsi}` : '',
+        infoWeb.heading?.length ? `Heading di Halaman Asli:\n- ${infoWeb.heading.join('\n- ')}` : '',
+        infoWeb.navigasi?.length ? `Menu Navigasi Asli: ${infoWeb.navigasi.join(' · ')}` : '',
+      ].filter(Boolean).join('\n')
+    : '';
+
+  const system = (merek?.profil?.gaya || GAYA_BAWAAN)
+    + ' Kamu membuat naskah VIDEO SHOWCASE WEBSITE/APLIKASI CUSTOM 9:16 kelas agency untuk Bakafrawi Project (durasi 25–35 detik, 5 babak: hook → browser scroll → desktop+HP responsive → spotlight fitur → penutup CTA). '
+    + 'Posisikan website yang ditampilkan sebagai BUKTI KARYA / STUDI KASUS kemampuan Bakafrawi ("kami bisa membuatkan website profesional seperti ini untuk pesantren, sekolah, UMKM, atau bisnis Anda"). '
+    + 'Gunakan Bahasa Indonesia lisan yang hangat, meyakinkan, modern, dan tidak bertele-tele. Jangan menulis nomor WA atau link di dalam narasi suara (kontak otomatis tampil di layar penutup).';
+
+  const prompt = [
+    `Buat naskah 5 babak WebShowcase untuk: ${produk.nama} (${domain}).`,
+    ringkasProduk(produk, situs, merek),
+    blokScan ? `\nHASIL PINDAI HALAMAN ASLI WEBSITE (jadikan rujukan agar akurat, jangan mengarang fitur yang tidak sesuai):\n${blokScan}` : '',
+    ringkasReferensiWorker(referensi),
+    `\nArahan khusus dari pemilik: ${arahan || '(tonjolkan tampilan profesional, responsif di HP & laptop, dan ajak konsultasi pembuatan web custom)'}`,
+    '\nAturan ringkas:',
+    '- Tiap narasi 1–2 kalimat lisan tajam (12–24 kata per babak), total 5 babak ±28 detik.',
+    '- `hook.judul` maksimal 6 kata (kapital tegas); `hook.sorotKata` 1–2 kata yang persis ada di `hook.judul`.',
+    '- `browser.chips`, `responsive.poin`, dan `spotlight.daftar` masing-masing 3 butir singkat (2–5 kata per butir).',
+    '- `kataSorot`: 2–3 kata kunci yang persis muncul di `narasi` babak tersebut.',
+  ].filter(Boolean).join('\n');
+
+  const normalisasiShowcase = (mentah) => {
+    const akar = mentah && typeof mentah === 'object' && !Array.isArray(mentah) ? mentah : {};
+    const bungkus = [akar.naskah, akar.data, akar.hasil, akar.showcase].find((v) => v && typeof v === 'object' && !Array.isArray(v));
+    const o = akar.hook ? akar : (bungkus ?? akar);
+    const arr = (v, cadangan, maks = 3) => {
+      const list = Array.isArray(v) ? v.map((x) => String(x ?? '').trim()).filter(Boolean).slice(0, maks) : [];
+      return list.length ? list : cadangan;
+    };
+    const str = (v, cadangan, maks = 220) => String(v ?? '').trim().slice(0, maks) || cadangan;
+    const h = o.hook ?? {};
+    const b = o.browser ?? {};
+    const r = o.responsive ?? {};
+    const s = o.spotlight ?? {};
+    const p = o.penutup ?? {};
+    return {
+      judul: str(o.judul, templat.judul, 80),
+      hook: {
+        badge: str(h.badge, templat.hook.badge, 42),
+        judul: str(h.judul, templat.hook.judul, 68),
+        sorotKata: str(h.sorotKata ?? h.sorot_kata, templat.hook.sorotKata, 28),
+        sub: str(h.sub, templat.hook.sub, 95),
+        narasi: str(h.narasi, templat.hook.narasi, 240),
+        kataSorot: arr(h.kataSorot ?? h.kata_sorot, templat.hook.kataSorot, 4),
+      },
+      browser: {
+        judulBagian: str(b.judulBagian ?? b.judul_bagian ?? b.judul, templat.browser.judulBagian, 56),
+        chips: arr(b.chips ?? b.fitur, templat.browser.chips, 4),
+        narasi: str(b.narasi, templat.browser.narasi, 240),
+        kataSorot: arr(b.kataSorot ?? b.kata_sorot, templat.browser.kataSorot, 4),
+      },
+      responsive: {
+        badge: str(r.badge, templat.responsive.badge, 32),
+        judul: str(r.judul, templat.responsive.judul, 56),
+        poin: arr(r.poin ?? r.daftar, templat.responsive.poin, 3),
+        narasi: str(r.narasi, templat.responsive.narasi, 240),
+        kataSorot: arr(r.kataSorot ?? r.kata_sorot, templat.responsive.kataSorot, 4),
+      },
+      spotlight: {
+        badge: str(s.badge, templat.spotlight.badge, 36),
+        judul: str(s.judul, templat.spotlight.judul, 56),
+        labelKlik: str(s.labelKlik ?? s.label_klik, templat.spotlight.labelKlik, 28),
+        daftar: arr(s.daftar ?? s.poin, templat.spotlight.daftar, 3),
+        narasi: str(s.narasi, templat.spotlight.narasi, 240),
+        kataSorot: arr(s.kataSorot ?? s.kata_sorot, templat.spotlight.kataSorot, 4),
+      },
+      penutup: {
+        judul: str(p.judul, templat.penutup.judul, 56),
+        tombol: str(p.tombol, templat.penutup.tombol, 28),
+        narasi: str(p.narasi, templat.penutup.narasi, 240),
+        kataSorot: arr(p.kataSorot ?? p.kata_sorot, templat.penutup.kataSorot, 4),
+      },
+      ajakan: str(o.ajakan, templat.ajakan, 60),
+      caption: str(o.caption, templat.caption, 800),
+      hashtag: arr(o.hashtag, templat.hashtag, 8).map((x) => x.replace(/^#+/, '')),
+    };
+  };
+
+  try {
+    const r = await panggilRouterWorkerJson({
+      system,
+      prompt,
+      maksToken: 4096,
+      skemaZod: SkemaWebShowcase,
+      normalisasi: normalisasiShowcase,
+      petunjukJson: PETUNJUK_JSON_SHOWCASE,
+      namaTahap: 'naskah web showcase',
+      effortClaude: 'low',
+    });
+    return {
+      ...r.data,
+      narasi: [
+        r.data.hook.narasi,
+        r.data.browser.narasi,
+        r.data.responsive.narasi,
+        r.data.spotlight.narasi,
+        r.data.penutup.narasi,
+      ],
+      sumber: `web-showcase:${r.sumber}`,
+      pemakaian: r.pemakaian,
+    };
+  } catch (e) {
+    console.error('Semua penyedia naskah WebShowcase gagal, memakai templat:', e.message);
+    return { ...templat, sumber: `templat-web-showcase (${String(e.message).slice(0, 100)})` };
+  }
+}

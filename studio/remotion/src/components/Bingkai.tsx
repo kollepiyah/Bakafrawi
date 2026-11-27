@@ -9,11 +9,15 @@ export const Latar: React.FC<{ merek: Naskah['merek']; gaya?: string; latarGamba
   const { durationInFrames } = useVideoConfig();
   const gelap = gaya !== 'clean-ui';
   const zoom = interpolate(frame, [0, Math.max(1, durationInFrames)], [1, 1.12], { extrapolateRight: 'clamp' });
+  const orbX1 = 80 + Math.sin(frame / 54) * 9;
+  const orbY1 = 12 + Math.cos(frame / 62) * 7;
+  const orbX2 = 18 + Math.cos(frame / 48) * 9;
+  const orbY2 = 84 + Math.sin(frame / 58) * 6;
   const latarGelap = gaya === 'split-hook'
-    ? `radial-gradient(circle at 82% 14%, ${merek.kedua}24 0%, transparent 45%), radial-gradient(circle at 18% 82%, #1E3A8A4D 0%, transparent 50%), linear-gradient(165deg, #111827 0%, #0D1017 100%)`
+    ? `radial-gradient(circle at ${orbX1}% ${orbY1}%, ${merek.kedua}2A 0%, transparent 46%), radial-gradient(circle at ${orbX2}% ${orbY2}%, #1E3A8A54 0%, transparent 52%), linear-gradient(165deg, #111827 0%, #0A0D14 100%)`
     : gaya === 'pov-chat'
-    ? `radial-gradient(circle at 78% 16%, rgba(34,197,94,0.18) 0%, transparent 46%), radial-gradient(circle at 20% 85%, ${merek.utama}40 0%, transparent 50%), linear-gradient(165deg, #131B24 0%, #0F1419 100%)`
-    : `radial-gradient(circle at 80% 12%, ${merek.kedua}2E 0%, transparent 48%), radial-gradient(circle at 18% 85%, ${merek.utama}44 0%, transparent 52%), linear-gradient(165deg, #0E131B 0%, #0A0C10 100%)`;
+    ? `radial-gradient(circle at ${orbX1}% ${orbY1}%, rgba(34,197,94,0.22) 0%, transparent 46%), radial-gradient(circle at ${orbX2}% ${orbY2}%, ${merek.utama}44 0%, transparent 52%), linear-gradient(165deg, #131B24 0%, #0B1016 100%)`
+    : `radial-gradient(circle at ${orbX1}% ${orbY1}%, ${merek.kedua}34 0%, transparent 48%), radial-gradient(circle at ${orbX2}% ${orbY2}%, ${merek.utama}4A 0%, transparent 54%), linear-gradient(165deg, #0E131B 0%, #070A0F 100%)`;
 
   return (
     <AbsoluteFill

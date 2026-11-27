@@ -52,6 +52,7 @@ import {
   HARI_WIB,
   jadwalRutinBawaan,
   keInputDatetimeWIB,
+  uraiJadwalCustomWIB,
   VIDEO_OPENING_BAWAAN_LEKKOPI,
   type JadwalRutin,
   type SasaranTayang,
@@ -62,6 +63,17 @@ import { teksNaskah, type Naskah } from "@/lib/lekkopi/konten-murni";
 import type { UsulanArahan } from "@/lib/usul-arahan-murni";
 import type { KonsepReelsViral, SlotWaktu } from "@/lib/riset-reels-murni";
 import type { ReferensiTersimpan } from "@/lib/referensi-video";
+import {
+  aksenKategoriWebCustom,
+  normalisasiDaftarWebCustom,
+  normalisasiUrlWeb,
+  OPSI_KATEGORI_WEB_CUSTOM,
+  slugWebCustom,
+  type KategoriWebCustom,
+  type WebCustomStudio,
+} from "@/lib/web-custom-murni";
+
+const SLUG_WEB_CUSTOM_BARU = "__web_custom_baru__";
 
 const FOKUS_LEKKOPI = [
   { slug: "lekkopi-promo", nama: "Promo & Hari Spesial (Hari Guru, Diskon, dll.)" },
@@ -71,7 +83,8 @@ const FOKUS_LEKKOPI = [
 ];
 
 const PRESET_VIDEO = [
-  { kode: "otomatis", label: "Otomatis (Rotasi Gelap / Split Hook / POV / Sinematik AI)" },
+  { kode: "otomatis", label: "Otomatis (Rotasi Gelap / Split Hook / POV / Sinematik AI / Web Showcase)" },
+  { kode: "web-showcase", label: "★ Web Showcase 3D Agency (Browser Scroll + HP Responsive + Kursor)" },
   { kode: "dark-keynote", label: "Dark Tech Bakafrawi (Latar Gelap #0A0C10 + Aksen Teal)" },
   { kode: "sinematik-ai", label: "Storytelling Full AI (5 Adegan Sinematik Penuh Tanpa Kotak UI)" },
   { kode: "editorial-scroll", label: "Laptop / Scroll Website & Aplikasi (ala POUR·PLAY)" },
@@ -235,11 +248,18 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
         bahan?: string[];
         suara_elevenlabs?: SuaraFavorit[];
         aset_studio?: { kategori?: string; karakter?: string }[];
+        web_custom?: WebCustomStudio[];
       };
     }[]
   >([]);
   const [pilihMerek, setPilihMerek] = useState("bakafrawi");
   const [pilihProduk, setPilihProduk] = useState("maktaba-pos");
+  const [webUrl, setWebUrl] = useState("");
+  const [webNama, setWebNama] = useState("");
+  const [webKategori, setWebKategori] = useState<KategoriWebCustom>("pesantren");
+  const [webDeskripsi, setWebDeskripsi] = useState("");
+  const [simpanWebKeDaftar, setSimpanWebKeDaftar] = useState(true);
+  const [menyimpanWeb, setMenyimpanWeb] = useState(false);
   const [pilihJenis, setPilihJenis] = useState<"gambar" | "video">("gambar");
   const [pilihGaya, setPilihGaya] = useState("otomatis");
   const [pilihSuara, setPilihSuara] = useState("otomatis");
@@ -793,16 +813,12 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     if (modeJadwalBuat === "prime19") {
       jadwalOtomatisIso = daftarSlotCepatWIB()[3]?.waktuIso ?? null;
     } else if (modeJadwalBuat === "custom" && waktuJadwalBuat.trim()) {
-      const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(waktuJadwalBuat.trim());
-      if (m) {
-        const [, y, mo, da, h, mi] = m;
-        const tgl = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(da), Number(h), Number(mi), 0) - 7 * 3600_000);
-        if (tgl.getTime() <= Date.now() - 60_000) {
-          setSibuk(false);
-          return setPesan("Waktu jadwal custom sudah lewat — pilih waktu ke depan (WIB).");
-        }
-        jadwalOtomatisIso = tgl.toISOString();
+      const parsed = uraiJadwalCustomWIB(waktuJadwalBuat.trim());
+      if (!parsed.ok) {
+        setSibuk(false);
+        return setPesan(parsed.pesan);
       }
+      jadwalOtomatisIso = parsed.tanggal.toISOString();
     }
 
     const barisInsert: Record<string, unknown> = {
@@ -812,6 +828,53 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
       arahan: arahanAkhir,
       latar: d.get("latar") ? "ai" : "polos",
     };
+
+    // Jika memilih Web Custom tersimpan atau URL bebas baru (mis. almansur.id)
+    if (adalahBakafrawi && (pilihProduk === SLUG_WEB_CUSTOM_BARU || webCustomTerpilih)) {
+      const cekUrl = normalisasiUrlWeb(webUrl || webCustomTerpilih?.url || "");
+      if (!cekUrl.ok) {
+        setSibuk(false);
+        return setPesan(cekUrl.pesan);
+      }
+      const slugFinal = webCustomTerpilih ? webCustomTerpilih.slug : slugWebCustom(cekUrl.domain);
+      const namaFinal = (webNama.trim() || webCustomTerpilih?.nama || cekUrl.domain).slice(0, 64);
+      const kategoriFinal = webKategori || webCustomTerpilih?.kategori || "custom";
+      const deskripsiFinal = (webDeskripsi.trim() || webCustomTerpilih?.deskripsi || "").slice(0, 260);
+      const aksenFinal = webCustomTerpilih?.aksen || aksenKategoriWebCustom(kategoriFinal);
+
+      if (pilihProduk === SLUG_WEB_CUSTOM_BARU && simpanWebKeDaftar) {
+        const tok = await tokenSegar();
+        if (tok) {
+          await fetch("/api/studio/web-custom", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              aksi: "simpan",
+              url: cekUrl.url,
+              nama: namaFinal,
+              kategori: kategoriFinal,
+              deskripsi: deskripsiFinal,
+              aksen: aksenFinal,
+            }),
+          }).catch(() => null);
+          void muatMerek();
+        }
+      }
+
+      barisInsert.produk_slug = slugFinal;
+      barisInsert.naskah = {
+        webCustom: {
+          slug: slugFinal,
+          nama: namaFinal,
+          url: cekUrl.url,
+          domain: cekUrl.domain,
+          kategori: kategoriFinal,
+          deskripsi: deskripsiFinal,
+          aksen: aksenFinal,
+        },
+      };
+    }
+
     if (jadwalOtomatisIso) {
       barisInsert.status_tayang = "dijadwalkan";
       barisInsert.jadwal_tayang = jadwalOtomatisIso;
@@ -888,10 +951,64 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
     muat();
   }
 
+  const daftarWebCustom: WebCustomStudio[] = normalisasiDaftarWebCustom(
+    merek.find((m) => m.slug === "bakafrawi")?.profil?.web_custom,
+  );
+  const webCustomTerpilih = daftarWebCustom.find((w) => w.slug === pilihProduk) ?? null;
+  const sedangModeWebCustom = pilihMerek === "bakafrawi" && (pilihProduk === SLUG_WEB_CUSTOM_BARU || Boolean(webCustomTerpilih));
+
+  async function simpanWebCustomSekarang() {
+    const cekUrl = normalisasiUrlWeb(webUrl);
+    if (!cekUrl.ok) return setPesan(cekUrl.pesan);
+    setMenyimpanWeb(true);
+    setPesan("");
+    const tok = await tokenSegar();
+    const res = await fetch("/api/studio/web-custom", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        aksi: "simpan",
+        id: webCustomTerpilih?.id,
+        url: cekUrl.url,
+        nama: webNama.trim() || cekUrl.domain,
+        kategori: webKategori,
+        deskripsi: webDeskripsi.trim(),
+        aksen: aksenKategoriWebCustom(webKategori),
+      }),
+    }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    setMenyimpanWeb(false);
+    if (!j.ok) return setPesan(j.pesan ?? "Gagal menyimpan Web Custom.");
+    setPesan(j.pesan ?? "Web Custom tersimpan.");
+    await muatMerek();
+    if (j.item?.slug) setPilihProduk(String(j.item.slug));
+  }
+
+  async function hapusWebCustomSekarang(item: WebCustomStudio) {
+    if (!confirm(`Hapus "${item.nama}" (${item.url}) dari daftar Web Custom Studio?`)) return;
+    setMenyimpanWeb(true);
+    const tok = await tokenSegar();
+    const res = await fetch("/api/studio/web-custom", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ aksi: "hapus", id: item.id }),
+    }).catch(() => null);
+    const j = res ? await res.json().catch(() => ({})) : {};
+    setMenyimpanWeb(false);
+    if (!j.ok) return setPesan(j.pesan ?? "Gagal menghapus Web Custom.");
+    setPesan(j.pesan ?? "Web Custom dihapus.");
+    setPilihProduk("maktaba-pos");
+    setWebUrl("");
+    setWebNama("");
+    setWebDeskripsi("");
+    await muatMerek();
+  }
+
   const namaProduk = (slug: string) =>
     slug === "lekkopi-serial"
       ? "Serial Kartun Lek Kopi"
       : situs.produk.find((p) => p.slug === slug)?.nama ??
+        daftarWebCustom.find((w) => w.slug === slug)?.nama ??
         FOKUS_LEKKOPI.find((f) => f.slug === slug)?.nama ??
         slug;
   const merekAktif = merek.filter((m) => m.aktif);
@@ -1649,24 +1766,63 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="grid gap-1.5">
                     <span className="text-xs font-medium text-muted-foreground">
-                      {adalahBakafrawi ? "Produk" : "Fokus Konten"}
+                      {adalahBakafrawi ? "Produk / Website Custom" : "Fokus Konten"}
                     </span>
                     <select
                       name="produk"
                       value={pilihProduk}
                       onChange={(e) => {
-                        setPilihProduk(e.target.value);
+                        const val = e.target.value;
+                        setPilihProduk(val);
                         setUsulan([]);
                         setGalatUsulan("");
+                        if (val === SLUG_WEB_CUSTOM_BARU) {
+                          setWebUrl("");
+                          setWebNama("");
+                          setWebKategori("pesantren");
+                          setWebDeskripsi("");
+                          setSimpanWebKeDaftar(true);
+                          if (pilihJenis === "video") setPilihGaya("web-showcase");
+                        } else {
+                          const temuWeb = daftarWebCustom.find((w) => w.slug === val);
+                          if (temuWeb) {
+                            setWebUrl(temuWeb.url);
+                            setWebNama(temuWeb.nama);
+                            setWebKategori(temuWeb.kategori);
+                            setWebDeskripsi(temuWeb.deskripsi);
+                            if (pilihJenis === "video") setPilihGaya("web-showcase");
+                          }
+                        }
                       }}
                       className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
                     >
-                      {(adalahBakafrawi
-                        ? situs.produk.map((p) => ({ slug: p.slug, nama: p.nama }))
-                        : FOKUS_LEKKOPI
-                      ).map((p) => (
-                        <option key={p.slug} value={p.slug} className="bg-card">{p.nama}</option>
-                      ))}
+                      {adalahBakafrawi ? (
+                        <>
+                          <optgroup label="Produk Bakafrawi" className="bg-card">
+                            {situs.produk.map((p) => (
+                              <option key={p.slug} value={p.slug} className="bg-card">{p.nama}</option>
+                            ))}
+                          </optgroup>
+                          {daftarWebCustom.length > 0 && (
+                            <optgroup label="Web Custom Tersimpan" className="bg-card">
+                              {daftarWebCustom.map((w) => (
+                                <option key={w.slug} value={w.slug} className="bg-card">
+                                  🌐 {w.nama} ({w.url.replace(/^https?:\/\//, "")})
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          <optgroup label="Website Klien / Custom Baru" className="bg-card">
+                            <option value={SLUG_WEB_CUSTOM_BARU} className="bg-card">
+                              + Web Custom / URL Baru (mis. almansur.id)…
+                            </option>
+                          </optgroup>
+                        </>
+                      ) : (
+                        FOKUS_LEKKOPI.map((p) => (
+                          <option key={p.slug} value={p.slug} className="bg-card">{p.nama}</option>
+                        ))
+                      )}
                     </select>
                   </label>
                   <label className="grid gap-1.5">
@@ -1675,8 +1831,9 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                       name="jenis"
                       value={pilihJenis}
                       onChange={(e) => {
-                        setPilihJenis(e.target.value as "gambar" | "video");
-                        setPilihGaya("otomatis");
+                        const jns = e.target.value as "gambar" | "video";
+                        setPilihJenis(jns);
+                        setPilihGaya(jns === "video" && sedangModeWebCustom ? "web-showcase" : "otomatis");
                         setPilihKarakter("otomatis");
                       }}
                       className="h-10 rounded-lg border border-input bg-transparent px-3 text-sm"
@@ -1686,6 +1843,94 @@ export function Studio({ sesi, kepala }: { sesi: Session | null; kepala: ReactNo
                     </select>
                   </label>
                 </div>
+
+                {sedangModeWebCustom && (
+                  <div className="grid gap-3 rounded-xl border border-[#18B4A8]/35 bg-[#18B4A8]/[0.06] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Link2 className="size-4 text-[#34E0CD]" />
+                        <span className="text-xs font-semibold text-foreground">
+                          {webCustomTerpilih ? `Web Custom: ${webCustomTerpilih.nama}` : "Website Custom Baru (Auto-Scan & Potret Desktop + HP)"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={simpanWebCustomSekarang}
+                          disabled={menyimpanWeb || !webUrl.trim()}
+                          className="rounded-lg border border-[#34E0CD]/40 bg-[#18B4A8]/15 px-2.5 py-1 text-[11px] font-medium text-[#34E0CD] hover:bg-[#18B4A8]/25 disabled:opacity-50"
+                        >
+                          {menyimpanWeb ? "Menyimpan…" : webCustomTerpilih ? "Perbarui Data" : "Simpan ke Daftar"}
+                        </button>
+                        {webCustomTerpilih && (
+                          <button
+                            type="button"
+                            onClick={() => hapusWebCustomSekarang(webCustomTerpilih)}
+                            disabled={menyimpanWeb}
+                            className="rounded-lg border border-red-400/30 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-300 hover:bg-red-500/20 disabled:opacity-50"
+                          >
+                            Hapus
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <label className="grid gap-1">
+                        <span className="text-[11px] text-muted-foreground">URL Website *</span>
+                        <input
+                          type="text"
+                          value={webUrl}
+                          onChange={(e) => setWebUrl(e.target.value)}
+                          placeholder="almansur.id"
+                          className="h-9 rounded-lg border border-input bg-background/60 px-3 text-sm"
+                        />
+                      </label>
+                      <label className="grid gap-1">
+                        <span className="text-[11px] text-muted-foreground">Nama Proyek / Lembaga</span>
+                        <input
+                          type="text"
+                          value={webNama}
+                          onChange={(e) => setWebNama(e.target.value)}
+                          placeholder="Pesantren Al Manshur"
+                          className="h-9 rounded-lg border border-input bg-background/60 px-3 text-sm"
+                        />
+                      </label>
+                      <label className="grid gap-1">
+                        <span className="text-[11px] text-muted-foreground">Bidang / Sektor</span>
+                        <select
+                          value={webKategori}
+                          onChange={(e) => setWebKategori(e.target.value as KategoriWebCustom)}
+                          className="h-9 rounded-lg border border-input bg-background/60 px-3 text-sm"
+                        >
+                          {OPSI_KATEGORI_WEB_CUSTOM.map((k) => (
+                            <option key={k.kode} value={k.kode} className="bg-card">{k.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <label className="grid gap-1">
+                      <span className="text-[11px] text-muted-foreground">Ringkasan singkat (opsional — mesin otomatis membaca isi asli halaman web)</span>
+                      <input
+                        type="text"
+                        value={webDeskripsi}
+                        onChange={(e) => setWebDeskripsi(e.target.value)}
+                        placeholder="Mis. Website profil pondok pesantren, info pendaftaran santri baru, berita & galeri kegiatan"
+                        className="h-9 rounded-lg border border-input bg-background/60 px-3 text-sm"
+                      />
+                    </label>
+                    {!webCustomTerpilih && (
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={simpanWebKeDaftar}
+                          onChange={(e) => setSimpanWebKeDaftar(e.target.checked)}
+                          className="size-3.5 accent-[#18B4A8]"
+                        />
+                        <span>Simpan otomatis ke daftar Web Custom Studio (tidak tampil di katalog publik bakafrawi.com)</span>
+                      </label>
+                    )}
+                  </div>
+                )}
 
                 <div
                   className={

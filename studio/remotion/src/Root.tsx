@@ -17,6 +17,12 @@ import {
   FPS_MOTION,
   hitungDurasiCeritaMotion,
 } from './CeritaMotion';
+import {
+  contohWebShowcase,
+  FPS_SHOWCASE,
+  hitungDurasiWebShowcase,
+  WebShowcase,
+} from './WebShowcase';
 
 // Props bawaan = naskah contoh + narasi hasil `npm run siapkan` (bila sudah dibuat). Mesin Studio
 // menimpa seluruhnya lewat --props; durasi selalu dihitung ulang dari naskah + suara.
@@ -73,6 +79,16 @@ export const Root: React.FC = () => (
       durationInFrames={hitungDurasiCeritaMotion(contohCeritaMotion).total}
       defaultProps={contohCeritaMotion}
       calculateMetadata={({ props }) => ({ durationInFrames: hitungDurasiCeritaMotion(props).total })}
+    />
+    <Composition
+      id="WebShowcase"
+      component={WebShowcase}
+      width={1080}
+      height={1920}
+      fps={FPS_SHOWCASE}
+      durationInFrames={hitungDurasiWebShowcase(contohWebShowcase).total}
+      defaultProps={contohWebShowcase}
+      calculateMetadata={({ props }) => ({ durationInFrames: hitungDurasiWebShowcase(props).total })}
     />
   </>
 );

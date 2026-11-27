@@ -404,3 +404,30 @@ test('pilihKolamGayaDenganEvaluasi: utamakan gayaPrioritas di dalam kolamDasar &
     ['dark-keynote'],
   );
 });
+
+test('WebShowcase: hitungDurasiWebShowcase & naskahWebShowcaseTemplat memakai data scan web asli', async () => {
+  const { contohWebShowcase, hitungDurasiWebShowcase } = await import('../remotion/src/data/web-showcase.ts');
+  const { naskahWebShowcaseTemplat } = await import('./naskah.mjs');
+  const dur = hitungDurasiWebShowcase(contohWebShowcase);
+  assert.equal(dur.babak.length, 5);
+  assert.ok(dur.total >= 30 * 20);
+
+  const tmpl = naskahWebShowcaseTemplat(
+    {
+      nama: 'Pesantren Al Manshur',
+      kategori: 'pesanan',
+      sektorLabel: 'Pesantren & Lembaga Islam',
+      urlWeb: 'https://almansur.id',
+      fitur: [{ judul: 'Profil Lembaga', isi: 'Rapi' }],
+    },
+    { kontak: { whatsappTampil: '0857-1047-7372' } },
+    {
+      domain: 'almansur.id',
+      heading: ['Pondok Pesantren Mambaul Ulum', 'Pendaftaran Santri Baru', 'Berita Pondok'],
+      navigasi: ['Beranda', 'Profil', 'PPDB'],
+    },
+  );
+  assert.match(tmpl.hook.judul, /ALMANSUR\.ID/);
+  assert.deepEqual(tmpl.browser.chips, ['Beranda', 'Profil', 'PPDB']);
+  assert.equal(tmpl.spotlight.daftar[0], 'Pondok Pesantren Mambaul Ulum');
+});

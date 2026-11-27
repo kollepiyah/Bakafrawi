@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { ffmpeg, jalankan, probe } from './bank/alat.mjs';
 import { adaGambarAi, buatGambarAi, galatKuota } from './bank/gambar-ai.mjs';
-import { suaraDialogSerial } from './bank/suara.mjs';
+import { deteksiGenderCerita, suaraDialogSerial } from './bank/suara.mjs';
 import { buatMusikKafe, buatSfxOpening } from './opening-audio.mjs';
 import { panggilRouterWorkerJson, urutanPenyediaWorker } from './router-worker.mjs';
 import { pilihMusik } from './video.mjs';
@@ -57,7 +57,7 @@ export const SkemaNaskahSerial = z.object({
         namaPembicara: z.string().describe('Nama tokoh/narator yang bicara, mis. "Narator", "Mas Lek", "Mas Danu", "Mbak Rara", "Pak Budi", atau "Cerita Lek Kopi"'),
         dialog: z.string().describe('Kalimat dialog/narasi lisan natural Indonesia (12–48 kata sesuai target panjang episode, boleh 2–3 kalimat utuh)'),
         promptVisual: z.string().optional().describe('Prompt visual Inggris untuk ilustrasi sinematik 9:16 khusus mode dokumenter'),
-        jenisMotion: z.enum(['pembuka', 'perkamen', 'peta', 'ilustrasi', 'penutup']).optional(),
+        jenisMotion: z.enum(['pembuka', 'perkamen', 'peta', 'ilustrasi', 'arsip', 'penutup']).optional(),
         judulKartu: z.string().optional(),
         kataSorot: z.array(z.string()).optional(),
         sfx: z.enum(['pop', 'whoosh', 'tanpa']),
@@ -70,7 +70,7 @@ export const SkemaNaskahSerial = z.object({
   hashtag: z.array(z.string()).describe('3-5 hashtag relevan tanpa tanda #'),
 });
 
-const JENIS_MOTION_SAH = ['pembuka', 'perkamen', 'peta', 'ilustrasi', 'penutup'];
+const JENIS_MOTION_SAH = ['pembuka', 'perkamen', 'peta', 'ilustrasi', 'arsip', 'penutup'];
 
 /** Rapikan JSON mentah dari AI gratis (Cloudflare/OpenRouter/Groq) agar tidak gagal Zod hanya karena enum/field opsional. */
 export function normalisasiNaskahSerialWorker(mentah, { nomorEpisode = 1, gayaCerita = 'kedai' } = {}) {
@@ -556,8 +556,107 @@ function pecahJudulPerkamen(judul) {
 }
 
 /**
- * Konversi naskah dokumenter / manual + ilustrasi AI + audio ElevenLabs/Gemini
- * menjadi props komposisi Remotion `CeritaMotion`. Murni.
+ * Tentukan animasi karakter 2D tampak samping (berjalan, memeriksa arsip, dialog 2 tokoh, berdiri)
+ * secara otomatis dari isi narasi, tipe cerita, dan gender narator/tokoh. Murni.
+ */
+export function pilihKarakterCeritaOtomatis(
+  adegan,
+  idx,
+  { jenis = 'ilustrasi', genderNarator = 'pria', konteksCerita = '' } = {},
+) {
+  if (jenis === 'peta' || jenis === 'arsip') return undefined;
+  if (adegan?.karakter && typeof adegan.karakter === 'object' && adegan.karakter.aksi) {
+    return adegan.karakter;
+  }
+
+  const narasi = String(adegan?.dialog ?? adegan?.narasi ?? '').trim();
+  const gabung = `${konteksCerita} ${narasi}`;
+
+  const sebutWanita = /\b(mbak|mba|ibu|bunda|umi|ning|nisa|aisyah|siti|putri|ayu|dewi|rina|sari|indah|rara|gadis|wanita|perempuan|santriwati)\b/i.test(
+    narasi,
+  );
+  const sebutSantri = /\b(syekh|syeikh|ulama|kyai|kiai|gus|ustadz|santri|pesantren|pondok|sufi|dzikir|masjid|kitab|madrasah|ngaji)\b/i.test(
+    gabung,
+  );
+  const sebutPetualang = /\b(lek\s+\w+|pelabuhan|perkebunan|jejak|penjelajah|petualang|perjalanan|kapal|gunung|lembah|voc|nusantara|banten|yaman|mokha|stasiun)\b/i.test(
+    gabung,
+  );
+
+  const tokohUtama =
+    genderNarator === 'wanita' || (sebutWanita && !/\b(lek\s+\w+|mas\s+\w+|pak\s+\w+|syekh|kyai|arga)\b/i.test(narasi))
+      ? 'wanita'
+      : sebutSantri
+      ? 'santri'
+      : sebutPetualang
+      ? 'petualang'
+      : 'pria';
+
+  const propKopi = /\b(kopi|cangkir|seduh|teguk|qahwah|espresso|arabika|robusta)\b/i.test(narasi);
+  const propArsip = /\b(arsip|catatan|surat|dokumen|laporan|kartu|kitab|peta|daftar|naskah|buku|voc)\b/i.test(narasi);
+  const propLentera = /\b(malam|gelap|fajar|gua|stasiun|sunyi|lampu|lentera|bayangan|lorong)\b/i.test(narasi);
+
+  if (jenis === 'penutup') {
+    return {
+      aksi: 'berdiri_tenang',
+      tokohUtama,
+      properti: propKopi ? 'cangkir' : propArsip ? 'arsip' : 'lentera',
+    };
+  }
+
+  if (/\b(jalan|berjalan|melangkah|menelusuri|menyusuri|berangkat|menuju|pulang|perjalanan|keliling|melewati|pergi|melintas|ekspedisi|menyebar|tiba)\b/i.test(narasi)) {
+    return {
+      aksi: idx % 2 === 0 ? 'jalan_kanan' : 'jalan_kiri',
+      tokohUtama,
+      properti: propLentera ? 'lentera' : propArsip ? 'arsip' : propKopi ? 'cangkir' : 'tas',
+    };
+  }
+
+  if (/\b(bertemu|berbicara|menyerahkan|menunjukkan|bertanya|pedagang|warga|penduduk|kakak|ibu|guru|murid|sahabat|petani|tamu|orang|mereka)\b/i.test(narasi)) {
+    const tokohKedua =
+      tokohUtama === 'wanita'
+        ? 'pria'
+        : sebutWanita
+        ? 'wanita'
+        : sebutSantri
+        ? 'petualang'
+        : 'pria';
+    return {
+      aksi: 'dialog_dua',
+      tokohUtama,
+      tokohKedua,
+      properti: propArsip ? 'arsip' : propKopi ? 'cangkir' : 'lentera',
+    };
+  }
+
+  if (/\b(menemukan|membaca|memeriksa|meneliti|melihat|membuka|arsip|catatan|surat|dokumen|tas|rekaman|jejak|petunjuk|kitab)\b/i.test(narasi)) {
+    return {
+      aksi: 'periksa_arsip',
+      tokohUtama,
+      properti: propArsip ? 'arsip' : 'lentera',
+    };
+  }
+
+  if (idx === 0) {
+    return {
+      aksi: 'jalan_kanan',
+      tokohUtama,
+      properti: propLentera ? 'lentera' : propKopi ? 'cangkir' : 'tas',
+    };
+  }
+
+  const pola = ['jalan_kanan', 'tunjuk_arsip', 'jalan_kiri', 'dialog_dua'];
+  const aksi = pola[idx % pola.length];
+  return {
+    aksi,
+    tokohUtama,
+    ...(aksi === 'dialog_dua' ? { tokohKedua: tokohUtama === 'wanita' ? 'pria' : 'wanita' } : {}),
+    properti: propArsip ? 'arsip' : propKopi ? 'cangkir' : propLentera ? 'lentera' : 'tas',
+  };
+}
+
+/**
+ * Konversi naskah dokumenter / manual + ilustrasi AI + audio (ElevenLabs/Gemini/Edge)
+ * menjadi props komposisi Remotion `CeritaMotion` lengkap dengan karakter 2D berjalan & berakting. Murni.
  */
 export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
   const temaBawaan = konteks.temaVisual === 'perkamen' ? 'perkamen' : 'malam';
@@ -569,6 +668,8 @@ export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
   const nomorEpisode = Math.max(1, Math.round(Number(konteks.nomorEpisode) || 1));
   const judulEpisode = String(naskah?.judulEpisode || `Episode ${nomorEpisode}`).trim().slice(0, 88);
   const judulSerial = String(konteks.judulSerial || 'Jejak Cerita').trim().slice(0, 60);
+  const genderNarator = konteks.genderNarator === 'wanita' ? 'wanita' : 'pria';
+  const konteksCerita = `${judulSerial} ${judulEpisode} ${naskah?.tema ?? ''}`;
 
   const sumberAdegan = (naskah?.adegan ?? []).slice(0, 16);
   const adegan = sumberAdegan.map((a, idx) => {
@@ -618,6 +719,7 @@ export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
     let plakatTahun;
     let plakatTempat;
     let wilayahPeta;
+    let stempelArsip;
 
     if (jenis === 'pembuka') {
       lencanaBagian = kartuWaktu || `Bagian ${nomorEpisode}`;
@@ -640,6 +742,10 @@ export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
         judulBarisKedua = pecah.barisDua;
       }
       pitaEra = kartuWaktu || undefined;
+    } else if (jenis === 'arsip') {
+      judulKartu = judulKartuAsli || 'CATATAN ARSIP';
+      pitaEra = kartuWaktu || undefined;
+      stempelArsip = String(a?.stempelArsip ?? '').trim() || kartuWaktu || 'TERCATAT';
     } else if (jenis === 'peta') {
       const teksKonteksPeta = [judulSerial, judulEpisode, judulKartuAsli, kartuWaktu, narasi, naskah?.tema]
         .filter(Boolean)
@@ -675,6 +781,12 @@ export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
       ? 'zoom_masuk'
       : 'geser_kanan';
 
+    const karakter = pilihKarakterCeritaOtomatis(a, idx, {
+      jenis,
+      genderNarator,
+      konteksCerita,
+    });
+
     return {
       nomor: Number(a?.nomor) || idx + 1,
       jenis,
@@ -689,6 +801,8 @@ export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
       ...(plakatTahun ? { plakatTahun } : {}),
       ...(plakatTempat ? { plakatTempat } : {}),
       ...(wilayahPeta ? { wilayahPeta } : {}),
+      ...(stempelArsip ? { stempelArsip } : {}),
+      ...(karakter ? { karakter } : {}),
       narasi,
       kataSorot,
       ...(itemSuara.berkas ? { suaraBerkas: path.basename(itemSuara.berkas) } : {}),
@@ -785,7 +899,10 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
   const bersambung = Boolean(metaTugas.bersambung);
   const gayaCerita = metaTugas.gayaCerita === 'dokumenter' ? 'dokumenter' : 'kedai';
   const temaVisual = metaTugas.temaVisual === 'perkamen' ? 'perkamen' : 'malam';
-  const genderNarator = metaTugas.genderNarator === 'wanita' ? 'wanita' : 'pria';
+  const genderEksplisit =
+    metaTugas.genderNarator === 'wanita' || metaTugas.genderNarator === 'pria'
+      ? metaTugas.genderNarator
+      : null;
   const hasilRiset = String(metaTugas.hasilRiset ?? '').trim();
   const suaraTokoh = metaTugas.suaraTokoh || serialObj.suaraTokoh || {};
   const daftarLatar = Array.isArray(konfig.latar) ? konfig.latar : [];
@@ -883,7 +1000,15 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
     }
   }
 
-  // 2. Buat audio multi-tokoh (ElevenLabs dengan timestamps untuk lip-sync/kinetik + fallback berjenjang)
+  // 2. Buat audio multi-tokoh (ElevenLabs / Gemini / Edge TTS Indonesia natural + timestamps kata)
+  const teksUntukGender = [
+    judulSerial,
+    naskah.judulEpisode,
+    metaTugas.ide || tugas?.arahan || '',
+    ...(naskah.adegan ?? []).map((a) => a.dialog),
+  ].join(' ');
+  const genderNarator = deteksiGenderCerita(teksUntukGender, genderEksplisit);
+
   const daftarVoice = Array.isArray(merekBakafrawi?.profil?.suara_elevenlabs)
     ? merekBakafrawi.profil.suara_elevenlabs
     : [];
@@ -926,6 +1051,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
         judulSerial,
         nomorEpisode,
         temaVisual,
+        genderNarator,
         petaLatar,
         petaVisualAi,
         suaraHasil: suaraHasil.item,

@@ -1,7 +1,7 @@
 // Komposisi utama video iklan 9:16. Lapisan (bawah → atas): latar berkisi, adegan, maskot, caption,
 // bilah progres, lencana langkah & nama merek. Narasi per adegan + musik yang mengecil saat narasi.
 import React from 'react';
-import { AbsoluteFill, Audio, interpolate, Sequence, staticFile, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, Audio, interpolate, Sequence, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Latar, Lencana, Merek, NotifPov, PitaHook, Progres } from './components/Bingkai';
 import { Caption } from './components/Caption';
 import { tataLetak, useKeluar } from './components/dasar';
@@ -40,15 +40,20 @@ const Isi: React.FC<PIsi> = ({ a, merek, durasi, atas, jumlah, layar, gelap }) =
   }
 };
 
-/** Area visual: isi adegan diletakkan di tengah area dan diskalakan agar muat, lalu memudar di akhir. */
+/** Area visual: isi adegan masuk dengan pegas halus, diskalakan agar muat, lalu meluncur keluar. */
 const Panggung: React.FC<PIsi & { bawah: number }> = (p) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const masuk = spring({ frame, fps, config: { damping: 16, stiffness: 135 } });
   const keluar = useKeluar(p.durasi);
   if (p.a.jenis === 'penutup') return <Isi {...p} />;
   // Tak pernah membesar di atas 1: konten dirancang ≤ 960 px lebar supaya tak menyentuh bilah progres.
   const tinggi = p.a.jenis === 'layar' ? 900 : 820;
   const skala = Math.min(1, (p.bawah - p.atas) / tinggi);
+  const op = Math.min(masuk, keluar);
+  const geserY = (1 - masuk) * 26 - (1 - keluar) * 20;
   return (
-    <div style={{ position: 'absolute', left: 0, right: 0, top: p.atas, height: p.bawah - p.atas, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: keluar, transform: `scale(${(0.96 + 0.04 * keluar) * skala})` }}>
+    <div style={{ position: 'absolute', left: 0, right: 0, top: p.atas, height: p.bawah - p.atas, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: op, transform: `translateY(${geserY}px) scale(${(0.95 + 0.05 * op) * skala})` }}>
       <Isi {...p} />
     </div>
   );

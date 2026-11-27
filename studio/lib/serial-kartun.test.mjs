@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { gabungRiwayatEpisode, normalisasiNaskahSerialWorker, siapkanPropsCeritaMotion, siapkanPropsSerialKartun, SkemaNaskahSerial } from './serial-kartun.mjs';
+import { gabungRiwayatEpisode, normalisasiNaskahSerialWorker, pilihKarakterCeritaOtomatis, siapkanPropsCeritaMotion, siapkanPropsSerialKartun, SkemaNaskahSerial } from './serial-kartun.mjs';
 import { KANDIDAT_MODEL_WORKER, parseJsonToleran, urutanPenyediaWorker } from './router-worker.mjs';
-import { pilihVoicePerTokoh, suaraDialogSerial } from './bank/suara.mjs';
+import { deteksiGenderCerita, kataDariMetadataEdge, pilihVoicePerTokoh, suaraDialogSerial } from './bank/suara.mjs';
 import { promptGambar } from './bank/gambar-ai.mjs';
 import {
   contohSerialKartun,
@@ -386,7 +386,7 @@ test('siapkanPropsCeritaMotion memetakan adegan pembuka/perkamen/peta/penutup da
   assert.ok(hitungDurasiCeritaMotion(props).total > 500);
 });
 
-test('narator pria tidak jatuh ke suara wanita saat otomatis maupun saat ElevenLabs menolak Voice Library', async () => {
+test('narator pria/wanita beralih bersih ke suara Indonesia natural (Edge/Gemini) saat ElevenLabs 402 & tidak mengulang error tiap adegan', async () => {
   const daftarFav = [
     { id: 'm6elNOMAsoqePTs244dg', nama: 'Mbak Indah' },
     { id: 'R86jddkroI9bJwXFfjsr', nama: 'Mas Jowo' },
@@ -396,34 +396,98 @@ test('narator pria tidak jatuh ke suara wanita saat otomatis maupun saat ElevenL
   assert.equal(pilihVoicePerTokoh('narator', { daftarVoice: daftarFav, gender: 'pria' }), 'R86jddkroI9bJwXFfjsr');
   assert.equal(pilihVoicePerTokoh('narator', { daftarVoice: daftarFav, gender: 'wanita' }), 'm6elNOMAsoqePTs244dg');
 
-  // Saat Voice Library ditolak ElevenLabs (400 bad_request), coba voice premade pria ElevenLabs dulu agar timestamps tetap jalan
+  // Deteksi gender cerita otomatis & parser WordBoundary Edge TTS
+  assert.equal(deteksiGenderCerita('Nisa seorang gadis yang menunggu ibu di stasiun.'), 'wanita');
+  assert.equal(deteksiGenderCerita('Lek Aceng menelusuri pelabuhan Banten bersama pedagang.'), 'pria');
+  assert.equal(deteksiGenderCerita('Nisa pergi ke stasiun.', 'pria'), 'pria');
+  const kataEdge = kataDariMetadataEdge({
+    Metadata: [
+      { Type: 'WordBoundary', Data: { Offset: 1_000_000, Duration: 2_000_000, text: { Text: 'Kisah' } } },
+      { Type: 'WordBoundary', Data: { Offset: 3_500_000, Duration: 3_000_000, text: { Text: 'kopi' } } },
+    ],
+  });
+  assert.deepEqual(kataEdge, [
+    { teks: 'Kisah', mulai: 0.1, selesai: 0.3 },
+    { teks: 'kopi', mulai: 0.35, selesai: 0.65 },
+  ]);
+
+  // Saat Voice Library ditolak ElevenLabs (402 paid_plan_required), langsung beralih ke suara Indonesia natural
+  // (tanpa fallback bule Adam) dan TIDAK mencoba ulang ElevenLabs di adegan ke-2 & ke-3!
   const dir = await mkdtemp(path.join(os.tmpdir(), 'suara-gender-'));
   try {
     const panggilan = [];
     const hasil = await suaraDialogSerial(
-      [{ teks: 'Kisah Qahwah dari Yaman.', pembicara: 'narator', gender: 'pria' }],
+      [
+        { teks: 'Kisah Qahwah dari Yaman.', pembicara: 'narator', gender: 'pria' },
+        { teks: 'Lek Aceng menelusuri pelabuhan Banten.', pembicara: 'narator', gender: 'pria' },
+        { teks: 'Biji kopi mulai menyebar di Nusantara.', pembicara: 'narator', gender: 'pria' },
+      ],
       dir,
       {
         jalur: 'elevenlabs',
-        suaraTokoh: { narator: '1k39YpzqXZn52BgyLyGO' },
+        suaraTokoh: { narator: 'kYZOIefFr4yPpf7CGkHt' },
         buat: async (_t, _k, j, info) => {
-          panggilan.push({ j, voiceId: info.voiceId, geminiSuara: info.profil?.geminiSuara });
-          if (j === 'elevenlabs' && info.voiceId === '1k39YpzqXZn52BgyLyGO') {
-            throw new Error('ElevenLabs TTS 400: {"detail":{"code":"bad_request","message":"You need to upgrade to use library voices"}}');
+          panggilan.push({ j, voiceId: info.voiceId, edgeSuara: info.profil?.edgeSuara, geminiSuara: info.profil?.geminiSuara });
+          if (j === 'elevenlabs') {
+            throw new Error('ElevenLabs TTS 402: {"detail":{"code":"paid_plan_required","message":"Free users cannot use library voices via the API."}}');
           }
-          return { kata: [{ teks: 'Kisah', mulai: 0.1, selesai: 0.4 }], voiceId: info.voiceId };
+          if (j === 'gemini') {
+            throw new Error('Gemini TTS 404: model not found');
+          }
+          return { kata: [{ teks: 'Kisah', mulai: 0.1, selesai: 0.4 }], voiceId: info.profil?.edgeSuara };
         },
       },
     );
 
-    assert.equal(hasil.item[0].jalur, 'elevenlabs');
-    assert.equal(hasil.item[0].voiceId, 'pNInz6obpgDQGcFmaJgB');
+    // ElevenLabs hanya dipanggil 1x (adegan 1), tidak 3x!
+    assert.equal(panggilan.filter((p) => p.j === 'elevenlabs').length, 1);
+    assert.equal(hasil.item.length, 3);
+    assert.equal(hasil.item[0].jalur, 'edge');
+    assert.equal(hasil.item[0].voiceId, 'id-ID-ArdiNeural');
     assert.equal(hasil.item[0].kata.length, 1);
-    assert.equal(panggilan[0].geminiSuara, 'Charon');
-    assert.match(hasil.catatan[0] ?? '', /You need to upgrade to use library voices/);
+    assert.equal(hasil.item[2].jalur, 'edge');
+    assert.equal(hasil.catatan.length, 1);
+    assert.match(hasil.catatan[0] ?? '', /edge natural \(id-ID-ArdiNeural\)/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('pilihKarakterCeritaOtomatis & siapkanPropsCeritaMotion menyematkan animasi karakter berjalan, arsip & gender cerita', () => {
+  const kJalan = pilihKarakterCeritaOtomatis(
+    { dialog: 'Lek Aceng berjalan menyusuri pelabuhan Banten di pagi hari.' },
+    0,
+    { jenis: 'pembuka', genderNarator: 'pria', konteksCerita: 'Jejak Kopi Nusantara' },
+  );
+  assert.equal(kJalan.aksi, 'jalan_kanan');
+  assert.equal(kJalan.tokohUtama, 'petualang');
+
+  const kDialog = pilihKarakterCeritaOtomatis(
+    { dialog: 'Nisa bertemu dengan ibunya dan menyerahkan surat lama itu.' },
+    1,
+    { jenis: 'ilustrasi', genderNarator: 'wanita', konteksCerita: 'Stasiun Mati' },
+  );
+  assert.equal(kDialog.aksi, 'dialog_dua');
+  assert.equal(kDialog.tokohUtama, 'wanita');
+  assert.equal(kDialog.properti, 'arsip');
+
+  const props = siapkanPropsCeritaMotion(
+    {
+      judulEpisode: 'Arsip Banten',
+      adegan: [
+        { nomor: 1, jenisMotion: 'pembuka', dialog: 'Lek Aceng melangkah masuk pelabuhan Banten.' },
+        { nomor: 2, jenisMotion: 'arsip', judulKartu: 'CATATAN VOC', kartuWaktu: 'BANTEN · 1696', dialog: 'Tercatat kiriman pertama biji kopi Arabika.' },
+        { nomor: 3, jenisMotion: 'penutup', dialog: 'Secangkir kopi hangat menyimpan sejarah panjang.' },
+      ],
+    },
+    { judulSerial: 'Biji Merah', nomorEpisode: 1, temaVisual: 'perkamen', genderNarator: 'pria' },
+  );
+  assert.equal(props.adegan[0].karakter?.aksi, 'jalan_kanan');
+  assert.equal(props.adegan[1].jenis, 'arsip');
+  assert.equal(props.adegan[1].karakter, undefined);
+  assert.equal(props.adegan[1].stempelArsip, 'BANTEN · 1696');
+  assert.equal(props.adegan[2].karakter?.aksi, 'berdiri_tenang');
+  assert.equal(props.adegan[2].karakter?.properti, 'cangkir');
 });
 
 test('promptGambar mode ilustrasi sejarah tidak menyisipkan prompt gelas meja kafe, dan peta Nusantara terdeteksi otomatis', () => {

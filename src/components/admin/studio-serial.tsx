@@ -775,7 +775,7 @@ export function PanelSerialKartun({
             >
               <div className="text-xs font-semibold">Dokumenter / Cerita Motion</div>
               <div className="mt-0.5 text-[11px] opacity-80">
-                Type motion + riset Google + ilustrasi AI / gulungan perkamen / peta kuno.
+                Karakter 2D berjalan &amp; dialog + ilustrasi AI + arsip berstempel / gulungan perkamen / peta kuno.
               </div>
             </button>
           </div>
