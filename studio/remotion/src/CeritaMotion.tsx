@@ -260,9 +260,10 @@ const TeksKinetik: React.FC<{
                 fontSize: ukuranFont,
                 fontWeight: 800,
                 lineHeight: 1.24,
-                opacity: 0.18,
-                color: gaya === 'perkamen' ? '#F8EED8' : '#FFFFFF',
-                padding: gaya === 'perkamen' && disorot ? '2px 12px' : '0px 2px',
+                opacity: 0,
+                color: '#FFFFFF',
+                padding: gaya === 'perkamen' && disorot ? '3px 14px 5px' : '0px 2px',
+                display: 'inline-block',
               }}
             >
               {item.kata}
@@ -495,6 +496,8 @@ const AdeganPembuka: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numbe
   const pPil = pegasHalus(frame, fps, 10);
   const pJudul = pegasHalus(frame, fps, 16);
   const pSub = pegasHalus(frame, fps, 24);
+  const panjangJudul = (adegan.judulKartu ?? '').trim().length;
+  const ukuranJudul = panjangJudul > 20 ? 70 : panjangJudul > 12 ? 86 : 114;
 
   return (
     <AbsoluteFill style={{ background: '#080A0D' }}>
@@ -509,21 +512,21 @@ const AdeganPembuka: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numbe
       <AbsoluteFill
         style={{
           background:
-            'linear-gradient(180deg, rgba(6,8,12,0.52) 0%, rgba(6,8,12,0.06) 24%, rgba(6,8,12,0.12) 48%, rgba(8,10,13,0.88) 69%, #080A0D 82%)',
+            'linear-gradient(180deg, rgba(6,8,12,0.52) 0%, rgba(6,8,12,0.06) 24%, rgba(6,8,12,0.18) 44%, rgba(8,10,13,0.9) 66%, #080A0D 80%)',
         }}
       />
       <BingkaiSinematik gelap />
       <WatermarkAkun akun={akun} terang />
 
-      {/* Hook teks kinetik di atas kartu judul */}
+      {/* Hook teks kinetik di atas kartu judul dengan jarak aman anti-tabrakan */}
       <TeksKinetik
         narasi={adegan.narasi}
         durasiDetik={adegan.durasi}
         kata={adegan.kata}
         kataSorot={adegan.kataSorot}
         gaya="malam"
-        bottom={555}
-        ukuranFont={52}
+        bottom={660}
+        ukuranFont={48}
       />
 
       {/* Kartu Judul Editorial di bawah (ala @waktunya.malam) */}
@@ -532,7 +535,7 @@ const AdeganPembuka: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numbe
           position: 'absolute',
           left: 64,
           right: 64,
-          bottom: 205,
+          bottom: 185,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -547,12 +550,13 @@ const AdeganPembuka: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numbe
               background: '#EFE5CF',
               color: '#17130F',
               fontFamily: FONT_SANS,
-              fontSize: 25,
+              fontSize: 22,
               fontWeight: 800,
-              padding: '7px 26px',
+              padding: '6px 24px',
               borderRadius: 999,
               boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
               marginBottom: 14,
+              maxWidth: '92%',
             }}
           >
             {adegan.lencanaBagian}
@@ -565,9 +569,9 @@ const AdeganPembuka: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numbe
               transform: `translateY(${interpolate(pJudul, [0, 1], [24, 0])}px)`,
               opacity: pJudul,
               fontFamily: FONT_SERIF,
-              fontSize: 122,
+              fontSize: ukuranJudul,
               fontWeight: 800,
-              lineHeight: 0.98,
+              lineHeight: 1.04,
               color: '#F7EFE0',
               letterSpacing: '-0.015em',
               textShadow: '0 10px 32px rgba(0,0,0,0.85)',
@@ -580,11 +584,11 @@ const AdeganPembuka: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numbe
         {adegan.subjudulKartu ? (
           <div
             style={{
-              marginTop: 14,
+              marginTop: 12,
               transform: `translateY(${interpolate(pSub, [0, 1], [16, 0])}px)`,
               opacity: pSub,
               fontFamily: FONT_SERIF_ITALIC,
-              fontSize: 44,
+              fontSize: 38,
               fontWeight: 500,
               color: '#E5BC5B',
               textShadow: '0 4px 18px rgba(0,0,0,0.85)',
@@ -764,7 +768,7 @@ const AdeganIlustrasi: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: num
   );
 };
 
-/** Adegan 3: Peta Kuno SVG Animasi Rute Bercahaya (Mokha → Dunia, ala @motionformat). */
+/** Adegan 3: Peta Kuno SVG Animasi Rute Bercahaya (mendukung wilayah Mokha & Nusantara, ala @motionformat). */
 const AdeganPetaKuno: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: number; akun: string }> = ({
   adegan,
   durasiBingkai,
@@ -777,51 +781,110 @@ const AdeganPetaKuno: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numb
   const zoomPeta = interpolate(frame, [0, durasiBingkai], [1.0, 1.07], { extrapolateRight: 'clamp' });
   const rotasiKompas = interpolate(frame, [0, durasiBingkai], [-8, 18]);
 
-  // Pusat: Pelabuhan Mokha, Yaman (x: 470, y: 1090)
-  const rute = [
-    {
-      nama: 'Kairo',
-      path: 'M 470 1090 Q 385 950 325 795',
-      panjang: 360,
-      tunda: 14,
-      x: 325,
-      y: 795,
-      labelDx: -14,
-      labelDy: -24,
-    },
-    {
-      nama: 'Istanbul',
-      path: 'M 470 1090 Q 445 865 395 650',
-      panjang: 480,
-      tunda: 26,
-      x: 395,
-      y: 650,
-      labelDx: 18,
-      labelDy: -20,
-    },
-    {
-      nama: 'Eropa',
-      path: 'M 470 1090 Q 320 830 165 620',
-      panjang: 590,
-      tunda: 38,
-      x: 165,
-      y: 620,
-      labelDx: 14,
-      labelDy: -22,
-    },
-    {
-      nama: 'Nusantara',
-      path: 'M 470 1090 Q 715 1190 925 1135',
-      panjang: 520,
-      tunda: 48,
-      x: 925,
-      y: 1135,
-      labelDx: -96,
-      labelDy: -26,
-    },
-  ];
+  const adalahNusantara = adegan.wilayahPeta === 'nusantara';
+  const pusat = adalahNusantara
+    ? { x: 425, y: 1125, nama: 'Jawa' }
+    : { x: 470, y: 1090, nama: 'Mokha' };
+
+  const rute = adalahNusantara
+    ? [
+        {
+          nama: 'Aceh · Gayo',
+          path: 'M 425 1125 Q 250 1005 150 795',
+          panjang: 460,
+          tunda: 14,
+          x: 150,
+          y: 795,
+          labelDx: 18,
+          labelDy: -18,
+        },
+        {
+          nama: 'Sumatera',
+          path: 'M 425 1125 Q 320 1055 260 950',
+          panjang: 260,
+          tunda: 22,
+          x: 260,
+          y: 950,
+          labelDx: -135,
+          labelDy: 34,
+        },
+        {
+          nama: 'Bali',
+          path: 'M 425 1125 Q 525 1165 612 1152',
+          panjang: 210,
+          tunda: 30,
+          x: 612,
+          y: 1152,
+          labelDx: -16,
+          labelDy: 40,
+        },
+        {
+          nama: 'Sulawesi',
+          path: 'M 425 1125 Q 615 1045 775 940',
+          panjang: 430,
+          tunda: 38,
+          x: 775,
+          y: 940,
+          labelDx: 18,
+          labelDy: -16,
+        },
+        {
+          nama: 'Maluku',
+          path: 'M 425 1125 Q 725 1095 935 965',
+          panjang: 560,
+          tunda: 48,
+          x: 935,
+          y: 965,
+          labelDx: -98,
+          labelDy: -22,
+        },
+      ]
+    : [
+        {
+          nama: 'Kairo',
+          path: 'M 470 1090 Q 385 950 325 795',
+          panjang: 360,
+          tunda: 14,
+          x: 325,
+          y: 795,
+          labelDx: -14,
+          labelDy: -24,
+        },
+        {
+          nama: 'Istanbul',
+          path: 'M 470 1090 Q 445 865 395 650',
+          panjang: 480,
+          tunda: 26,
+          x: 395,
+          y: 650,
+          labelDx: 18,
+          labelDy: -20,
+        },
+        {
+          nama: 'Eropa',
+          path: 'M 470 1090 Q 320 830 165 620',
+          panjang: 590,
+          tunda: 38,
+          x: 165,
+          y: 620,
+          labelDx: 14,
+          labelDy: -22,
+        },
+        {
+          nama: 'Nusantara',
+          path: 'M 470 1090 Q 715 1190 925 1135',
+          panjang: 520,
+          tunda: 48,
+          x: 925,
+          y: 1135,
+          labelDx: -96,
+          labelDy: -26,
+        },
+      ];
 
   const denyutPusat = 1 + 0.14 * Math.sin(frame * 0.14);
+  const judulPeta = adegan.judulKartu || (adalahNusantara ? 'NUSANTARA' : 'MOKHA');
+  const ukuranJudulPeta = judulPeta.length > 10 ? 78 : judulPeta.length > 7 ? 92 : 108;
 
   return (
     <AbsoluteFill style={{ background: '#162421', overflow: 'hidden' }}>
@@ -864,86 +927,178 @@ const AdeganPetaKuno: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numb
             <line key={`lon-${x}`} x1={x} y1={420} x2={x} y2={1600} stroke="rgba(232,209,154,0.12)" strokeWidth={1.5} />
           ))}
 
-          {/* Garis rhumb radial halus dari Mokha */}
+          {/* Garis rhumb radial halus dari titik pusat */}
           {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg) => {
             const rad = (deg * Math.PI) / 180;
             return (
               <line
                 key={`rhumb-${deg}`}
-                x1={470}
-                y1={1090}
-                x2={470 + Math.cos(rad) * 760}
-                y2={1090 + Math.sin(rad) * 760}
+                x1={pusat.x}
+                y1={pusat.y}
+                x2={pusat.x + Math.cos(rad) * 760}
+                y2={pusat.y + Math.sin(rad) * 760}
                 stroke="rgba(243,213,141,0.08)"
                 strokeWidth={1.2}
               />
             );
           })}
 
-          {/* Daratan bergaya peta kuno: Eropa Selatan & Anatolia */}
-          <path
-            d="M -20 510 L 140 535 L 230 600 L 295 585 L 350 645 L 485 655 L 550 615 L 660 660 L 820 580 L 1090 540 L 1090 420 L -20 420 Z"
-            fill="url(#daratanKuno)"
-            stroke="#DFB87A"
-            strokeOpacity="0.45"
-            strokeWidth={2.5}
-          />
+          {adalahNusantara ? (
+            <g>
+              {/* Semenanjung Malaya (konteks utara) */}
+              <path
+                d="M 245 520 Q 290 610 355 715 L 395 700 Q 345 600 315 520 Z"
+                fill="url(#daratanKuno)"
+                fillOpacity="0.65"
+                stroke="#DFB87A"
+                strokeOpacity="0.35"
+                strokeWidth={2}
+              />
+              {/* Pulau Sumatera (Aceh/Gayo di utara sampai Lampung) */}
+              <path
+                d="M 118 765 Q 165 755 210 815 L 335 968 Q 368 1020 345 1072 L 305 1084 Q 245 1025 188 942 L 108 825 Z"
+                fill="#A66542"
+                stroke="#F2CD7E"
+                strokeOpacity="0.68"
+                strokeWidth={3}
+              />
+              {/* Pulau Jawa (Batavia, Priangan, Parakan, Jawa Timur) */}
+              <path
+                d="M 358 1098 Q 445 1092 548 1118 L 585 1134 L 574 1166 Q 475 1164 362 1136 Z"
+                fill="#A66542"
+                stroke="#F2CD7E"
+                strokeOpacity="0.72"
+                strokeWidth={3}
+              />
+              {/* Bali & Nusa Tenggara */}
+              <path
+                d="M 594 1138 Q 624 1134 636 1152 L 614 1168 L 592 1156 Z"
+                fill="#A66542"
+                stroke="#F2CD7E"
+                strokeOpacity="0.65"
+                strokeWidth={2.5}
+              />
+              <path
+                d="M 652 1152 Q 722 1152 810 1164 L 802 1184 Q 715 1178 650 1170 Z"
+                fill="url(#daratanKuno)"
+                stroke="#DFB87A"
+                strokeOpacity="0.48"
+                strokeWidth={2}
+              />
+              {/* Pulau Kalimantan */}
+              <path
+                d="M 485 752 Q 585 710 665 758 L 692 845 Q 684 940 622 985 L 512 978 Q 458 925 462 842 Z"
+                fill="url(#daratanKuno)"
+                stroke="#DFB87A"
+                strokeOpacity="0.52"
+                strokeWidth={2.5}
+              />
+              {/* Pulau Sulawesi (bentuk K khas) */}
+              <path
+                d="M 738 830 Q 805 805 858 835 L 822 868 Q 785 885 795 925 L 842 968 L 818 1005 L 772 958 L 768 1030 L 732 1022 L 736 932 Z"
+                fill="#A66542"
+                stroke="#F2CD7E"
+                strokeOpacity="0.65"
+                strokeWidth={2.5}
+              />
+              {/* Kepulauan Maluku & Halmahera */}
+              <path
+                d="M 915 842 Q 952 852 962 908 L 938 925 L 912 885 Z M 902 958 Q 948 948 982 968 L 972 992 Q 930 988 902 978 Z"
+                fill="url(#daratanKuno)"
+                stroke="#DFB87A"
+                strokeOpacity="0.55"
+                strokeWidth={2}
+              />
+              {/* Label laut halus */}
+              <text
+                x={468}
+                y={1046}
+                fill="rgba(232,216,176,0.36)"
+                fontFamily={FONT_SERIF_ITALIC}
+                fontSize={24}
+                letterSpacing="4"
+              >
+                Laut Jawa
+              </text>
+              <text
+                x={518}
+                y={882}
+                fill="rgba(255,240,206,0.38)"
+                fontFamily={FONT_SERIF}
+                fontSize={22}
+                letterSpacing="5"
+              >
+                BORNEO
+              </text>
+            </g>
+          ) : (
+            <g>
+              {/* Daratan bergaya peta kuno: Eropa Selatan & Anatolia */}
+              <path
+                d="M -20 510 L 140 535 L 230 600 L 295 585 L 350 645 L 485 655 L 550 615 L 660 660 L 820 580 L 1090 540 L 1090 420 L -20 420 Z"
+                fill="url(#daratanKuno)"
+                stroke="#DFB87A"
+                strokeOpacity="0.45"
+                strokeWidth={2.5}
+              />
 
-          {/* Afrika Timur Laut, Mesir & Tanduk Afrika */}
-          <path
-            d="M -20 745 L 220 755 L 345 785 L 378 860 L 420 985 L 448 1110 L 495 1175 L 435 1290 L 340 1440 L -20 1460 Z"
-            fill="url(#daratanKuno)"
-            stroke="#DFB87A"
-            strokeOpacity="0.45"
-            strokeWidth={2.5}
-          />
+              {/* Afrika Timur Laut, Mesir & Tanduk Afrika */}
+              <path
+                d="M -20 745 L 220 755 L 345 785 L 378 860 L 420 985 L 448 1110 L 495 1175 L 435 1290 L 340 1440 L -20 1460 Z"
+                fill="url(#daratanKuno)"
+                stroke="#DFB87A"
+                strokeOpacity="0.45"
+                strokeWidth={2.5}
+              />
 
-          {/* Jazirah Arab & Yaman (Pusat Qahwah) */}
-          <path
-            d="M 380 770 L 495 725 L 610 750 L 675 835 L 725 945 L 640 1055 L 520 1120 L 462 1102 L 432 1015 L 395 900 Z"
-            fill="#A66542"
-            stroke="#F2CD7E"
-            strokeOpacity="0.65"
-            strokeWidth={3}
-          />
+              {/* Jazirah Arab & Yaman (Pusat Qahwah) */}
+              <path
+                d="M 380 770 L 495 725 L 610 750 L 675 835 L 725 945 L 640 1055 L 520 1120 L 462 1102 L 432 1015 L 395 900 Z"
+                fill="#A66542"
+                stroke="#F2CD7E"
+                strokeOpacity="0.65"
+                strokeWidth={3}
+              />
 
-          {/* Pesisir India Barat */}
-          <path
-            d="M 785 735 L 915 780 L 945 895 L 870 1020 L 815 920 L 795 825 Z"
-            fill="url(#daratanKuno)"
-            stroke="#DFB87A"
-            strokeOpacity="0.4"
-            strokeWidth={2}
-          />
+              {/* Pesisir India Barat */}
+              <path
+                d="M 785 735 L 915 780 L 945 895 L 870 1020 L 815 920 L 795 825 Z"
+                fill="url(#daratanKuno)"
+                stroke="#DFB87A"
+                strokeOpacity="0.4"
+                strokeWidth={2}
+              />
 
-          {/* Kepulauan Nusantara (kanan bawah) */}
-          <g fill="url(#daratanKuno)" stroke="#DFB87A" strokeOpacity="0.55" strokeWidth={2}>
-            <path d="M 855 1085 Q 890 1115 918 1148 L 896 1164 Q 865 1130 842 1098 Z" />
-            <path d="M 922 1160 Q 968 1168 1010 1164 L 1008 1184 Q 964 1190 920 1178 Z" />
-            <path d="M 945 1068 Q 985 1072 1002 1108 L 972 1134 Q 938 1118 935 1082 Z" />
-          </g>
+              {/* Kepulauan Nusantara (kanan bawah) */}
+              <g fill="url(#daratanKuno)" stroke="#DFB87A" strokeOpacity="0.55" strokeWidth={2}>
+                <path d="M 855 1085 Q 890 1115 918 1148 L 896 1164 Q 865 1130 842 1098 Z" />
+                <path d="M 922 1160 Q 968 1168 1010 1164 L 1008 1184 Q 964 1190 920 1178 Z" />
+                <path d="M 945 1068 Q 985 1072 1002 1108 L 972 1134 Q 938 1118 935 1082 Z" />
+              </g>
 
-          {/* Label wilayah halus pada peta */}
-          <text
-            x={548}
-            y={945}
-            fill="rgba(255,240,206,0.45)"
-            fontFamily={FONT_SERIF}
-            fontSize={26}
-            letterSpacing="6"
-          >
-            ARABIA
-          </text>
-          <text
-            x={378}
-            y={962}
-            fill="rgba(232,216,176,0.38)"
-            fontFamily={FONT_SERIF_ITALIC}
-            fontSize={22}
-            transform="rotate(68 378 962)"
-          >
-            Laut Merah
-          </text>
+              {/* Label wilayah halus pada peta */}
+              <text
+                x={548}
+                y={945}
+                fill="rgba(255,240,206,0.45)"
+                fontFamily={FONT_SERIF}
+                fontSize={26}
+                letterSpacing="6"
+              >
+                ARABIA
+              </text>
+              <text
+                x={378}
+                y={962}
+                fill="rgba(232,216,176,0.38)"
+                fontFamily={FONT_SERIF_ITALIC}
+                fontSize={22}
+                transform="rotate(68 378 962)"
+              >
+                Laut Merah
+              </text>
+            </g>
+          )}
 
           {/* Rute dagang bercahaya emas yang menggambar sendiri */}
           {rute.map((r) => {
@@ -987,7 +1142,7 @@ const AdeganPetaKuno: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numb
                       y={r.y + r.labelDy}
                       fill="#FAF0D7"
                       fontFamily={FONT_SERIF}
-                      fontSize={30}
+                      fontSize={28}
                       fontWeight={700}
                       style={{ filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.9))' }}
                     >
@@ -999,21 +1154,24 @@ const AdeganPetaKuno: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numb
             );
           })}
 
-          {/* Pilar cahaya emas & suar Pelabuhan Mokha */}
-          <polygon points="454,1090 486,1090 475,770 465,770" fill="url(#sinarMokha)" />
-          <circle cx={470} cy={1090} r={42 * denyutPusat} fill="none" stroke="#F5CA6A" strokeWidth={2.5} opacity={0.45} />
-          <circle cx={470} cy={1090} r={24 * denyutPusat} fill="#F5CA6A" opacity={0.32} />
-          <circle cx={470} cy={1090} r={11} fill="#FFF7DC" stroke="#A63222" strokeWidth={3.5} filter="url(#pendarEmas)" />
+          {/* Pilar cahaya emas & suar pusat */}
+          <polygon
+            points={`${pusat.x - 16},${pusat.y} ${pusat.x + 16},${pusat.y} ${pusat.x + 5},${pusat.y - 310} ${pusat.x - 5},${pusat.y - 310}`}
+            fill="url(#sinarMokha)"
+          />
+          <circle cx={pusat.x} cy={pusat.y} r={42 * denyutPusat} fill="none" stroke="#F5CA6A" strokeWidth={2.5} opacity={0.45} />
+          <circle cx={pusat.x} cy={pusat.y} r={24 * denyutPusat} fill="#F5CA6A" opacity={0.32} />
+          <circle cx={pusat.x} cy={pusat.y} r={11} fill="#FFF7DC" stroke="#A63222" strokeWidth={3.5} filter="url(#pendarEmas)" />
           <text
-            x={495}
-            y={1096}
+            x={pusat.x + 24}
+            y={pusat.y + 8}
             fill="#FFE8A3"
             fontFamily={FONT_SERIF}
             fontSize={32}
             fontWeight={800}
             style={{ filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.95))' }}
           >
-            Mokha
+            {pusat.nama}
           </text>
 
           {/* Kompas Kuno berputar perlahan di kanan bawah peta */}
@@ -1039,7 +1197,7 @@ const AdeganPetaKuno: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numb
       <PartikelCahaya warna="#F5CA6A" jumlah={14} intensitas={0.45} />
       <WatermarkAkun akun={akun} terang />
 
-      {/* Header Majapahit-style ala @motionformat */}
+      {/* Header Editorial Peta ala @motionformat */}
       <div
         style={{
           position: 'absolute',
@@ -1054,16 +1212,16 @@ const AdeganPetaKuno: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numb
         <div
           style={{
             fontFamily: FONT_SERIF,
-            fontSize: 108,
+            fontSize: ukuranJudulPeta,
             fontWeight: 800,
-            letterSpacing: '0.1em',
+            letterSpacing: '0.09em',
             background: 'linear-gradient(180deg, #FCE39E 0%, #D49B3E 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             lineHeight: 1.0,
           }}
         >
-          {adegan.judulKartu || 'MOKHA'}
+          {judulPeta}
         </div>
         <div
           style={{

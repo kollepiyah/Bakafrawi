@@ -1,6 +1,7 @@
 import "server-only";
 import { adaKunciServer, rest } from "./db-server";
 import {
+  apakahAntreanRutinMasihBerlaku,
   catatRiwayatVideoBuka,
   jamBukaBerikutnya,
   jamWibBerikutnya,
@@ -541,20 +542,40 @@ export async function sinkronTugasJadwalRutin(
   merek: Merek,
   jadwal: JadwalRutin,
   originSitus = "https://bakafrawi.com",
-  opsi?: { paksaAcakUlang?: boolean },
+  opsi?: { paksaAcakUlang?: boolean; hanyaJikaPerlu?: boolean },
 ): Promise<RingkasTugas | null> {
-  const berikutnya = jamBukaBerikutnya(jadwal, new Date());
-  const antrean = (await rest(
-    `studio_tugas?merek=eq.${encodeURIComponent(merek.slug)}&produk_slug=eq.rutin-buka&status_tayang=eq.dijadwalkan&select=id,jadwal_tayang,naskah,hasil&order=dibuat.desc`,
-  ).catch(() => [])) as {
-    id: string;
-    jadwal_tayang: string | null;
+  const sekarang = new Date();
+  const semuaAktif = (await rest(
+    `studio_tugas?merek=eq.${encodeURIComponent(merek.slug)}&produk_slug=eq.rutin-buka&status_tayang=in.(dijadwalkan,antre,proses)&select=id,jenis,produk_slug,status,status_tayang,jadwal_tayang,merek,dibuat,naskah,hasil&order=dibuat.desc`,
+  ).catch(() => [])) as (RingkasTugas & {
     naskah?: { videoDipilihId?: string; mode?: string } | null;
-    hasil?: { id?: string; url?: string; judul?: string }[];
-  }[];
+  })[];
 
-  if (!jadwal.aktif || !berikutnya) {
+  const sedangJalan = semuaAktif.filter((a) => a.status_tayang === "antre" || a.status_tayang === "proses");
+  const antrean = semuaAktif.filter((a) => a.status_tayang === "dijadwalkan");
+
+  if (!jadwal.aktif) {
     // Matikan/hapus antrean rutin yang belum tayang bila jadwal rutin dinonaktifkan
+    for (const a of antrean) {
+      await rest(`studio_tugas?id=eq.${a.id}&status_tayang=eq.dijadwalkan`, { method: "DELETE", headers: { Prefer: "return=minimal" } }).catch(() => {});
+    }
+    return null;
+  }
+
+  // Mode detak 5 menit: JANGAN pernah menimpa/menggeser jadwal yang masih berlaku, mendekati jam buka,
+  // sudah jatuh tempo (menunggu worker), atau sedang antre/proses tayang.
+  if (opsi?.hanyaJikaPerlu) {
+    if (sedangJalan.length > 0) return sedangJalan[0];
+    if (antrean.length > 0 && apakahAntreanRutinMasihBerlaku(antrean[0].jadwal_tayang, jadwal, sekarang)) {
+      for (const ekstra of antrean.slice(1)) {
+        await rest(`studio_tugas?id=eq.${ekstra.id}&status_tayang=eq.dijadwalkan`, { method: "DELETE", headers: { Prefer: "return=minimal" } }).catch(() => {});
+      }
+      return antrean[0];
+    }
+  }
+
+  const berikutnya = jamBukaBerikutnya(jadwal, sekarang);
+  if (!berikutnya) {
     for (const a of antrean) {
       await rest(`studio_tugas?id=eq.${a.id}&status_tayang=eq.dijadwalkan`, { method: "DELETE", headers: { Prefer: "return=minimal" } }).catch(() => {});
     }
@@ -863,7 +884,9 @@ export async function pastikanSemuaJadwalRutin() {
     const jr = m.profil?.jadwal_rutin as JadwalRutin | undefined;
     if (!jr?.aktif) continue;
     const jadwal = normalisasiJadwalRutin(jr, m.slug);
-    await sinkronTugasJadwalRutin(m, jadwal).catch((e) => console.error(`Sinkron rutin ${m.slug}:`, e));
+    await sinkronTugasJadwalRutin(m, jadwal, "https://bakafrawi.com", { hanyaJikaPerlu: true }).catch((e) =>
+      console.error(`Sinkron rutin ${m.slug}:`, e),
+    );
   }
 }
 

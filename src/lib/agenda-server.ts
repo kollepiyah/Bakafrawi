@@ -179,19 +179,21 @@ export async function sinkronGoogle(sekarang = new Date()): Promise<string> {
   return `Sinkron: ${tertunda.length - gagalDorong} terkirim, ${simpan.length} diperbarui dari Google, ${hilang.length} dicek.`;
 }
 
-/** Detak 5 menit (dipanggil pg_cron Supabase): sinkron, pengingat 30 menit, ringkasan pagi, jadwal rutin jam buka. */
+/** Detak 5 menit (dipanggil pg_cron Supabase): picu studio jatuh tempo, jadwal rutin jam buka, sinkron, pengingat 30 menit, ringkasan pagi. */
 export async function detakAgenda(sekarang = new Date()) {
   const laporan: string[] = [];
+  // Picu Studio DULU sebelum menyinkronkan jadwal rutin berikutnya supaya tugas jatuh tempo langsung jalan.
+  try {
+    const r = await picuStudioJikaAdaKerja(sekarang);
+    if (r.dipicu) laporan.push("Studio dipicu untuk konten/jadwal jatuh tempo.");
+    else if (r.alasan !== "tak ada kerja") laporan.push(`Studio belum dipicu (${r.alasan}).`);
+  } catch (e) {
+    laporan.push(`Picu studio gagal: ${e instanceof Error ? e.message : e}`);
+  }
   try {
     await pastikanSemuaJadwalRutin();
   } catch (e) {
     laporan.push(`Jadwal rutin gagal: ${e instanceof Error ? e.message : e}`);
-  }
-  try {
-    const r = await picuStudioJikaAdaKerja(sekarang);
-    if (r.dipicu) laporan.push("Studio dipicu untuk konten/jadwal jatuh tempo.");
-  } catch (e) {
-    laporan.push(`Picu studio gagal: ${e instanceof Error ? e.message : e}`);
   }
   try {
     const ev = await jalankanEvaluasiMingguanJikaWaktunya(sekarang);

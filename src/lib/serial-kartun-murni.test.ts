@@ -319,8 +319,9 @@ test("buatPromptNaskahDrafSerial mode dokumenter memakai hasil riset tanpa tokoh
   assert.match(system, /tokohKiri: null/);
   assert.match(system, /tokohKanan: null/);
   assert.match(system, /promptVisual/);
-  assert.match(prompt, /DOKUMENTER MURNI/);
+  assert.match(prompt, /DOKUMENTER \/ CERITA MOTION/);
   assert.match(prompt, /Catatan al-Jaziri abad ke-15/);
+  assert.equal(prompt.includes("scroll title"), false);
   assert.equal(prompt.includes("14000"), false);
   assert.equal(prompt.includes("Kopi Lek"), false);
 });

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  apakahAntreanRutinMasihBerlaku,
   catatRiwayatVideoBuka,
   daftarSlotCepatWIB,
   jadwalRutinBawaan,
@@ -149,4 +150,31 @@ test("jamBukaBerikutnya tetap aktif bila aiAktif=true meskipun daftar video stat
   });
   const jumatPagi = new Date("2026-11-20T03:00:00.000Z"); // 10:00 WIB
   assert.equal(jamBukaBerikutnya(jadwal, jumatPagi)?.toISOString(), "2026-11-20T07:00:00.000Z"); // 14:00 WIB
+});
+
+test("apakahAntreanRutinMasihBerlaku menjaga jadwal hari ini tidak tergeser ke besok saat 08:58-09:05 WIB", () => {
+  const jadwal = normalisasiJadwalRutin({
+    ...jadwalRutinBawaan("lekkopi"),
+    aktif: true,
+    jam: "09:00",
+    hari: [1, 2, 3, 4, 5, 6],
+    terakhirTayang: "2026-11-26",
+  });
+  const jadwalHariIni = "2026-11-27T02:00:00.000Z"; // 09:00 WIB
+
+  // 08:58 WIB (2 menit sebelum jam buka) — wajib dipertahankan, jangan digeser ke besok
+  assert.equal(apakahAntreanRutinMasihBerlaku(jadwalHariIni, jadwal, new Date("2026-11-27T01:58:00.000Z")), true);
+  // 09:00:01 WIB (tepat jatuh tempo, menunggu detak/worker) — wajib dipertahankan
+  assert.equal(apakahAntreanRutinMasihBerlaku(jadwalHariIni, jadwal, new Date("2026-11-27T02:00:01.000Z")), true);
+  // 09:15 WIB (baru lewat 15 menit, menunggu runner GitHub Actions) — wajib dipertahankan
+  assert.equal(apakahAntreanRutinMasihBerlaku(jadwalHariIni, jadwal, new Date("2026-11-27T02:15:00.000Z")), true);
+  // Jika sudah tercatat tayang hari ini → boleh dijadwalkan ulang untuk hari berikutnya
+  assert.equal(
+    apakahAntreanRutinMasihBerlaku(jadwalHariIni, { ...jadwal, terakhirTayang: "2026-11-27" }, new Date("2026-11-27T02:15:00.000Z")),
+    false,
+  );
+  // Jika lewat lebih dari 6 jam (basi) → boleh dijadwalkan ulang
+  assert.equal(apakahAntreanRutinMasihBerlaku(jadwalHariIni, jadwal, new Date("2026-11-27T08:05:00.000Z")), false);
+  // Jika jadwal dimatikan → false
+  assert.equal(apakahAntreanRutinMasihBerlaku(jadwalHariIni, { ...jadwal, aktif: false }, new Date("2026-11-27T01:58:00.000Z")), false);
 });

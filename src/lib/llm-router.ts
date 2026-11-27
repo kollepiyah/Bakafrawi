@@ -35,6 +35,8 @@ export type OpsiLlm = {
   maksToken?: number;
   /** Aktifkan Google Search Grounding (khusus Gemini) untuk riset tren live & analisis link. */
   pakaiSearch?: boolean;
+  /** Jika true, wajib pakai penyedia dengan Google Search aktif (Gemini) — dilarang fallback ke AI tanpa internet. */
+  wajibSearch?: boolean;
   /** Jawaban yang tidak lolos dianggap gagal → lanjut ke penyedia berikutnya. */
   valid?: (data: unknown) => boolean;
 };
@@ -58,11 +60,11 @@ export function claudeDimatikan(): boolean {
   return /^(1|true|ya|on)$/i.test(String(process.env.STUDIO_TANPA_CLAUDE ?? "").trim());
 }
 
-/** Buang pagar ```json dan teks pembuka/penutup bila penyedia menambahkannya. */
+/** Buang blok <think>...</think>, pagar ```json, dan teks pembuka/penutup bila penyedia menambahkannya. */
 function ekstrakJson(teks: string): string {
-  const t = teks.trim();
-  const m = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  const bersih = m ? m[1].trim() : t;
+  const tanpaThink = teks.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const m = tanpaThink.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  const bersih = m ? m[1].trim() : tanpaThink;
   const awal = bersih.search(/[[{]/);
   if (awal < 0) return bersih;
   const buka = bersih[awal];
@@ -134,6 +136,38 @@ function bolehLanjutModel(err: unknown, label: string, statusLanjut: Set<number>
   return false;
 }
 
+const CACHE_MODEL_AKTIF = new Map<string, { sampai: number; daftar: string[] }>();
+
+/** Ambil daftar model aktif langsung dari endpoint /models bila semua kandidat statis kena 404/410. */
+async function temukanModelAktif(
+  kunciCache: string,
+  urlModels: string,
+  apiKey: string,
+  saring: (id: string) => boolean,
+  headerTambahan?: Record<string, string>,
+): Promise<string[]> {
+  const sekarang = Date.now();
+  const hit = CACHE_MODEL_AKTIF.get(kunciCache);
+  if (hit && hit.sampai > sekarang) return hit.daftar;
+  try {
+    const res = await fetch(urlModels, {
+      method: "GET",
+      signal: AbortSignal.timeout(8_000),
+      headers: { Authorization: `Bearer ${apiKey}`, ...headerTambahan },
+    });
+    if (!res.ok) return [];
+    const j = (await res.json()) as { data?: { id?: string; active?: boolean }[] };
+    const daftar = (j.data ?? [])
+      .filter((m) => m && m.id && m.active !== false && saring(String(m.id)))
+      .map((m) => String(m.id))
+      .slice(0, 4);
+    CACHE_MODEL_AKTIF.set(kunciCache, { sampai: sekarang + 15 * 60_000, daftar });
+    return daftar;
+  } catch {
+    return [];
+  }
+}
+
 /** Helper bersama untuk penyedia API berformat OpenAI Chat Completions (Groq, NVIDIA NIM, OpenRouter). */
 async function panggilOpenAiKompatibel(
   opsi: OpsiLlm,
@@ -146,6 +180,8 @@ async function panggilOpenAiKompatibel(
     headerTambahan?: Record<string, string>;
     izinkanGambar?: boolean;
     statusLanjutModel?: number[];
+    urlModels?: string;
+    saringModel?: (id: string) => boolean;
   },
 ) {
   const daftarGambar = konfig.izinkanGambar && opsi.gambar?.length ? opsi.gambar.slice(0, 5) : [];
@@ -174,7 +210,7 @@ async function panggilOpenAiKompatibel(
   const kirimOpenAi = async (model: string, pakaiJsonMode: boolean) => {
     const res = await fetch(konfig.url, {
       method: "POST",
-      signal: AbortSignal.timeout(32_000),
+      signal: AbortSignal.timeout(22_000),
       headers: {
         Authorization: `Bearer ${konfig.apiKey}`,
         "Content-Type": "application/json",
@@ -200,7 +236,10 @@ async function panggilOpenAiKompatibel(
     };
   };
 
-  for (const model of konfig.kandidatModel) {
+  const dicoba = new Set<string>();
+  const cobaModel = async (model: string): Promise<boolean> => {
+    if (dicoba.has(model)) return false;
+    dicoba.add(model);
     modelDipakai = model;
     try {
       let mentah;
@@ -223,30 +262,59 @@ async function panggilOpenAiKompatibel(
       j = mentah;
       dataHasil = data;
       teksHasil = teks;
-      break;
+      return true;
     } catch (e) {
       if (!galatPertama) galatPertama = `${model}: ${e instanceof Error ? e.message : String(e)}`;
       galatTerakhir = e;
       if (!bolehLanjutModel(e, konfig.label, statusLanjut)) throw e;
+      return false;
+    }
+  };
+
+  let ada404 = false;
+  for (const model of konfig.kandidatModel) {
+    const sukses = await cobaModel(model);
+    if (sukses) break;
+    const msg = galatTerakhir instanceof Error ? galatTerakhir.message : String(galatTerakhir ?? "");
+    if (msg.includes(`${konfig.label} 404`) || msg.includes(`${konfig.label} 410`) || msg.includes("model_not_found")) {
+      ada404 = true;
+    }
+  }
+
+  // Jika semua kandidat statis kena 404/410, cari model aktif langsung dari API /models akun terkait.
+  if (!j && ada404 && konfig.urlModels && konfig.saringModel) {
+    const ekstra = await temukanModelAktif(
+      `${konfig.nama}:${daftarGambar.length > 0 ? "v" : "t"}`,
+      konfig.urlModels,
+      konfig.apiKey,
+      konfig.saringModel,
+      konfig.headerTambahan,
+    );
+    for (const model of ekstra) {
+      if (await cobaModel(model)) break;
     }
   }
 
   if (!j) {
+    const pertama = String(galatPertama ?? "");
     const pesanAkhir = galatTerakhir instanceof Error ? galatTerakhir.message : String(galatTerakhir ?? "gagal merespons");
     throw new Error(
-      galatPertama && !pesanAkhir.includes(galatPertama.slice(0, 30))
-        ? `${galatPertama.slice(0, 140)} → ${pesanAkhir.slice(0, 140)}`
+      pertama && !pesanAkhir.includes(pertama.slice(0, 30))
+        ? `${pertama.slice(0, 140)} → ${pesanAkhir.slice(0, 140)}`
         : pesanAkhir,
     );
   }
-  const input = Number(j.usage?.prompt_tokens) || Math.round((opsi.system.length + opsi.prompt.length) / 4);
-  const output = Number(j.usage?.completion_tokens) || Math.round(teksHasil.length / 4);
+  const resFinal = j as { usage?: { prompt_tokens?: number; completion_tokens?: number } };
+  const input = Number(resFinal.usage?.prompt_tokens) || Math.round((opsi.system.length + opsi.prompt.length) / 4);
+  const output = Number(resFinal.usage?.completion_tokens) || Math.round(teksHasil.length / 4);
   const tarif = HARGA[konfig.nama] ?? { input: 0, output: 0 };
   return {
     data: dataHasil,
     pemakaian: { penyedia: konfig.nama, model: modelDipakai, input, output, biayaUsd: biaya(input, output, tarif) },
   };
 }
+
+const BUKAN_CHAT_MODEL = /whisper|tts|orpheus|guard|embed|rerank|moderation|audio|image|flux|sdxl|stable-diffusion|bge|clip/i;
 
 async function panggilGroq(opsi: OpsiLlm) {
   const adaGambar = Boolean(opsi.gambar?.length);
@@ -255,6 +323,8 @@ async function panggilGroq(opsi: OpsiLlm) {
     : ([
         process.env.STUDIO_GROQ_TEKS,
         "llama-3.3-70b-versatile",
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
         "llama-3.1-8b-instant",
       ].filter(Boolean) as string[]);
 
@@ -262,6 +332,8 @@ async function panggilGroq(opsi: OpsiLlm) {
     nama: "groq",
     label: "Groq",
     url: "https://api.groq.com/openai/v1/chat/completions",
+    urlModels: "https://api.groq.com/openai/v1/models",
+    saringModel: (id) => !BUKAN_CHAT_MODEL.test(id) && (!adaGambar || /vision|scout|maverick/i.test(id)),
     apiKey: process.env.GROQ_API_KEY!,
     kandidatModel: [...new Set(kandidatModel)],
     izinkanGambar: true,
@@ -276,8 +348,9 @@ async function panggilNvidia(opsi: OpsiLlm) {
       [
         process.env.STUDIO_NVIDIA_TEKS,
         "meta/llama-3.3-70b-instruct",
-        "nvidia/llama-3.3-nemotron-super-49b-v1",
-        "qwen/qwen2.5-72b-instruct",
+        "nvidia/llama-3.1-nemotron-70b-instruct",
+        "deepseek-ai/deepseek-r1-distill-qwen-14b",
+        "meta/llama-3.1-8b-instruct",
       ].filter(Boolean) as string[],
     ),
   ];
@@ -286,6 +359,8 @@ async function panggilNvidia(opsi: OpsiLlm) {
     nama: "nvidia",
     label: "NVIDIA",
     url: `${baseUrl}/chat/completions`,
+    urlModels: `${baseUrl}/models`,
+    saringModel: (id) => !BUKAN_CHAT_MODEL.test(id) && /instruct|chat|llama|qwen|deepseek|mistral/i.test(id),
     apiKey: process.env.NVIDIA_API_KEY!,
     kandidatModel,
     izinkanGambar: false,
@@ -316,7 +391,7 @@ async function panggilOpenRouter(opsi: OpsiLlm) {
       "X-Title": "Bakafrawi Studio",
     },
     izinkanGambar: true,
-    statusLanjutModel: [404, 410, 429, 503],
+    statusLanjutModel: [400, 402, 404, 410, 429, 500, 502, 503, 504],
   });
 }
 
@@ -327,9 +402,9 @@ async function panggilGemini(opsi: OpsiLlm) {
       [
         process.env.STUDIO_GEMINI_TEKS,
         "gemini-3.8-flash",
-        "gemini-3.8-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
         "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
         "gemini-flash-latest",
       ].filter(Boolean) as string[],
     ),
@@ -344,7 +419,7 @@ async function panggilGemini(opsi: OpsiLlm) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const res = await fetch(url, {
       method: "POST",
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(22_000),
       headers: { "Content-Type": "application/json", "x-goog-api-key": kunci },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: opsi.system + (pakaiSkema && !search ? "" : teksSkema(opsi.skema)) }] },
@@ -485,7 +560,9 @@ function rapikanSkemaClaude(node: unknown): unknown {
 async function panggilClaude(opsi: OpsiLlm) {
   const model = process.env.STUDIO_CLAUDE_TEKS || "claude-haiku-5-5";
   const skemaClaude = opsi.skema ? (rapikanSkemaClaude(opsi.skema) as Record<string, unknown>) : undefined;
-  const maxTokens = Math.max(opsi.maksToken ?? 5200, 5200);
+  // Claude 5.5 memakai adaptive thinking yang dihitung ke kuota max_tokens — beri ruang minimal 16000 token
+  // supaya tidak pernah kehabisan max_tokens sebelum menulis blok teks JSON.
+  const maxTokens = Math.max(opsi.maksToken ?? 16000, 16000);
   const kontenUser: Anthropic.MessageParam["content"] = opsi.gambar?.length
     ? [
         ...opsi.gambar.map((g) => ({
@@ -500,17 +577,29 @@ async function panggilClaude(opsi: OpsiLlm) {
       ]
     : opsi.prompt;
 
+  const client = new Anthropic();
   const kirimClaude = async (pakaiSkema: boolean) => {
     const gunakanFormatSkema = pakaiSkema && Boolean(skemaClaude);
-    const res = await new Anthropic().messages.create({
+    const dasar = {
       model,
       max_tokens: maxTokens,
       output_config: gunakanFormatSkema
-        ? { effort: "low", format: { type: "json_schema", schema: skemaClaude! } }
-        : { effort: "low" },
+        ? { effort: "low" as const, format: { type: "json_schema" as const, schema: skemaClaude! } }
+        : { effort: "low" as const },
       system: gunakanFormatSkema ? opsi.system : opsi.system + teksSkema(opsi.skema),
-      messages: [{ role: "user", content: kontenUser }],
-    });
+      messages: [{ role: "user" as const, content: kontenUser }],
+    };
+    let res: Anthropic.Message;
+    try {
+      // Kurangi reasoning upfront di Claude 5.5 agar cepat & tidak menghabiskan max_tokens untuk JSON.
+      res = await client.messages.create({
+        ...dasar,
+        thinking: { type: "between_tools" },
+      } as unknown as Anthropic.MessageCreateParamsNonStreaming);
+    } catch (eThink) {
+      if (!/400|thinking|between_tools|invalid/i.test(String(eThink))) throw eThink;
+      res = await client.messages.create(dasar);
+    }
     if (res.stop_reason === "refusal") throw new Error("Claude menolak permintaan ini.");
     const teks = res.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -590,7 +679,11 @@ export async function panggilLlmJson<T>(opsi: OpsiLlm, tahap?: string): Promise<
     return 0;
   });
   const galat: string[] = [];
-  for (const p of urut.filter((x) => x.ada())) {
+  const daftarAktif = urut.filter((x) => x.ada() && (!opsi.wajibSearch || x.nama === "gemini"));
+  if (opsi.wajibSearch && !daftarAktif.length) {
+    throw new Error("Riset Google memerlukan GEMINI_API_KEY aktif (hanya Gemini yang mendukung Google Search langsung).");
+  }
+  for (const p of daftarAktif) {
     // NVIDIA teks & Cloudflare Llama teks belum mendukung gambar vision — lewati bila ada input gambar.
     if (adaGambar && (p.nama === "cloudflare" || p.nama === "nvidia")) continue;
     try {
@@ -610,6 +703,9 @@ export async function panggilLlmJson<T>(opsi: OpsiLlm, tahap?: string): Promise<
   }
   if (!galat.length) {
     throw new Error("Belum ada kunci AI aktif (isi GROQ_API_KEY, NVIDIA_API_KEY, GEMINI_API_KEY, OPENROUTER_API_KEY, atau CF_ACCOUNT_ID + CF_API_TOKEN di Vercel).");
+  }
+  if (opsi.wajibSearch) {
+    throw new Error(`Riset Google (Gemini Search) gagal — ${galat.join(" | ")}. Tidak dialihkan ke AI tanpa Google agar fakta sejarah tidak dikarang.`);
   }
   throw new Error(`Semua penyedia AI gagal — ${galat.join(" | ")}`);
 }

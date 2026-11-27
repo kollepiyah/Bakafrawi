@@ -327,6 +327,30 @@ export function jamBukaBerikutnya(jadwal: JadwalRutin, sekarang = new Date()): D
 }
 
 /**
+ * Tentukan apakah baris antrean `rutin-buka` yang sudah `dijadwalkan` masih berlaku dan TIDAK boleh
+ * ditimpa/digeser ke besok oleh detak cron 5 menit.
+ * Mencegah bug jadwal hari ini tergeser ke besok sesaat sebelum/tepat saat jam buka tiba.
+ */
+export function apakahAntreanRutinMasihBerlaku(
+  jadwalTayangIso: string | null | undefined,
+  jadwal: JadwalRutin,
+  sekarang = new Date(),
+  batasLewatMs = 6 * 3600_000,
+): boolean {
+  const j = normalisasiJadwalRutin(jadwal);
+  if (!j.aktif || !jadwalTayangIso) return false;
+  const targetMs = new Date(jadwalTayangIso).getTime();
+  if (!Number.isFinite(targetMs)) return false;
+  const tglTarget = tanggalWibDari(new Date(targetMs));
+  // Jika tanggal tersebut sudah tercatat tayang, jadwal ini boleh diganti ke hari buka berikutnya.
+  if (j.terakhirTayang && tglTarget === j.terakhirTayang) return false;
+  const lewatMs = sekarang.getTime() - targetMs;
+  // Pertahankan jadwal masa depan, jadwal yang hampir tiba, maupun jadwal yang baru jatuh tempo (<= 6 jam)
+  // supaya worker sempat memicu & menayangkannya.
+  return lewatMs <= batasLewatMs;
+}
+
+/**
  * Pilih daftar video yang akan diupload pada saat jam buka:
  * - Mode "acak": pilih 1 video secara acak dari semua video aktif, menghindari video yang sudah
  *   tayang dalam siklus saat ini (`riwayatVideo`) dan tidak pernah mengulang `terakhirVideoId`

@@ -93,11 +93,33 @@ export async function buatNaskahVideoFullAi(produk, situs, arahan, merek = null,
   const prompt = `Buat naskah video Reels/TikTok Storytelling Full AI (5 adegan) untuk ${adalahKedai ? 'kedai/merek' : 'produk'} berikut.\n\n${ringkasProduk(produk, situs, merek)}${blokRef}\n\nArahan tambahan dari pemilik: ${arahan || '(pilih sudut cerita paling segar & relatable untuk audiens Indonesia)'}`;
 
   try {
+    const normalisasiFullAi = (mentah) => {
+      const akar = mentah && typeof mentah === 'object' && !Array.isArray(mentah) ? mentah : {};
+      const bungkus = [akar.naskah, akar.data, akar.hasil, akar.video].find((v) => v && typeof v === 'object' && !Array.isArray(v));
+      const o = Array.isArray(akar.adegan) || Array.isArray(akar.scenes) ? akar : (bungkus ?? akar);
+      const daftar = Array.isArray(o.adegan) ? o.adegan : Array.isArray(o.scenes) ? o.scenes : [];
+      const adegan = daftar.slice(0, 7).map((a) => ({
+        narasi: String(a?.narasi ?? a?.dialog ?? a?.teks ?? '').trim(),
+        teksLayar: String(a?.teksLayar ?? a?.teks_layar ?? a?.judul ?? '').trim() || produk.nama,
+        bidikan: String(a?.bidikan ?? a?.visual ?? a?.prompt ?? '').trim() || 'Cinematic Indonesian coffee shop scene, warm lighting, vertical 9:16, no text',
+      })).filter((a) => a.narasi);
+      const hashtag = Array.isArray(o.hashtag)
+        ? o.hashtag.map((h) => String(h ?? '').replace(/^#+/, '').trim()).filter(Boolean)
+        : [];
+      return {
+        judul: String(o.judul ?? o.title ?? produk.nama).trim() || produk.nama,
+        adegan,
+        ajakan: String(o.ajakan ?? o.cta ?? `Coba ${produk.nama}`).trim() || `Coba ${produk.nama}`,
+        caption: String(o.caption ?? '').trim() || adegan[0]?.narasi || produk.deskripsi,
+        hashtag: hashtag.length ? hashtag : ['bakafrawi'],
+      };
+    };
     const r = await panggilRouterWorkerJson({
       system,
       prompt,
       maksToken: 4096,
       skemaZod: SkemaVideoFullAi,
+      normalisasi: normalisasiFullAi,
       petunjukJson: PETUNJUK_JSON_FULL_AI,
       namaTahap: 'naskah video full ai',
       effortClaude: 'low',
@@ -167,14 +189,31 @@ export async function buatNaskah(produk, situs, arahan, jenis, merek = null) {
   const prompt = `Buat naskah ${promptJenis}.\n\n${ringkasProduk(produk, situs, merek)}\n\nArahan tambahan dari pemilik: ${arahan || '(tidak ada)'}`;
 
   try {
+    const normalisasiPoster = (mentah) => {
+      const akar = mentah && typeof mentah === 'object' && !Array.isArray(mentah) ? mentah : {};
+      const bungkus = [akar.naskah, akar.data, akar.hasil, akar.poster].find((v) => v && typeof v === 'object' && !Array.isArray(v));
+      const o = akar.judul || akar.title ? akar : (bungkus ?? akar);
+      const keArr = (v, cadangan) => (Array.isArray(v) ? v.map((x) => String(x ?? '').trim()).filter(Boolean) : cadangan);
+      return {
+        judul: String(o.judul ?? o.title ?? '').trim(),
+        sub: String(o.sub ?? o.subtitle ?? produk.judul ?? '').trim(),
+        poin: keArr(o.poin, produk.fitur.slice(0, 3).map((f) => f.judul)),
+        ajakan: String(o.ajakan ?? o.cta ?? `Coba ${produk.nama}`).trim(),
+        narasi: keArr(o.narasi, [String(o.sub ?? produk.deskripsi).trim()]),
+        caption: String(o.caption ?? o.sub ?? produk.deskripsi).trim(),
+        hashtag: keArr(o.hashtag, ['bakafrawi']).map((h) => h.replace(/^#+/, '')),
+        adegan: keArr(o.adegan, ['Warm cinematic Indonesian workspace atmosphere, soft daylight, no text']),
+      };
+    };
     const r = await panggilRouterWorkerJson({
       system,
       prompt,
       maksToken: 4096,
       skemaZod: SkemaNaskah,
+      normalisasi: normalisasiPoster,
       petunjukJson: PETUNJUK_JSON_POSTER,
       namaTahap: 'naskah poster',
-      effortClaude: 'medium',
+      effortClaude: 'low',
     });
     return { ...r.data, sumber: r.sumber, pemakaian: r.pemakaian };
   } catch (e) {

@@ -38,7 +38,7 @@ export function catatBiayaWorker(tahap, u = {}, penyedia = 'claude', model = MOD
 }
 
 export function ekstrakJson(teks) {
-  const t = String(teks ?? '').trim();
+  const t = String(teks ?? '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
   const m = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   const bersih = m ? m[1].trim() : t;
   const awal = bersih.search(/[[{]/);
@@ -123,18 +123,21 @@ export function urutanPenyediaWorker({
 export const KANDIDAT_MODEL_WORKER = {
   groq: [
     'llama-3.3-70b-versatile',
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
     'llama-3.1-8b-instant',
   ],
   nvidia: [
     'meta/llama-3.3-70b-instruct',
-    'nvidia/llama-3.3-nemotron-super-49b-v1',
-    'qwen/qwen2.5-72b-instruct',
+    'nvidia/llama-3.1-nemotron-70b-instruct',
+    'deepseek-ai/deepseek-r1-distill-qwen-14b',
+    'meta/llama-3.1-8b-instruct',
   ],
   gemini: [
     'gemini-3.8-flash',
-    'gemini-3.8-flash-lite',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
     'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
     'gemini-flash-latest',
   ],
   openrouter: [
@@ -150,19 +153,54 @@ export const KANDIDAT_MODEL_WORKER = {
 };
 
 const STATUS_LANJUT_WORKER = [404, 410, 429, 500, 502, 503, 504];
+const BUKAN_CHAT_WORKER = /whisper|tts|orpheus|guard|embed|rerank|moderation|audio|image|flux|sdxl|stable-diffusion|bge|clip/i;
+const CACHE_MODELS_WORKER = new Map();
+
+async function temukanModelWorker(kunci, urlModels, apiKey, saring, headerTambahan = {}) {
+  const sekarang = Date.now();
+  const hit = CACHE_MODELS_WORKER.get(kunci);
+  if (hit && hit.sampai > sekarang) return hit.daftar;
+  try {
+    const res = await fetch(urlModels, {
+      method: 'GET',
+      signal: AbortSignal.timeout(10_000),
+      headers: { Authorization: `Bearer ${apiKey}`, ...headerTambahan },
+    });
+    if (!res.ok) return [];
+    const j = await res.json();
+    const daftar = (j.data ?? [])
+      .filter((m) => m && m.id && m.active !== false && saring(String(m.id)))
+      .map((m) => String(m.id))
+      .slice(0, 4);
+    CACHE_MODELS_WORKER.set(kunci, { sampai: sekarang + 15 * 60_000, daftar });
+    return daftar;
+  } catch {
+    return [];
+  }
+}
+
+function validasiDanRapikan(dataMentah, { skemaZod = null, normalisasi = null } = {}) {
+  const dirapikan = typeof normalisasi === 'function' ? normalisasi(dataMentah) : dataMentah;
+  if (!skemaZod) return dirapikan;
+  const cek = skemaZod.safeParse(dirapikan);
+  if (!cek.success) {
+    throw new Error(`Format JSON tidak cocok (${cek.error?.issues?.[0]?.path?.join('.') || 'skema'})`);
+  }
+  return cek.data;
+}
 
 function bolehLanjutModelWorker(err, label, statusLanjut) {
   if (err instanceof SyntaxError) return true;
   if (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) return true;
   const msg = err instanceof Error ? err.message : String(err ?? '');
-  if (/timeout|timed out|aborted/i.test(msg)) return true;
+  if (/timeout|timed out|aborted|Format JSON tidak cocok/i.test(msg)) return true;
   for (const s of statusLanjut) {
     if (msg.includes(`${label} ${s}`)) return true;
   }
   return false;
 }
 
-async function panggilOpenAiWorker({ label, penyedia, url, apiKey, kandidatModel, system, prompt, gambar = [], suhu = 0.75, maksToken = 4096, headerTambahan = {}, statusLanjut = STATUS_LANJUT_WORKER }) {
+async function panggilOpenAiWorker({ label, penyedia, url, urlModels = '', saringModel = null, apiKey, kandidatModel, system, prompt, gambar = [], suhu = 0.75, maksToken = 4096, headerTambahan = {}, statusLanjut = STATUS_LANJUT_WORKER, skemaZod = null, normalisasi = null }) {
   const isiUser = gambar.length
     ? [
         ...gambar.slice(0, 5).flatMap((g) => [
@@ -174,11 +212,12 @@ async function panggilOpenAiWorker({ label, penyedia, url, apiKey, kandidatModel
     : prompt;
 
   const lanjutSet = new Set(statusLanjut);
+  let galatPertama = null;
   let galat = null;
   const kirim = async (model, pakaiJsonMode) => {
     const res = await fetch(url, {
       method: 'POST',
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(40_000),
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', ...headerTambahan },
       body: JSON.stringify({
         model,
@@ -194,7 +233,10 @@ async function panggilOpenAiWorker({ label, penyedia, url, apiKey, kandidatModel
     return res.json();
   };
 
-  for (const model of kandidatModel) {
+  const dicoba = new Set();
+  const cobaModel = async (model) => {
+    if (dicoba.has(model)) return null;
+    dicoba.add(model);
     try {
       let j;
       if (!gambar.length) {
@@ -208,21 +250,48 @@ async function panggilOpenAiWorker({ label, penyedia, url, apiKey, kandidatModel
         j = await kirim(model, false);
       }
       const teks = String(j.choices?.[0]?.message?.content ?? '{}');
+      const data = validasiDanRapikan(parseJsonToleran(teks), { skemaZod, normalisasi });
       return {
-        data: parseJsonToleran(teks),
+        data,
         penyedia,
         model,
         usage: { input: Number(j.usage?.prompt_tokens) || 0, output: Number(j.usage?.completion_tokens) || 0 },
       };
     } catch (e) {
+      if (!galatPertama) galatPertama = `${model}: ${e.message}`;
       galat = e;
       if (!bolehLanjutModelWorker(e, label, lanjutSet)) throw e;
+      return null;
+    }
+  };
+
+  let ada404 = false;
+  for (const model of kandidatModel) {
+    const ok = await cobaModel(model);
+    if (ok) return ok;
+    const msg = galat?.message ?? '';
+    if (msg.includes(`${label} 404`) || msg.includes(`${label} 410`) || msg.includes('model_not_found')) {
+      ada404 = true;
     }
   }
-  throw galat ?? new Error(`${label} gagal merespons.`);
+
+  if (ada404 && urlModels && typeof saringModel === 'function') {
+    const ekstra = await temukanModelWorker(`${penyedia}:${gambar.length ? 'v' : 't'}`, urlModels, apiKey, saringModel, headerTambahan);
+    for (const model of ekstra) {
+      const ok = await cobaModel(model);
+      if (ok) return ok;
+    }
+  }
+
+  const pesanAkhir = galat?.message ?? `${label} gagal merespons.`;
+  throw new Error(
+    galatPertama && !pesanAkhir.includes(galatPertama.slice(0, 28))
+      ? `${galatPertama.slice(0, 140)} → ${pesanAkhir.slice(0, 140)}`
+      : pesanAkhir,
+  );
 }
 
-async function panggilGeminiWorker({ system, prompt, gambar = [], suhu = 0.75, maksToken = 6000 }) {
+async function panggilGeminiWorker({ system, prompt, gambar = [], suhu = 0.75, maksToken = 6000, skemaZod = null, normalisasi = null }) {
   const kandidat = [...new Set([process.env.STUDIO_GEMINI_TEKS, ...KANDIDAT_MODEL_WORKER.gemini].filter(Boolean))];
   const parts = [
     ...gambar.flatMap((g) => [
@@ -237,7 +306,7 @@ async function panggilGeminiWorker({ system, prompt, gambar = [], suhu = 0.75, m
     try {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(40_000),
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: system }] },
@@ -250,9 +319,10 @@ async function panggilGeminiWorker({ system, prompt, gambar = [], suhu = 0.75, m
       }
       const j = await res.json();
       const teks = (j.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('') || '{}';
+      const data = validasiDanRapikan(parseJsonToleran(teks), { skemaZod, normalisasi });
       const u = j.usageMetadata ?? {};
       return {
-        data: parseJsonToleran(teks),
+        data,
         penyedia: 'gemini',
         model,
         usage: { input: Number(u.promptTokenCount) || 0, output: (Number(u.candidatesTokenCount) || 0) + (Number(u.thoughtsTokenCount) || 0) },
@@ -265,7 +335,7 @@ async function panggilGeminiWorker({ system, prompt, gambar = [], suhu = 0.75, m
   throw galat ?? new Error('Gemini gagal merespons.');
 }
 
-async function panggilCloudflareWorker({ system, prompt, suhu = 0.75, maksToken = 4096 }) {
+async function panggilCloudflareWorker({ system, prompt, suhu = 0.75, maksToken = 5200, skemaZod = null, normalisasi = null }) {
   const kandidat = [...new Set([process.env.STUDIO_CF_TEKS, ...KANDIDAT_MODEL_WORKER.cloudflare].filter(Boolean))];
   const lanjutSet = new Set([400, ...STATUS_LANJUT_WORKER]);
   let galat = null;
@@ -278,13 +348,14 @@ async function panggilCloudflareWorker({ system, prompt, suhu = 0.75, maksToken 
         body: JSON.stringify({
           messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
           temperature: suhu,
-          max_tokens: maksToken,
+          max_tokens: Math.max(maksToken, 5200),
         }),
       });
       if (!res.ok) throw new Error(`Cloudflare ${res.status}: ${(await res.text().catch(() => '')).slice(0, 160)}`);
       const j = await res.json();
       const r = j.result?.response;
-      const data = typeof r === 'string' ? parseJsonToleran(r) : (r ?? {});
+      const mentah = typeof r === 'string' ? parseJsonToleran(r) : (r ?? {});
+      const data = validasiDanRapikan(mentah, { skemaZod, normalisasi });
       return {
         data,
         penyedia: 'cloudflare',
@@ -301,7 +372,8 @@ async function panggilCloudflareWorker({ system, prompt, suhu = 0.75, maksToken 
 
 /**
  * Panggil penyedia AI berurutan (Groq → NVIDIA → Gemini → OpenRouter → Cloudflare → Claude Haiku terakhir)
- * dengan validasi Zod opsional. Memulangkan { data, sumber, penyedia, model, pemakaian }.
+ * dengan validasi Zod & normalisasi opsional di dalam tiap kandidat model.
+ * Memulangkan { data, sumber, penyedia, model, pemakaian }.
  */
 export async function panggilRouterWorkerJson({
   system,
@@ -310,6 +382,7 @@ export async function panggilRouterWorkerJson({
   maksToken = 4096,
   suhu = 0.75,
   skemaZod = null,
+  normalisasi = null,
   petunjukJson = '',
   namaTahap = 'naskah',
   effortClaude = 'low',
@@ -327,6 +400,8 @@ export async function panggilRouterWorkerJson({
       if (p.nama === 'claude') {
         const model = process.env.STUDIO_MODEL || MODEL_CLAUDE_BAWAAN;
         const client = new Anthropic();
+        // Claude 5.5 memakai adaptive thinking dalam kuota max_tokens → beri ruang >= 16000 agar teks tidak pernah kosong.
+        const maxTokensClaude = Math.max(maksToken, 16000);
         const kontenUser = adaGambar
           ? [
               ...gambar.flatMap((g) => [
@@ -337,12 +412,21 @@ export async function panggilRouterWorkerJson({
             ]
           : prompt;
 
+        const buatDenganThinking = async (fn, payload) => {
+          try {
+            return await fn({ ...payload, thinking: { type: 'between_tools' } });
+          } catch (eThink) {
+            if (!/400|thinking|between_tools|invalid/i.test(String(eThink))) throw eThink;
+            return await fn(payload);
+          }
+        };
+
         if (skemaZod) {
           let pakaiFallback = false;
           try {
-            const res = await client.messages.parse({
+            const res = await buatDenganThinking((pl) => client.messages.parse(pl), {
               model,
-              max_tokens: Math.max(maksToken, 6000),
+              max_tokens: maxTokensClaude,
               output_config: { effort: effortClaude, format: zodOutputFormat(skemaZod) },
               system,
               messages: [{ role: 'user', content: kontenUser }],
@@ -350,15 +434,20 @@ export async function panggilRouterWorkerJson({
             if (res.stop_reason === 'refusal' || !res.parsed_output) {
               pakaiFallback = true;
             } else {
-              r = { data: res.parsed_output, penyedia: 'claude', model, usage: res.usage };
+              r = {
+                data: validasiDanRapikan(res.parsed_output, { skemaZod, normalisasi }),
+                penyedia: 'claude',
+                model,
+                usage: res.usage,
+              };
             }
           } catch {
             pakaiFallback = true;
           }
           if (pakaiFallback) {
-            const res = await client.messages.create({
+            const res = await buatDenganThinking((pl) => client.messages.create(pl), {
               model,
-              max_tokens: Math.max(maksToken, 6000),
+              max_tokens: maxTokensClaude,
               output_config: { effort: effortClaude },
               system: system + petunjukJson,
               messages: [{ role: 'user', content: kontenUser }],
@@ -366,19 +455,29 @@ export async function panggilRouterWorkerJson({
             if (res.stop_reason === 'refusal') throw new Error('Claude menolak.');
             const teks = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
             if (!teks) throw new Error(`Claude respons kosong (${res.stop_reason ?? 'unknown'}).`);
-            r = { data: parseJsonToleran(teks), penyedia: 'claude', model, usage: res.usage };
+            r = {
+              data: validasiDanRapikan(parseJsonToleran(teks), { skemaZod, normalisasi }),
+              penyedia: 'claude',
+              model,
+              usage: res.usage,
+            };
           }
         } else {
-          const res = await client.messages.create({
+          const res = await buatDenganThinking((pl) => client.messages.create(pl), {
             model,
-            max_tokens: maksToken,
+            max_tokens: maxTokensClaude,
             output_config: { effort: effortClaude },
             system: system + petunjukJson,
             messages: [{ role: 'user', content: kontenUser }],
           });
           const teks = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
           if (!teks) throw new Error(`Claude respons kosong (${res.stop_reason ?? 'unknown'}).`);
-          r = { data: parseJsonToleran(teks), penyedia: 'claude', model, usage: res.usage };
+          r = {
+            data: validasiDanRapikan(parseJsonToleran(teks), { normalisasi }),
+            penyedia: 'claude',
+            model,
+            usage: res.usage,
+          };
         }
       } else if (p.nama === 'groq') {
         const kandidat = adaGambar
@@ -388,6 +487,8 @@ export async function panggilRouterWorkerJson({
           label: 'Groq',
           penyedia: 'groq',
           url: 'https://api.groq.com/openai/v1/chat/completions',
+          urlModels: 'https://api.groq.com/openai/v1/models',
+          saringModel: (id) => !BUKAN_CHAT_WORKER.test(id) && (!adaGambar || /vision|scout|maverick/i.test(id)),
           apiKey: process.env.GROQ_API_KEY,
           kandidatModel: kandidat,
           system: system + petunjukJson,
@@ -396,6 +497,8 @@ export async function panggilRouterWorkerJson({
           suhu,
           maksToken,
           statusLanjut: STATUS_LANJUT_WORKER,
+          skemaZod,
+          normalisasi,
         });
       } else if (p.nama === 'nvidia') {
         const baseUrl = (process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, '');
@@ -404,6 +507,8 @@ export async function panggilRouterWorkerJson({
           label: 'NVIDIA',
           penyedia: 'nvidia',
           url: `${baseUrl}/chat/completions`,
+          urlModels: `${baseUrl}/models`,
+          saringModel: (id) => !BUKAN_CHAT_WORKER.test(id) && /instruct|chat|llama|qwen|deepseek|mistral/i.test(id),
           apiKey: process.env.NVIDIA_API_KEY,
           kandidatModel: kandidat,
           system: system + petunjukJson,
@@ -411,6 +516,8 @@ export async function panggilRouterWorkerJson({
           suhu,
           maksToken,
           statusLanjut: STATUS_LANJUT_WORKER,
+          skemaZod,
+          normalisasi,
         });
       } else if (p.nama === 'openrouter') {
         const kandidat = [...new Set([process.env.STUDIO_OPENROUTER_MODEL, ...KANDIDAT_MODEL_WORKER.openrouter].filter(Boolean))];
@@ -426,18 +533,14 @@ export async function panggilRouterWorkerJson({
           suhu,
           maksToken,
           headerTambahan: { 'HTTP-Referer': 'https://bakafrawi.com', 'X-Title': 'Bakafrawi Studio' },
-          statusLanjut: [404, 410, 429, 503],
+          statusLanjut: [400, 402, 404, 410, 429, 500, 502, 503, 504],
+          skemaZod,
+          normalisasi,
         });
       } else if (p.nama === 'gemini') {
-        r = await panggilGeminiWorker({ system: system + petunjukJson, prompt, gambar, suhu, maksToken: Math.max(maksToken, 6000) });
+        r = await panggilGeminiWorker({ system: system + petunjukJson, prompt, gambar, suhu, maksToken: Math.max(maksToken, 6000), skemaZod, normalisasi });
       } else {
-        r = await panggilCloudflareWorker({ system: system + petunjukJson, prompt, suhu, maksToken });
-      }
-
-      if (skemaZod) {
-        const cek = skemaZod.safeParse(r.data);
-        if (!cek.success) throw new Error(`Format JSON tidak cocok (${cek.error?.issues?.[0]?.path?.join('.') || 'skema'})`);
-        r.data = cek.data;
+        r = await panggilCloudflareWorker({ system: system + petunjukJson, prompt, suhu, maksToken, skemaZod, normalisasi });
       }
 
       return {

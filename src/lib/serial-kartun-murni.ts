@@ -952,33 +952,34 @@ export function buatPromptNaskahDrafSerial({
   if (gayaCerita === "dokumenter") {
     const gayaGambar =
       temaVisual === "perkamen"
-        ? "flat vintage editorial historical illustration with warm parchment paper grain, cream ochre terracotta umber palette, clean upper sky space for scroll title, vertical 9:16, no text, no watermark"
-        : "atmospheric dark 2D painterly gouache illustration with subtle paper grain, deep indigo-charcoal shadows and warm glowing amber light, darkened lower third for typography, vertical 9:16, no text, no watermark";
+        ? "flat vintage historical storybook illustration with warm parchment paper grain, muted cream ochre terracotta umber palette, soft empty upper sky, vertical 9:16 composition, strictly no text, no letters, no banners, no signage, no watermark, no floating coffee cups"
+        : "atmospheric dark 2D painterly gouache illustration with subtle paper grain, deep indigo-charcoal shadows and warm glowing amber light, darkened lower third, vertical 9:16 composition, strictly no text, no letters, no signage, no watermark, no floating coffee cups";
     return {
       system:
-        `Kamu penulis naskah film dokumenter & kisah sejarah sinematik (Reels 9:16) yang mengutamakan akurasi fakta dan adab keilmuan. ` +
-        `Bahasa Indonesia baku-hangat yang puitis namun tetap jelas, berwibawa, dan enak didengar sebagai voice-over dokumenter. ` +
-        `ATURAN KETAT DOKUMENTER MURNI (CERITA MOTION — tema ${temaVisual}):\n` +
-        `1) Set \`tokohKiri: null\` dan \`tokohKanan: null\` di SELURUH adegan (tidak boleh memunculkan tokoh barista/pelanggan komedi kedai).\n` +
-        `2) DILARANG KERAS memakai kata gaul/logat daerah ("lho", "rek", "cak", "nih", "sih"), DILARANG menyebut kasir, mesin espresso modern, atau daftar harga menu kafe.\n` +
-        `3) Gunakan \`pembicara: "narator"\` (boleh isi \`namaPembicara: "Narator"\` atau nama tokoh saat menukil doa/perkataan singkat yang terverifikasi, sementara narator tetap membacakannya).\n` +
-        `4) WAJIB isi \`jenisMotion\` ("pembuka" untuk adegan 1, "${temaVisual === "perkamen" ? "perkamen" : "ilustrasi"}" untuk adegan isi, boleh "peta" 1x jika membahas penyebaran rute Mokha/dunia, dan "penutup" untuk adegan terakhir), \`judulKartu\` singkat 2–5 kata, dan \`kataSorot\` (2–4 kata kunci penting dari dialog untuk disorot warna emas/kuning).\n` +
-        `5) WAJIB isi \`promptVisual\` berbahasa Inggris pada setiap adegan non-peta dengan adegan visual konkret selaras zaman dan akhiri dengan: "${gayaGambar}".`,
+        `Kamu penulis naskah film dokumenter & kisah naratif sinematik (Reels 9:16) yang mengutamakan kesetiaan pada alur cerita pemilik, akurasi fakta, dan adab keilmuan. ` +
+        `Bahasa Indonesia baku-hangat yang mengalir hidup, puitis, berwibawa, dan enak didengar sebagai voice-over dokumenter. ` +
+        `ATURAN KETAT DOKUMENTER / CERITA MOTION (tema ${temaVisual}):\n` +
+        `1) Set \`tokohKiri: null\` dan \`tokohKanan: null\` di SELURUH adegan (dilarang memunculkan tokoh barista/pelanggan komedi kedai yang tidak diminta pemilik).\n` +
+        `2) DILARANG kata gaul/logat receh ("lho", "rek", "cak", "nih", "sih"), DILARANG menyebut kasir, mesin espresso modern, atau daftar harga menu kafe.\n` +
+        `3) WAJIB IKUTI TOKOH & ALUR CERITA PEMILIK: Jika pemilik menyebut tokoh atau perjalanan spesifik (mis. perjalanan seseorang ke Aceh/Gayo/daerah tertentu), tokoh dan perjalanan tersebut HARUS menjadi tulang punggung cerita sejak Adegan 1 sampai penutup! DILARANG mengubahnya menjadi daftar tahun kering ala Wikipedia ("Pada tahun X... Pada tahun Y..."). Sisipkan fakta sejarah secara alami di dalam alur cerita yang hidup.\n` +
+        `4) Gunakan \`pembicara: "narator"\`.\n` +
+        `5) WAJIB isi \`jenisMotion\` ("pembuka" untuk adegan 1, "${temaVisual === "perkamen" ? "perkamen" : "ilustrasi"}" untuk adegan isi, boleh "peta" maksimal 1x HANYA jika membahas penyebaran wilayah geografis, dan "penutup" untuk adegan terakhir), WAJIB isi \`judulKartu\` singkat 2–4 kata pada setiap adegan \`pembuka\`, \`perkamen\`, dan \`peta\`, serta \`kataSorot\` (2–4 kata kunci persis dari dialog).\n` +
+        `6) WAJIB isi \`promptVisual\` berbahasa Inggris pada setiap adegan non-peta menggambarkan adegan spesifik yang BENAR-BENAR sesuai lokasi & peristiwa dialog (JANGAN pernah menyebut tempat yang tidak relevan dengan cerita), dan akhiri dengan: "${gayaGambar}".`,
       prompt:
-        `Susun draf naskah DOKUMENTER MURNI (CeritaMotion · tema ${temaVisual}) untuk "${judulSerial}" EPISODE ${nomorEpisode} berisi **${spek.rentangAdegan}** (target durasi **${spek.durasiLabel}**).\n` +
-        `Gunakan \`latarKode: "sejarah"\` atau kode deskriptif singkat per adegan (mis. "gua", "lembah", "majelis", "mokha").` +
+        `Susun draf naskah DOKUMENTER / CERITA MOTION (tema ${temaVisual}) untuk "${judulSerial}" EPISODE ${nomorEpisode} berisi **${spek.rentangAdegan}** (target durasi **${spek.durasiLabel}**).\n` +
+        `Isi \`latarKode\` dengan 1 kata singkat sesuai lokasi adegan cerita (mis. "pelabuhan", "kebun", "perjalanan", "desa", "peta").` +
+        `\n\n${topik ? `BAHAN CERITA & ALUR UTAMA DARI PEMILIK (WAJIB DIIKUTI SEBAGAI INTI CERITA):\n${topik}` : "Topik: kisah inspiratif perjalanan kopi dan ketekunan."}` +
         (risetBersih
-          ? `\n\nHASIL RISET FAKTA TERVERIFIKASI (WAJIB JADI ACUAN UTAMA — DILARANG MENGARANG DI LUAR FAKTA INI):\n${risetBersih}`
-          : `\n\nVerifikasi fakta tokoh, era/abad, dan kronologi secara cermat terlebih dahulu; bedakan dengan jelas mana fakta sejarah dan mana kisah populer bila diperlukan.`) +
+          ? `\n\nREFERENSI FAKTA SEJARAH PENDUKUNG (gunakan untuk menjaga akurasi latar sejarah tanpa membuang tokoh/alur pemilik):\n${risetBersih}`
+          : `\n\nJaga akurasi fakta era/abad dan lokasi secara cermat; jangan mengarang tahun atau sumber yang tidak pasti.`) +
         teksRiwayat +
-        `\n\n${topik ? `Topik / bahan cerita dari pemilik:\n${topik}` : "Topik: sejarah perjalanan kopi & nilai ketekunan dalam peradaban Islam."}` +
         arahanBersambung +
         `\n\nAturan narasi & visual per adegan:` +
-        `\n- Panjang narasi per adegan: **${spek.kataPerAdegan}** (${spek.durasiAdegan}) — kalimat utuh, runtut secara kronologis, dan terasa hidup sebagai film dokumenter.` +
-        `\n- Adegan 1 (\`jenisMotion: "pembuka"\`) dibuka dengan hook sinematik yang kuat + \`judulKartu\` singkat.` +
-        `\n- Isi \`kartuWaktu\` singkat saat berganti era, tempat, atau babak cerita (mis. "YAMAN · ABAD KE-15", "MAJELIS QAHWAH · MOKHA").` +
-        `\n- Isi \`kataSorot\` (2–4 kata kunci yang persis ada di \`dialog\`) agar subtitle kinetik menyorot kata penting dengan emas/kuning.` +
-        `\n- Isi \`promptVisual\` (Bahasa Inggris, 15–35 kata) pada SETIAP adegan dengan adegan visual konkret + gaya "${gayaGambar}".`,
+        `\n- Panjang narasi per adegan: **${spek.kataPerAdegan}** (${spek.durasiAdegan}) — tulis 2–3 kalimat naratif yang mengalir bercerita, BUKAN 1 kalimat ringkas kering.` +
+        `\n- Adegan 1 (\`jenisMotion: "pembuka"\`) dibuka dengan hook sinematik yang kuat + \`judulKartu\` singkat (2–4 kata).` +
+        `\n- Pada setiap adegan \`perkamen\`, WAJIB isi \`judulKartu\` singkat (2–4 kata) agar gulungan perkamen tampil rapi + \`kartuWaktu\` singkat (mis. "ACEH · BENER MERIAH" atau era sesuai cerita).` +
+        `\n- Isi \`kataSorot\` (2–4 kata kunci yang persis ada di \`dialog\`) agar subtitle kinetik menyorot kata penting.` +
+        `\n- Isi \`promptVisual\` (Bahasa Inggris, 15–35 kata) pada SETIAP adegan non-peta dengan adegan konkret sesuai cerita + gaya "${gayaGambar}".`,
     };
   }
 

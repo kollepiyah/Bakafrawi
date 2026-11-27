@@ -16,8 +16,14 @@ export const TAG_AI = 'ai'
 /** Ukuran per rasio (kelipatan 16). FLUX ditagih per petak 512×512: 720×1280 = 6 petak. */
 export const UKURAN_RASIO = { '9:16': [720, 1280], '4:5': [1024, 1280], '1:1': [1024, 1024] }
 
-export function promptGambar(deskripsi) {
+export function promptGambar(deskripsi, { mode = 'otomatis' } = {}) {
   const teks = String(deskripsi).trim()
+  const adalahIlustrasi =
+    mode === 'ilustrasi' ||
+    /\b(illustration|ilustrasi|painterly|gouache|storybook|vintage|historical|sejarah|parchment|perkamen|watercolor|woodcut)\b/i.test(teks)
+  if (adalahIlustrasi) {
+    return `${teks}\n\nStrictly no text, no letters, no words, no numbers, no banners, no labels, no logos, no watermarks, no signage, no floating modern cafe cups.`
+  }
   const adalahProduk = /kopi|coffee|latte|espresso|milkshake|matcha|minuman|drink|cup|cangkir|gelas|glass|es |iced |tea|teh|cake|kue|cireng|snack|cemilan|croissant|studio|editorial|minimalis|minimalist|krem|cream|#f3ebdf|#f4ece0|splash|floating|pour/i.test(teks)
   const adalahKafe = /kafe|cafe|barista|kedai|nongkrong|warung kopi/i.test(teks)
   const gaya = adalahProduk
@@ -71,13 +77,14 @@ async function cfJalankan(model, isi, ambil) {
 const cloudflare = {
   nama: 'cloudflare',
   ada: () => !!(process.env.CF_ACCOUNT_ID && process.env.CF_API_TOKEN),
-  async buat(deskripsi, rasio, keluar, ambil) {
+  async buat(deskripsi, rasio, keluar, ambil, opsiGambar = {}) {
     const model = process.env.STUDIO_CF_GAMBAR || CF_BAWAAN
     const ukuran = UKURAN_RASIO[rasio] ?? UKURAN_RASIO['1:1']
+    const teksPrompt = promptGambar(deskripsi, opsiGambar)
     try {
       // FLUX.2 lewat REST memakai multipart form (prompt, width, height).
       const form = new FormData()
-      form.append('prompt', promptGambar(deskripsi))
+      form.append('prompt', teksPrompt)
       form.append('width', String(ukuran[0]))
       form.append('height', String(ukuran[1]))
       const b64 = await cfJalankan(model, { body: form, headers: {} }, ambil)
@@ -85,7 +92,7 @@ const cloudflare = {
     } catch (e) {
       if (galatKuota(e) || model === CF_PERSEGI) throw e
       // Cadangan di Cloudflare sendiri: schnell (JSON, selalu persegi — dipotong saat dirakit).
-      const b64 = await cfJalankan(CF_PERSEGI, { body: JSON.stringify({ prompt: promptGambar(deskripsi), steps: 4 }), headers: { 'content-type': 'application/json' } }, ambil)
+      const b64 = await cfJalankan(CF_PERSEGI, { body: JSON.stringify({ prompt: teksPrompt, steps: 4 }), headers: { 'content-type': 'application/json' } }, ambil)
       return { berkas: await simpanBase64(b64, keluar), biayaUsd: hargaCf(CF_PERSEGI), model: CF_PERSEGI, catatan: `FLUX.2 gagal (${e.message.slice(0, 80)}), pakai schnell persegi` }
     }
   },
@@ -118,13 +125,13 @@ async function pilihModelGemini(ambil) {
 const gemini = {
   nama: 'gemini',
   ada: () => !!process.env.GEMINI_API_KEY,
-  async buat(deskripsi, rasio, keluar, ambil) {
+  async buat(deskripsi, rasio, keluar, ambil, opsiGambar = {}) {
     const model = await pilihModelGemini(ambil)
     const r = await ambil(`${API_GEMINI}/models/${model}:generateContent`, {
       method: 'POST',
       headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY, 'content-type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: promptGambar(deskripsi) }] }],
+        contents: [{ parts: [{ text: promptGambar(deskripsi, opsiGambar) }] }],
         generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: rasio } },
       }),
     })
@@ -140,7 +147,7 @@ const NVIDIA_GAMBAR_BAWAAN = 'black-forest-labs/flux.1-schnell'
 const nvidia = {
   nama: 'nvidia',
   ada: () => !!process.env.NVIDIA_API_KEY,
-  async buat(deskripsi, rasio, keluar, ambil) {
+  async buat(deskripsi, rasio, keluar, ambil, opsiGambar = {}) {
     const model = process.env.STUDIO_NVIDIA_GAMBAR || NVIDIA_GAMBAR_BAWAAN
     const ukuran = UKURAN_RASIO[rasio] ?? UKURAN_RASIO['1:1']
     const url = `https://ai.api.nvidia.com/v1/genai/${model}`
@@ -152,7 +159,7 @@ const nvidia = {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        prompt: promptGambar(deskripsi),
+        prompt: promptGambar(deskripsi, opsiGambar),
         width: ukuran[0],
         height: ukuran[1],
         steps: model.includes('schnell') ? 4 : 25,
@@ -189,12 +196,12 @@ const habis = new Set()
  * Satu gambar dari penyedia pertama yang berhasil → { berkas, biayaUsd, penyedia, catatan? }.
  * Semua kehabisan kuota → galat ber-kuota (pemanggil berhenti mencoba gambar berikutnya).
  */
-export async function buatGambarAi(deskripsi, rasio, keluarTanpaEkstensi, { ambil = fetch, penyedia = urutanPenyedia() } = {}) {
+export async function buatGambarAi(deskripsi, rasio, keluarTanpaEkstensi, { ambil = fetch, penyedia = urutanPenyedia(), mode = 'otomatis' } = {}) {
   const gagal = []
   for (const p of penyedia) {
     if (habis.has(p.nama)) continue
     try {
-      return { ...(await p.buat(deskripsi, rasio, keluarTanpaEkstensi, ambil)), penyedia: p.nama }
+      return { ...(await p.buat(deskripsi, rasio, keluarTanpaEkstensi, ambil, { mode })), penyedia: p.nama }
     } catch (e) {
       if (galatKuota(e)) habis.add(p.nama)
       gagal.push(e)

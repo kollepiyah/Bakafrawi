@@ -4,9 +4,10 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { gabungRiwayatEpisode, siapkanPropsCeritaMotion, siapkanPropsSerialKartun } from './serial-kartun.mjs';
+import { gabungRiwayatEpisode, normalisasiNaskahSerialWorker, siapkanPropsCeritaMotion, siapkanPropsSerialKartun, SkemaNaskahSerial } from './serial-kartun.mjs';
 import { KANDIDAT_MODEL_WORKER, parseJsonToleran, urutanPenyediaWorker } from './router-worker.mjs';
 import { pilihVoicePerTokoh, suaraDialogSerial } from './bank/suara.mjs';
+import { promptGambar } from './bank/gambar-ai.mjs';
 import {
   contohSerialKartun,
   DURASI_INTRO_DETIK,
@@ -295,10 +296,28 @@ test('urutanPenyediaWorker mendahulukan AI gratis, memisahkan vision & mematikan
   assert.ok(!KANDIDAT_MODEL_WORKER.openrouter.includes('google/gemini-2.0-flash-exp:free'));
   assert.ok(KANDIDAT_MODEL_WORKER.cloudflare.includes('@cf/meta/llama-4-scout-17b-16e-instruct'));
 
-  // Parser JSON toleran tahan trailing comma & newline mentah di dalam string
-  const parsed = parseJsonToleran('```json\n{"judul":"Qahwah\nMokha","adegan":[{"nomor":1,},]}\n```');
+  // Parser JSON toleran tahan blok <think>, trailing comma & newline mentah di dalam string
+  const parsed = parseJsonToleran('<think>Mari susun {draft} dulu</think>\n```json\n{"judul":"Qahwah\nMokha","adegan":[{"nomor":1,},]}\n```');
   assert.equal(parsed.judul, 'Qahwah\nMokha');
   assert.equal(parsed.adegan[0].nomor, 1);
+
+  // Normalisasi naskah serial worker meloloskan JSON Cloudflare/OpenRouter yang enum sfx/kamera-nya meleset
+  const mentahCf = {
+    naskah: {
+      judul: 'Jejak Kopi Nusantara',
+      scenes: [
+        { nomor: '1', latar: 'kebun', kamera: 'pan_slow', pembicara: 'narator', narasi: 'Adegan satu mulai.', sfx: 'none' },
+        { latar: 'pelabuhan', dialog: 'Adegan dua berlanjut.', sfx: '' },
+        { dialog: 'Adegan tiga penutup.' },
+      ],
+    },
+  };
+  const rapi = normalisasiNaskahSerialWorker(mentahCf, { nomorEpisode: 2, gayaCerita: 'dokumenter' });
+  const cek = SkemaNaskahSerial.safeParse(rapi);
+  assert.equal(cek.success, true);
+  assert.equal(rapi.adegan.length, 3);
+  assert.equal(rapi.adegan[0].sfx, 'tanpa');
+  assert.equal(rapi.adegan[0].kamera, 'zoom_masuk');
 });
 
 test('siapkanPropsCeritaMotion memetakan adegan pembuka/perkamen/peta/penutup dan timestamps ElevenLabs', () => {
@@ -405,4 +424,44 @@ test('narator pria tidak jatuh ke suara wanita saat otomatis maupun saat ElevenL
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('promptGambar mode ilustrasi sejarah tidak menyisipkan prompt gelas meja kafe, dan peta Nusantara terdeteksi otomatis', () => {
+  const p = promptGambar('A vintage historical illustration of coffee plants in Parakan with cream sky', {
+    mode: 'ilustrasi',
+  });
+  assert.equal(p.includes('cafe tabletop product photography'), false);
+  assert.equal(p.includes('single beverage'), false);
+  assert.match(p, /no floating modern cafe cups/i);
+
+  // Bahkan tanpa mode eksplisit, kata kunci historical/illustration tetap bebas bungkus produk kafe
+  const pAuto = promptGambar('Flat vintage historical illustration of coffee harvest in Gayo Aceh');
+  assert.equal(pAuto.includes('cafe tabletop product photography'), false);
+
+  const propsNusantara = siapkanPropsCeritaMotion(
+    {
+      judulEpisode: 'Jejak Kopi Nusantara',
+      adegan: [
+        {
+          nomor: 1,
+          jenisMotion: 'perkamen',
+          kartuWaktu: 'BATAVIA · 1696',
+          dialog: 'Bibit kopi pertama mulai ditanam di Jawa.',
+        },
+        {
+          nomor: 2,
+          jenisMotion: 'peta',
+          kartuWaktu: 'SUMATERA, SULAWESI, DAN BALI · ABAD KE-19',
+          dialog: 'Perkebunan kopi menyebar ke Aceh Gayo, Sumatera, Sulawesi, dan Bali.',
+        },
+      ],
+    },
+    { judulSerial: 'Jejak Kopi Nusantara', nomorEpisode: 1, temaVisual: 'perkamen' },
+  );
+
+  // Perkamen tanpa judulKartu tetap dapat judul gulungan otomatis dari kartuWaktu
+  assert.equal(propsNusantara.adegan[0].judulKartu, 'Batavia');
+  // Peta cerita Indonesia memakai wilayah Nusantara, BUKAN Mokha
+  assert.equal(propsNusantara.adegan[1].wilayahPeta, 'nusantara');
+  assert.equal(propsNusantara.adegan[1].judulKartu, 'NUSANTARA');
 });

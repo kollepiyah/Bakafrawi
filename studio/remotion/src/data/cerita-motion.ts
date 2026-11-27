@@ -50,6 +50,8 @@ export type AdeganCeritaMotion = {
   /** Baris atas/bawah plakat peta (mis. "Abad ke-15" / "Pelabuhan Mokha, Yaman"). */
   plakatTahun?: string;
   plakatTempat?: string;
+  /** Wilayah peta kuno untuk jenis 'peta': Nusantara (Indonesia) atau Mokha (Yaman/Dunia). */
+  wilayahPeta?: 'mokha' | 'nusantara';
   /** Teks narasi yang tampil sebagai subtitle kinetik. */
   narasi: string;
   /** Daftar kata (lowercase) yang disorot warna kuning/emas. */

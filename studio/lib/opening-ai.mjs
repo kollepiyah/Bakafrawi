@@ -104,20 +104,37 @@ export async function buatKonsepOpeningAI({ merekNama = 'Lek Kopi', jamBuka = '0
       '{"judul":"2 baris sangat singkat maks 22 huruf total (pakai \\n, mis. WE ARE\\nOPEN.)","sub":"1 kalimat singkat maks 68 huruf","menuNama":"nama menu PERSIS dari daftar (atau umum jika daftar kosong)","menuHarga":"Rp... persis dari daftar (atau kosong jika daftar kosong)","menuKet":"1 kalimat singkat maks 72 huruf","promptLatar":"English visual prompt for minimalist coffee product photography on wooden table, daylight, NO text"}';
 
     const skemaOpening = z.object({
-      judul: z.string(),
-      sub: z.string(),
-      menuNama: z.string(),
+      judul: z.string().min(1),
+      sub: z.string().min(1),
+      menuNama: z.string().min(1),
       menuHarga: z.string().optional().default(''),
-      menuKet: z.string(),
-      promptLatar: z.string(),
+      menuKet: z.string().min(1),
+      promptLatar: z.string().min(1),
     });
+
+    const normalisasiOpening = (mentah) => {
+      const akar = mentah && typeof mentah === 'object' && !Array.isArray(mentah) ? mentah : {};
+      const bungkus = [akar.konsep, akar.data, akar.hasil, akar.story].find(
+        (v) => v && typeof v === 'object' && !Array.isArray(v),
+      );
+      const o = akar.judul || akar.title || akar.headline ? akar : (bungkus ?? akar);
+      return {
+        judul: String(o.judul ?? o.title ?? o.headline ?? '').trim(),
+        sub: String(o.sub ?? o.subtitle ?? o.subjudul ?? cadangan.sub).trim(),
+        menuNama: String(o.menuNama ?? o.menu_nama ?? o.menu ?? cadangan.menuNama).trim(),
+        menuHarga: String(o.menuHarga ?? o.menu_harga ?? o.harga ?? '').trim(),
+        menuKet: String(o.menuKet ?? o.menu_ket ?? o.deskripsi ?? cadangan.menuKet).trim(),
+        promptLatar: String(o.promptLatar ?? o.prompt_latar ?? o.prompt ?? cadangan.promptLatar).trim(),
+      };
+    };
 
     const r = await panggilRouterWorkerJson({
       system: `Kamu direktur kreatif untuk kedai kopi ${merekNama}. Tulis dalam Bahasa Indonesia yang santai & hangat.`,
       prompt,
-      maksToken: 700,
+      maksToken: 900,
       suhu: 0.7,
       skemaZod: skemaOpening,
+      normalisasi: normalisasiOpening,
       petunjukJson,
       namaTahap: 'konsep opening ai',
       effortClaude: 'low',

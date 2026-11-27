@@ -1353,7 +1353,7 @@ export function PanelSerialKartun({
                             <option value="pembuka" className="bg-card">Pembuka Judul (Malam)</option>
                             <option value="ilustrasi" className="bg-card">Ilustrasi Sinematik</option>
                             <option value="perkamen" className="bg-card">Gulungan Perkamen</option>
-                            <option value="peta" className="bg-card">Peta Kuno (Rute Mokha)</option>
+                            <option value="peta" className="bg-card">Peta Kuno (Otomatis Nusantara / Mokha)</option>
                             <option value="penutup" className="bg-card">Penutup &amp; Kredit</option>
                           </select>
                         </label>
