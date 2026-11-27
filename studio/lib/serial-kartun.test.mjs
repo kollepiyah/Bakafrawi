@@ -7,6 +7,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { gabungRiwayatEpisode, normalisasiNaskahSerialWorker, pilihKarakterCeritaOtomatis, siapkanPropsCeritaMotion, siapkanPropsSerialKartun, SkemaNaskahSerial } from './serial-kartun.mjs';
 import { KANDIDAT_MODEL_WORKER, parseJsonToleran, urutanPenyediaWorker } from './router-worker.mjs';
 import { deteksiGenderCerita, kataDariMetadataEdge, pilihVoicePerTokoh, suaraDialogSerial } from './bank/suara.mjs';
+import { hitungTargetBitrateKbps } from './bank/alat.mjs';
 import { promptGambar } from './bank/gambar-ai.mjs';
 import {
   contohSerialKartun,
@@ -528,4 +529,82 @@ test('promptGambar mode ilustrasi sejarah tidak menyisipkan prompt gelas meja ka
   // Peta cerita Indonesia memakai wilayah Nusantara, BUKAN Mokha
   assert.equal(propsNusantara.adegan[1].wilayahPeta, 'nusantara');
   assert.equal(propsNusantara.adegan[1].judulKartu, 'NUSANTARA');
+});
+
+test('hitungTargetBitrateKbps menjaga ukuran video panjang tetap di bawah batas 50 MB Storage', () => {
+  const brPanjang = hitungTargetBitrateKbps(180, 42, 128);
+  assert.ok(brPanjang >= 650 && brPanjang <= 2000);
+  // Perkiraan ukuran total (video + audio) 180 detik harus aman < 42 MB
+  const estimasiMb = ((brPanjang + 128) * 180) / 8 / 1024;
+  assert.ok(estimasiMb < 42, `Estimasi ${estimasiMb.toFixed(1)} MB terlalu besar`);
+
+  const brPendek = hitungTargetBitrateKbps(30, 42, 128);
+  assert.equal(brPendek, 3800);
+});
+
+test('pilihKarakterCeritaOtomatis memvariasikan 8 tokoh berwarna, pose baru & mencegah aksi monoton berurutan', () => {
+  const kPetani = pilihKarakterCeritaOtomatis(
+    { dialog: 'Para petani memetik ceri kopi merah di lereng Gayo dan berkumpul ramai bersama warga.' },
+    1,
+    { jenis: 'perkamen', konteksCerita: 'Jejak Kopi Nusantara' },
+  );
+  assert.equal(kPetani.tokohUtama, 'petani');
+  assert.equal(kPetani.aksi, 'ramai_tiga');
+  assert.equal(kPetani.gaya, 'ilustrasi');
+
+  const kSeduh = pilihKarakterCeritaOtomatis(
+    { dialog: 'Sambil duduk di meja kayu, ia menyeduh secangkir kopi hangat perlahan.' },
+    2,
+    { jenis: 'ilustrasi', konteksCerita: 'Jejak Kopi Nusantara', sebelumnya: kPetani },
+  );
+  assert.equal(kSeduh.aksi, 'duduk_seduh');
+  assert.equal(kSeduh.properti, 'cangkir');
+
+  const kHorizon = pilihKarakterCeritaOtomatis(
+    { dialog: 'Ia berdiri menatap cakrawala laut dan gunung saat fajar menyingsing.' },
+    3,
+    { jenis: 'ilustrasi', konteksCerita: 'Jejak Kopi Nusantara', sebelumnya: kSeduh },
+  );
+  assert.equal(kHorizon.aksi, 'tatap_horizon');
+
+  // Dua adegan berurutan dengan teks sama tidak mengulang aksi yang sama
+  const kUlang = pilihKarakterCeritaOtomatis(
+    { dialog: 'Ia kembali menatap laut jauh di cakrawala fajar.' },
+    4,
+    { jenis: 'ilustrasi', konteksCerita: 'Jejak Kopi Nusantara', sebelumnya: kHorizon },
+  );
+  assert.notEqual(kUlang.aksi, kHorizon.aksi);
+
+  // Override manual 'tanpa' menyembunyikan karakter
+  const kTanpa = pilihKarakterCeritaOtomatis(
+    { dialog: 'Pemandangan alam saja.', karakter: { aksi: 'tanpa' } },
+    2,
+    { jenis: 'ilustrasi' },
+  );
+  assert.equal(kTanpa, undefined);
+});
+
+test('gabungRiwayatEpisode menyimpan metadata sambungan episode (gayaCerita, adeganTerakhir, jembatanBerikutnya)', () => {
+  const hasil = gabungRiwayatEpisode(
+    undefined,
+    'jejak-kopi',
+    {
+      nomor: 1,
+      judul: 'Pelabuhan Banten',
+      ringkasan: 'Lek Aceng menemukan arsip kapal VOC.',
+      tema: 'Sejarah Kopi',
+      mood: 'cerita_kopi',
+      gayaCerita: 'dokumenter',
+      temaVisual: 'perkamen',
+      adeganTerakhir: 'Lek Aceng melipat surat tua dan bersiap berlayar ke Gayo.',
+      jembatanBerikutnya: 'Bagaimana perjalanan Lek Aceng di Gayo? Tunggu Episode 2!',
+      tugasId: 't-100',
+    },
+    { judulSerial: 'Jejak Kopi Nusantara' },
+  );
+  const ep = hasil.serial[0].episode[0];
+  assert.equal(ep.gayaCerita, 'dokumenter');
+  assert.equal(ep.temaVisual, 'perkamen');
+  assert.match(ep.adeganTerakhir, /berlayar ke Gayo/);
+  assert.match(ep.jembatanBerikutnya, /Episode 2/);
 });

@@ -376,7 +376,7 @@ export async function buatNaskahSerialKartun({
       arahanMood,
       arahanFormat,
       `Latar yang tersedia (pilih kode di kolom \`latarKode\`):\n${teksLatar}`,
-      `MENU RESMI LEK KOPI (lek-kopi.web.app):\n${teksMenu}\nBila menyebut menu atau harga kedai, WAJIB pakai HANYA menu resmi Lek Kopi dari daftar ini / https://lek-kopi.web.app; DILARANG mengarang menu yang tidak ada.`,
+      `MENU RESMI LEK KOPI (lekkopi.bakafrawi.com):\n${teksMenu}\nBila menyebut menu atau harga kedai, WAJIB pakai HANYA menu resmi Lek Kopi dari daftar ini / https://lekkopi.bakafrawi.com; DILARANG mengarang menu yang tidak ada.`,
       teksRiwayat,
       ideBersih ? `Bahan cerita / ide / contoh naskah dari Kyai:\n${ideBersih}` : 'Topik bebas — pilihkan cerita paling relatable, mendalam, dan hangat.',
       arahanBersambung,
@@ -556,101 +556,175 @@ function pecahJudulPerkamen(judul) {
 }
 
 /**
- * Tentukan animasi karakter 2D tampak samping (berjalan, memeriksa arsip, dialog 2 tokoh, berdiri)
- * secara otomatis dari isi narasi, tipe cerita, dan gender narator/tokoh. Murni.
+ * Tentukan animasi karakter 2D (8 tipe tokoh berwarna/siluet + 9 pose sinematik + anti-pengulangan)
+ * secara otomatis dari isi narasi adegan, override manual, dan adegan sebelumnya. Murni.
  */
 export function pilihKarakterCeritaOtomatis(
   adegan,
   idx,
-  { jenis = 'ilustrasi', genderNarator = 'pria', konteksCerita = '' } = {},
+  {
+    jenis = 'ilustrasi',
+    genderNarator = 'pria',
+    konteksCerita = '',
+    gayaKarakter = 'ilustrasi',
+    sebelumnya = null,
+    totalAdegan = 1,
+  } = {},
 ) {
   if (jenis === 'peta' || jenis === 'arsip') return undefined;
-  if (adegan?.karakter && typeof adegan.karakter === 'object' && adegan.karakter.aksi) {
-    return adegan.karakter;
-  }
+
+  const gayaFinal = gayaKarakter === 'siluet' ? 'siluet' : 'ilustrasi';
+  const manual = adegan?.karakter && typeof adegan.karakter === 'object' ? adegan.karakter : null;
+  if (manual?.aksi === 'tanpa') return undefined;
 
   const narasi = String(adegan?.dialog ?? adegan?.narasi ?? '').trim();
   const gabung = `${konteksCerita} ${narasi}`;
 
-  const sebutWanita = /\b(mbak|mba|ibu|bunda|umi|ning|nisa|aisyah|siti|putri|ayu|dewi|rina|sari|indah|rara|gadis|wanita|perempuan|santriwati)\b/i.test(
-    narasi,
-  );
-  const sebutSantri = /\b(syekh|syeikh|ulama|kyai|kiai|gus|ustadz|santri|pesantren|pondok|sufi|dzikir|masjid|kitab|madrasah|ngaji)\b/i.test(
-    gabung,
-  );
-  const sebutPetualang = /\b(lek\s+\w+|pelabuhan|perkebunan|jejak|penjelajah|petualang|perjalanan|kapal|gunung|lembah|voc|nusantara|banten|yaman|mokha|stasiun)\b/i.test(
-    gabung,
-  );
+  // Pada episode panjang, sesekali biarkan 1 adegan tengah bersih (tanpa karakter) agar ilustrasi AI bernapas.
+  if (
+    !manual?.aksi &&
+    !manual?.tokohUtama &&
+    jenis !== 'pembuka' &&
+    jenis !== 'penutup' &&
+    totalAdegan >= 7 &&
+    idx > 1 &&
+    idx < totalAdegan - 1 &&
+    idx % 5 === 4
+  ) {
+    return undefined;
+  }
 
-  const tokohUtama =
-    genderNarator === 'wanita' || (sebutWanita && !/\b(lek\s+\w+|mas\s+\w+|pak\s+\w+|syekh|kyai|arga)\b/i.test(narasi))
-      ? 'wanita'
-      : sebutSantri
-      ? 'santri'
-      : sebutPetualang
-      ? 'petualang'
-      : 'pria';
+  // Deteksi tipe tokoh: prioritaskan isi spesifik narasi adegan saat ini agar 1 episode bervariasi (tidak monoton).
+  const sebutWanitaNarasi = /\b(mbak|mba|ibu|bunda|umi|ning|nisa|aisyah|siti|putri|ayu|dewi|rina|sari|indah|rara|gadis|wanita|perempuan|santriwati)\b/i.test(narasi);
+  const sebutPriaNamaNarasi = /\b(lek\s+\w+|mas\s+\w+|pak\s+\w+|syekh|syeikh|kyai|kiai|arga)\b/i.test(narasi);
+  const sebutPetualangNarasi = /\b(lek\s+\w+|perjalanan|menjelajah|jejak|petualang|ekspedisi|stasiun|berangkat)\b/i.test(narasi);
+  const sebutSantriNarasi = /\b(syekh|syeikh|ulama|kyai|kiai|gus|ustadz|santri|pesantren|pondok|sufi|dzikir|masjid|kitab|doa|ibadah|ngaji)\b/i.test(narasi);
+  const sebutPetaniNarasi = /\b(petani|kebun|panen|tanam|biji merah|ceri kopi|lereng|ladang|gayo|parakan|perkebunan|petik)\b/i.test(narasi);
+  const sebutPedagangNarasi = /\b(pedagang|saudagar|kapal|berlayar|voc|dagang|pasar|pelaut|niaga|bandar|pelabuhan)\b/i.test(narasi);
+  const sebutTetuaNarasi = /\b(kakek|nenek|tetua|sesepuh|orang tua|leluhur|turun-temurun|warisan|zaman dulu|lampau)\b/i.test(narasi);
+  const sebutPemudaNarasi = /\b(modern|kafe|kedai|barista|anak muda|generasi|hari ini|sekarang|menyeduh)\b/i.test(narasi);
 
-  const propKopi = /\b(kopi|cangkir|seduh|teguk|qahwah|espresso|arabika|robusta)\b/i.test(narasi);
-  const propArsip = /\b(arsip|catatan|surat|dokumen|laporan|kartu|kitab|peta|daftar|naskah|buku|voc)\b/i.test(narasi);
+  const sebutSantriKonteks = /\b(syekh|syeikh|ulama|kyai|kiai|santri|pesantren|pondok|sufi|dzikir|qahwah)\b/i.test(gabung);
+  const sebutPetualangKonteks = /\b(lek\s+\w+|pelabuhan|perkebunan|jejak|penjelajah|petualang|perjalanan|kapal|gunung|lembah|voc|nusantara|banten|yaman|mokha|stasiun)\b/i.test(gabung);
+
+  let tokohAuto;
+  if (genderNarator === 'wanita' && !sebutPriaNamaNarasi) {
+    tokohAuto = 'wanita';
+  } else if (sebutWanitaNarasi && !sebutPriaNamaNarasi) {
+    tokohAuto = 'wanita';
+  } else if (sebutSantriNarasi) {
+    tokohAuto = 'santri';
+  } else if (sebutPetualangNarasi) {
+    tokohAuto = 'petualang';
+  } else if (sebutPetaniNarasi) {
+    tokohAuto = 'petani';
+  } else if (sebutPedagangNarasi) {
+    tokohAuto = 'pedagang';
+  } else if (sebutTetuaNarasi) {
+    tokohAuto = 'tetua';
+  } else if (sebutPemudaNarasi) {
+    tokohAuto = 'pemuda';
+  } else if (sebutSantriKonteks) {
+    const kolam = ['santri', 'tetua', 'pedagang', 'petualang'];
+    tokohAuto = kolam[idx % kolam.length];
+  } else if (sebutPetualangKonteks) {
+    const kolam = ['petualang', 'petani', 'pedagang', 'tetua', 'pemuda'];
+    tokohAuto = kolam[idx % kolam.length];
+  } else {
+    const kolam = ['pria', 'wanita', 'pemuda', 'tetua'];
+    tokohAuto = kolam[idx % kolam.length];
+  }
+
+  const tokohUtama = manual?.tokohUtama || tokohAuto;
+  const gaya = manual?.gaya === 'siluet' || manual?.gaya === 'ilustrasi' ? manual.gaya : gayaFinal;
+
+  const propKopi = /\b(kopi|cangkir|seduh|teguk|qahwah|espresso|arabika|robusta|secangkir)\b/i.test(narasi);
+  const propBiji = /\b(biji merah|ceri kopi|panen|kebun|buah merah|petik)\b/i.test(narasi);
+  const propKitab = /\b(kitab|dzikir|ulama|syekh|sufi|pesantren|ngaji)\b/i.test(narasi);
+  const propArsip = /\b(arsip|catatan|surat|dokumen|laporan|kartu|peta|daftar|naskah|buku|voc)\b/i.test(narasi);
   const propLentera = /\b(malam|gelap|fajar|gua|stasiun|sunyi|lampu|lentera|bayangan|lorong)\b/i.test(narasi);
 
-  if (jenis === 'penutup') {
-    return {
-      aksi: 'berdiri_tenang',
-      tokohUtama,
-      properti: propKopi ? 'cangkir' : propArsip ? 'arsip' : 'lentera',
-    };
+  const ekspresi =
+    manual?.ekspresi ||
+    (/\b(ajaib|takjub|heran|terkejut|luar biasa|indah|megah|cahaya)\b/i.test(narasi)
+      ? 'takjub'
+      : /\b(rahasia|arsip|sejarah|fakta|tercatat|perang|kolonial|voc|keras|sulit)\b/i.test(narasi)
+      ? 'serius'
+      : /\b(hangat|senyum|bersama|sahabat|nikmat|harum|bahagia|kopi)\b/i.test(narasi)
+      ? 'hangat'
+      : 'tenang');
+
+  const pilihProperti = (bawaan = 'tas') =>
+    manual?.properti ||
+    (propBiji ? 'biji_kopi' : propKitab ? 'kitab' : propArsip ? 'arsip' : propKopi ? 'cangkir' : propLentera ? 'lentera' : bawaan);
+
+  const pilihPasangan = (utama) => {
+    if (manual?.tokohKedua) return manual.tokohKedua;
+    if (utama === 'wanita') return 'pria';
+    if (sebutWanitaNarasi) return 'wanita';
+    if (utama === 'petualang') return sebutPetaniNarasi ? 'petani' : 'pedagang';
+    if (utama === 'santri') return 'tetua';
+    if (utama === 'petani') return 'pedagang';
+    return 'wanita';
+  };
+
+  const pilihKetiga = (utama, kedua) => {
+    const kandidat = ['tetua', 'petani', 'pedagang', 'pemuda', 'wanita', 'santri'];
+    return kandidat.find((t) => t !== utama && t !== kedua) || 'tetua';
+  };
+
+  let aksi = manual?.aksi || '';
+  if (!aksi) {
+    if (jenis === 'penutup') {
+      aksi = 'berdiri_tenang';
+    } else if (/\b(jalan|berjalan|melangkah|menelusuri|menyusuri|berangkat|menuju|pulang|perjalanan|keliling|melewati|pergi|melintas|ekspedisi|menyebar|tiba)\b/i.test(narasi)) {
+      aksi = idx % 2 === 0 ? 'jalan_kanan' : 'jalan_kiri';
+    } else if (/\b(ramai|warga|penduduk|pasar|majelis|berkumpul|komunitas|para petani|para pedagang|orang-orang|berdiskusi)\b/i.test(narasi)) {
+      aksi = 'ramai_tiga';
+    } else if (/\b(bertemu|berbicara|menyerahkan|menunjukkan|bertanya|pedagang|kakak|ibu|guru|murid|sahabat|petani|tamu|mereka)\b/i.test(narasi)) {
+      aksi = 'dialog_dua';
+    } else if (/\b(menyeduh|seduh|menulis|mencatat|meja|duduk|menikmati|mencicipi|secangkir)\b/i.test(narasi)) {
+      aksi = 'duduk_seduh';
+    } else if (/\b(menatap|memandang|cakrawala|fajar|senja|laut|gunung|lembah|langit|jauh|kenangan)\b/i.test(narasi)) {
+      aksi = 'tatap_horizon';
+    } else if (/\b(menemukan|membaca|memeriksa|meneliti|melihat|membuka|arsip|catatan|surat|dokumen|rekaman|jejak|petunjuk|kitab)\b/i.test(narasi)) {
+      aksi = 'periksa_arsip';
+    } else if (idx === 0) {
+      aksi = 'jalan_kanan';
+    } else {
+      const pola = ['jalan_kanan', 'duduk_seduh', 'dialog_dua', 'tatap_horizon', 'tunjuk_arsip', 'ramai_tiga', 'jalan_kiri', 'periksa_arsip'];
+      aksi = pola[idx % pola.length];
+    }
+
+    // Anti-monoton: cegah 2 adegan berurutan memakai aksi/pose yang sama persis.
+    if (jenis !== 'penutup' && sebelumnya?.aksi && aksi === sebelumnya.aksi) {
+      const rotasi = ['dialog_dua', 'duduk_seduh', 'tatap_horizon', 'periksa_arsip', 'ramai_tiga', 'tunjuk_arsip', 'jalan_kiri', 'jalan_kanan'];
+      aksi = rotasi.find((k) => k !== sebelumnya.aksi) || 'tunjuk_arsip';
+    }
   }
 
-  if (/\b(jalan|berjalan|melangkah|menelusuri|menyusuri|berangkat|menuju|pulang|perjalanan|keliling|melewati|pergi|melintas|ekspedisi|menyebar|tiba)\b/i.test(narasi)) {
-    return {
-      aksi: idx % 2 === 0 ? 'jalan_kanan' : 'jalan_kiri',
-      tokohUtama,
-      properti: propLentera ? 'lentera' : propArsip ? 'arsip' : propKopi ? 'cangkir' : 'tas',
-    };
-  }
+  const properti =
+    aksi === 'berdiri_tenang'
+      ? manual?.properti || (propKopi ? 'cangkir' : propArsip ? 'arsip' : propKitab ? 'kitab' : 'lentera')
+      : aksi === 'dialog_dua'
+      ? manual?.properti || (propArsip ? 'arsip' : propKopi ? 'cangkir' : propBiji ? 'biji_kopi' : 'lentera')
+      : aksi === 'duduk_seduh'
+      ? manual?.properti || (propKitab ? 'kitab' : 'cangkir')
+      : aksi === 'periksa_arsip'
+      ? manual?.properti || (propArsip ? 'arsip' : propKitab ? 'kitab' : 'lentera')
+      : pilihProperti('tas');
 
-  if (/\b(bertemu|berbicara|menyerahkan|menunjukkan|bertanya|pedagang|warga|penduduk|kakak|ibu|guru|murid|sahabat|petani|tamu|orang|mereka)\b/i.test(narasi)) {
-    const tokohKedua =
-      tokohUtama === 'wanita'
-        ? 'pria'
-        : sebutWanita
-        ? 'wanita'
-        : sebutSantri
-        ? 'petualang'
-        : 'pria';
-    return {
-      aksi: 'dialog_dua',
-      tokohUtama,
-      tokohKedua,
-      properti: propArsip ? 'arsip' : propKopi ? 'cangkir' : 'lentera',
-    };
-  }
+  const tokohKedua = aksi === 'dialog_dua' || aksi === 'ramai_tiga' ? pilihPasangan(tokohUtama) : undefined;
+  const tokohKetiga = aksi === 'ramai_tiga' ? pilihKetiga(tokohUtama, tokohKedua) : undefined;
 
-  if (/\b(menemukan|membaca|memeriksa|meneliti|melihat|membuka|arsip|catatan|surat|dokumen|tas|rekaman|jejak|petunjuk|kitab)\b/i.test(narasi)) {
-    return {
-      aksi: 'periksa_arsip',
-      tokohUtama,
-      properti: propArsip ? 'arsip' : 'lentera',
-    };
-  }
-
-  if (idx === 0) {
-    return {
-      aksi: 'jalan_kanan',
-      tokohUtama,
-      properti: propLentera ? 'lentera' : propKopi ? 'cangkir' : 'tas',
-    };
-  }
-
-  const pola = ['jalan_kanan', 'tunjuk_arsip', 'jalan_kiri', 'dialog_dua'];
-  const aksi = pola[idx % pola.length];
   return {
     aksi,
     tokohUtama,
-    ...(aksi === 'dialog_dua' ? { tokohKedua: tokohUtama === 'wanita' ? 'pria' : 'wanita' } : {}),
-    properti: propArsip ? 'arsip' : propKopi ? 'cangkir' : propLentera ? 'lentera' : 'tas',
+    ...(tokohKedua ? { tokohKedua } : {}),
+    ...(tokohKetiga ? { tokohKetiga } : {}),
+    properti,
+    gaya,
+    ekspresi,
   };
 }
 
@@ -669,9 +743,11 @@ export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
   const judulEpisode = String(naskah?.judulEpisode || `Episode ${nomorEpisode}`).trim().slice(0, 88);
   const judulSerial = String(konteks.judulSerial || 'Jejak Cerita').trim().slice(0, 60);
   const genderNarator = konteks.genderNarator === 'wanita' ? 'wanita' : 'pria';
+  const gayaKarakter = konteks.gayaKarakter === 'siluet' ? 'siluet' : 'ilustrasi';
   const konteksCerita = `${judulSerial} ${judulEpisode} ${naskah?.tema ?? ''}`;
 
   const sumberAdegan = (naskah?.adegan ?? []).slice(0, 16);
+  let karakterSebelumnya = null;
   const adegan = sumberAdegan.map((a, idx) => {
     const jenisEksplisit = String(a?.jenisMotion ?? '').trim().toLowerCase();
     const jenis = JENIS_MOTION_SAH.includes(jenisEksplisit)
@@ -785,7 +861,11 @@ export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
       jenis,
       genderNarator,
       konteksCerita,
+      gayaKarakter,
+      sebelumnya: karakterSebelumnya,
+      totalAdegan: sumberAdegan.length,
     });
+    if (karakter) karakterSebelumnya = karakter;
 
     return {
       nomor: Number(a?.nomor) || idx + 1,
@@ -865,6 +945,13 @@ export function gabungRiwayatEpisode(serialKartunProfil, serialId, episodeBaru, 
     ringkasan: String(episodeBaru?.ringkasan || '').slice(0, 450),
     tema: String(episodeBaru?.tema || '').slice(0, 120),
     mood: episodeBaru?.mood || target.moodBawaan || 'komedi_ceria',
+    ...(episodeBaru?.gayaCerita ? { gayaCerita: episodeBaru.gayaCerita } : {}),
+    ...(episodeBaru?.temaVisual ? { temaVisual: episodeBaru.temaVisual } : {}),
+    ...(episodeBaru?.formatSuara ? { formatSuara: episodeBaru.formatSuara } : {}),
+    ...(episodeBaru?.panjangNaskah ? { panjangNaskah: episodeBaru.panjangNaskah } : {}),
+    ...(episodeBaru?.genderNarator ? { genderNarator: episodeBaru.genderNarator } : {}),
+    ...(episodeBaru?.adeganTerakhir ? { adeganTerakhir: String(episodeBaru.adeganTerakhir).slice(0, 450) } : {}),
+    ...(episodeBaru?.jembatanBerikutnya ? { jembatanBerikutnya: String(episodeBaru.jembatanBerikutnya).slice(0, 180) } : {}),
     ...(tugasId ? { tugasId } : {}),
     dibuat: episodeBaru?.dibuat || new Date().toISOString(),
   });
@@ -899,6 +986,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
   const bersambung = Boolean(metaTugas.bersambung);
   const gayaCerita = metaTugas.gayaCerita === 'dokumenter' ? 'dokumenter' : 'kedai';
   const temaVisual = metaTugas.temaVisual === 'perkamen' ? 'perkamen' : 'malam';
+  const gayaKarakter = metaTugas.gayaKarakter === 'siluet' ? 'siluet' : 'ilustrasi';
   const genderEksplisit =
     metaTugas.genderNarator === 'wanita' || metaTugas.genderNarator === 'pria'
       ? metaTugas.genderNarator
@@ -1052,6 +1140,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
         nomorEpisode,
         temaVisual,
         genderNarator,
+        gayaKarakter,
         petaLatar,
         petaVisualAi,
         suaraHasil: suaraHasil.item,
@@ -1110,7 +1199,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
 
   await jalankan(
     process.execPath,
-    [CLI, 'render', 'src/index.ts', komposisiId, videoKeluar, `--props=${propsPath}`, `--public-dir=${publik}`, '--log=error'],
+    [CLI, 'render', 'src/index.ts', komposisiId, videoKeluar, `--props=${propsPath}`, `--public-dir=${publik}`, '--crf=23', '--pixel-format=yuv420p', '--log=error'],
     { cwd: REMOTION },
   );
 
@@ -1153,6 +1242,13 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
     ...suaraHasil.catatan,
   ];
 
+  const adeganTerakhir = (naskah.adegan ?? [])
+    .slice(-2)
+    .map((a) => String(a?.dialog ?? '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 450);
+
   return {
     naskah: {
       sumber: naskah.sumber,
@@ -1173,6 +1269,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
         bersambung,
         gayaCerita,
         temaVisual,
+        gayaKarakter,
         genderNarator,
       },
       catatan,
@@ -1192,6 +1289,13 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
         ringkasan: naskah.ringkasanEpisode,
         tema: naskah.tema,
         mood,
+        gayaCerita,
+        temaVisual,
+        formatSuara,
+        panjangNaskah,
+        genderNarator,
+        ...(adeganTerakhir ? { adeganTerakhir } : {}),
+        ...(naskah.pertanyaanPenutup ? { jembatanBerikutnya: String(naskah.pertanyaanPenutup).slice(0, 180) } : {}),
         tugasId: tugas?.id,
         dibuat: new Date().toISOString(),
       },

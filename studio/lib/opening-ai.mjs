@@ -31,7 +31,7 @@ const SAPAAN_UMUM_LEKKOPI = [
     sub: 'Seduhan kopi segar sudah siap menemani harimu di Lek Kopi.',
     menuNama: 'Racikan Segar Hari Ini',
     menuHarga: '',
-    menuKet: 'Kopi, non-kopi, & menu favorit siap disajikan — cek daftar lengkap di lek-kopi.web.app.',
+    menuKet: 'Kopi, non-kopi, & menu favorit siap disajikan — cek daftar lengkap di lekkopi.bakafrawi.com.',
     promptLatar: 'Cinematic vertical photograph of iced coffee milk swirling with espresso shot in a minimalist glass, warm wooden cafe table, soft morning daylight, shallow depth of field, no text',
   },
   {
@@ -39,7 +39,7 @@ const SAPAAN_UMUM_LEKKOPI = [
     sub: 'Meja outdoor nyaman, angin sepoi, dan minuman dingin siap menyambutmu.',
     menuNama: 'Menu Favorit Kedai',
     menuHarga: '',
-    menuKet: 'Diseduh segar per gelas — mampir langsung atau pesan lewat lek-kopi.web.app.',
+    menuKet: 'Diseduh segar per gelas — mampir langsung atau pesan lewat lekkopi.bakafrawi.com.',
     promptLatar: 'Aesthetic minimalist cafe photography of iced coffee and cold drinks on a warm wooden cafe table, soft natural daylight, editorial beverage photography, no text',
   },
   {
@@ -47,7 +47,7 @@ const SAPAAN_UMUM_LEKKOPI = [
     sub: 'Espresso ditarik segar per gelas, cocok buat teman kerja atau santai.',
     menuNama: 'Freshly Brewed Today',
     menuHarga: '',
-    menuKet: 'Lihat seluruh pilihan menu & harga terbaru langsung di lek-kopi.web.app.',
+    menuKet: 'Lihat seluruh pilihan menu & harga terbaru langsung di lekkopi.bakafrawi.com.',
     promptLatar: 'Minimalist vertical shot of freshly poured iced coffee with crystal clear ice cubes, warm cafe light, editorial photography, no text',
   },
 ];
@@ -345,7 +345,7 @@ export async function renderOpeningAI({ merek, format = 'video-animasi', gaya = 
     menuNama: itemMenuFinal[0]?.nama ?? konsep.menuNama,
     menuHarga: itemMenuFinal[0]?.harga ?? konsep.menuHarga,
     menuKet: itemMenuFinal[0]?.ket ?? konsep.menuKet,
-    situs: merek?.slug === 'lekkopi' ? 'lek-kopi.web.app' : (merek?.profil?.situs || 'bakafrawi.com'),
+    situs: merek?.slug === 'lekkopi' ? 'lekkopi.bakafrawi.com' : (merek?.profil?.situs || 'bakafrawi.com'),
     alamat: merek?.slug === 'lekkopi' ? 'Panjunan, Waru, Sidoarjo' : 'Sidoarjo',
     aksen: merek?.profil?.aksen || '#D6A668',
     gaya: konsep.gaya,
@@ -383,7 +383,7 @@ export async function renderOpeningAI({ merek, format = 'video-animasi', gaya = 
   const keluar = path.join(folder, `opening-ai-${Date.now()}.mp4`);
   await jalankan(
     process.execPath,
-    [CLI, 'render', 'src/index.ts', 'OpeningStory', keluar, `--props=${berkasProps}`, `--public-dir=${publik}`, '--log=error'],
+    [CLI, 'render', 'src/index.ts', 'OpeningStory', keluar, `--props=${berkasProps}`, `--public-dir=${publik}`, '--crf=23', '--pixel-format=yuv420p', '--log=error'],
     { cwd: REMOTION },
   );
   const sampul = path.join(folder, `opening-ai-sampul-${Date.now()}.jpg`);

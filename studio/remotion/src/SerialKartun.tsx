@@ -358,6 +358,8 @@ const AdeganPanggung: React.FC<{
   const ukuranFontSubtitle = panjangTeksTampil > 75 ? 35 : 39;
 
   const pegasSubtitle = spring({ frame: frame - 2, fps, config: { damping: 16, stiffness: 150 } });
+  const pegasTokohKiri = spring({ frame, fps, config: { damping: 14, stiffness: 135, mass: 0.8 } });
+  const pegasTokohKanan = spring({ frame: Math.max(0, frame - 3), fps, config: { damping: 14, stiffness: 135, mass: 0.8 } });
 
   return (
     <AbsoluteFill style={{ opacity: Math.min(masuk, keluar) }}>
@@ -442,7 +444,8 @@ const AdeganPanggung: React.FC<{
           {adegan.tokohKiri && (
             <div
               style={{
-                transform: `translateY(${adegan.pembicara === 'kiri' ? -10 : 12}px)`,
+                opacity: pegasTokohKiri,
+                transform: `translateX(${interpolate(pegasTokohKiri, [0, 1], [-46, 0])}px) translateY(${adegan.pembicara === 'kiri' ? -10 : 12}px) scale(${0.92 + 0.08 * pegasTokohKiri})`,
                 filter:
                   adegan.pembicara === 'kanan' && jumlahTokoh === 2
                     ? 'brightness(0.88)'
@@ -464,7 +467,8 @@ const AdeganPanggung: React.FC<{
           {adegan.tokohKanan && (
             <div
               style={{
-                transform: `translateY(${adegan.pembicara === 'kanan' ? -10 : 12}px)`,
+                opacity: pegasTokohKanan,
+                transform: `translateX(${interpolate(pegasTokohKanan, [0, 1], [46, 0])}px) translateY(${adegan.pembicara === 'kanan' ? -10 : 12}px) scale(${0.92 + 0.08 * pegasTokohKanan})`,
                 filter:
                   adegan.pembicara === 'kiri' && jumlahTokoh === 2
                     ? 'brightness(0.88)'

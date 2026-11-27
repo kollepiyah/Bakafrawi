@@ -17,8 +17,10 @@ import {
   SKEMA_SARAN_CERITA_SERIAL,
   type FormatSuaraSerial,
   type GayaCeritaSerial,
+  type GayaKarakterCerita,
   type GayaKartunLatar,
   type KonfigSuaraTokoh,
+  type KonteksLanjutanEpisode,
   type LatarKartun,
   type MoodSerial,
   type NaskahDrafSerial,
@@ -29,6 +31,7 @@ import {
 import {
   adaKunciServer,
   ambilMenuLekKopiUntukPrompt,
+  bacaDetailEpisodeDariTugas,
   bacaKonfigSerialLekKopi,
   buatTugasSerialKartun,
   daftarMerek,
@@ -97,7 +100,9 @@ export async function POST(req: Request) {
     bersambung?: boolean;
     gayaCerita?: GayaCeritaSerial;
     temaVisual?: "malam" | "perkamen";
+    gayaKarakter?: GayaKarakterCerita;
     genderNarator?: "pria" | "wanita";
+    lanjutDariNomor?: number;
     hasilRiset?: string;
     risetGoogle?: boolean;
     modeJadwal?: "persetujuan" | "prime19" | "custom";
@@ -248,6 +253,29 @@ export async function POST(req: Request) {
       const panjangNaskah: PanjangSerial =
         isi.panjangNaskah === "ringkas" || isi.panjangNaskah === "panjang" ? isi.panjangNaskah : "sedang";
       const gayaCerita: GayaCeritaSerial = isi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
+
+      let melanjutkanEpisode: KonteksLanjutanEpisode | null = null;
+      if (isi.lanjutDariNomor && serial?.episode?.length) {
+        const epAcuan =
+          serial.episode.find((e) => e.nomor === Number(isi.lanjutDariNomor)) ??
+          serial.episode[serial.episode.length - 1];
+        if (epAcuan) {
+          const detailTugas =
+            !epAcuan.adeganTerakhir && epAcuan.tugasId
+              ? await bacaDetailEpisodeDariTugas(epAcuan.tugasId).catch(() => null)
+              : null;
+          melanjutkanEpisode = {
+            nomor: epAcuan.nomor,
+            judul: epAcuan.judul,
+            ringkasan: epAcuan.ringkasan,
+            tema: epAcuan.tema,
+            adeganTerakhir: epAcuan.adeganTerakhir,
+            jembatanBerikutnya: epAcuan.jembatanBerikutnya || detailTugas?.jembatanBerikutnya,
+            kutipanAdeganAkhir: detailTugas?.kutipanAdeganAkhir,
+          };
+        }
+      }
+
       const { system, prompt } = buatPromptSaranCeritaSerial({
         judulSerial: serial?.judul,
         nomorEpisode,
@@ -257,6 +285,7 @@ export async function POST(req: Request) {
         gayaCerita,
         hasilRiset: isi.hasilRiset,
         riwayatEpisode: serial?.episode ?? [],
+        melanjutkanEpisode,
         daftarMenu,
       });
       const hasil = await panggilLlmJson<Record<string, unknown>>(
@@ -291,12 +320,48 @@ export async function POST(req: Request) {
         konfig.serial.find((s) => s.id === konfig.serialAktifId) ??
         konfig.serial[0];
       const nomorEpisode = episodeBerikutnya(serial);
-      const mood: MoodSerial = isi.mood ?? serial?.moodBawaan ?? "komedi_ceria";
-      const formatSuara: FormatSuaraSerial = isi.formatSuara ?? serial?.formatSuara ?? "dialog";
-      const panjangNaskah: PanjangSerial =
+      let mood: MoodSerial = isi.mood ?? serial?.moodBawaan ?? "komedi_ceria";
+      let formatSuara: FormatSuaraSerial = isi.formatSuara ?? serial?.formatSuara ?? "dialog";
+      let panjangNaskah: PanjangSerial =
         isi.panjangNaskah === "ringkas" || isi.panjangNaskah === "panjang" ? isi.panjangNaskah : "sedang";
-      const gayaCerita: GayaCeritaSerial = isi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
-      const temaVisual = isi.temaVisual === "perkamen" ? "perkamen" : "malam";
+      let gayaCerita: GayaCeritaSerial = isi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
+      let temaVisual: "malam" | "perkamen" = isi.temaVisual === "perkamen" ? "perkamen" : "malam";
+
+      // Jika tombol Lanjutkan Episode dipicu, tarik konteks & kutipan adegan akhir dari Episode acuan (termasuk dari studio_tugas untuk episode lama)
+      let melanjutkanEpisode: KonteksLanjutanEpisode | null = null;
+      if (isi.lanjutDariNomor && serial?.episode?.length) {
+        const epAcuan =
+          serial.episode.find((e) => e.nomor === Number(isi.lanjutDariNomor)) ??
+          serial.episode[serial.episode.length - 1];
+        if (epAcuan) {
+          const detailTugas = epAcuan.tugasId
+            ? await bacaDetailEpisodeDariTugas(epAcuan.tugasId).catch(() => null)
+            : null;
+          if (!isi.gayaCerita && (epAcuan.gayaCerita || detailTugas?.gayaCerita)) {
+            gayaCerita = (epAcuan.gayaCerita || detailTugas?.gayaCerita) === "dokumenter" ? "dokumenter" : "kedai";
+          }
+          if (!isi.temaVisual && (epAcuan.temaVisual || detailTugas?.temaVisual)) {
+            temaVisual = (epAcuan.temaVisual || detailTugas?.temaVisual) === "perkamen" ? "perkamen" : "malam";
+          }
+          if (!isi.formatSuara && (epAcuan.formatSuara || detailTugas?.formatSuara)) {
+            formatSuara = (epAcuan.formatSuara || detailTugas?.formatSuara) as FormatSuaraSerial;
+          }
+          if (!isi.panjangNaskah && (epAcuan.panjangNaskah || detailTugas?.panjangNaskah)) {
+            panjangNaskah = (epAcuan.panjangNaskah || detailTugas?.panjangNaskah) as PanjangSerial;
+          }
+          if (!isi.mood && epAcuan.mood) mood = epAcuan.mood;
+
+          melanjutkanEpisode = {
+            nomor: epAcuan.nomor,
+            judul: epAcuan.judul,
+            ringkasan: epAcuan.ringkasan,
+            tema: epAcuan.tema,
+            adeganTerakhir: epAcuan.adeganTerakhir,
+            jembatanBerikutnya: epAcuan.jembatanBerikutnya || detailTugas?.jembatanBerikutnya,
+            kutipanAdeganAkhir: detailTugas?.kutipanAdeganAkhir,
+          };
+        }
+      }
 
       let teksRisetFinal = String(isi.hasilRiset ?? "").trim();
       let risetOtomatis: RisetCeritaSerial | null = null;
@@ -339,6 +404,7 @@ export async function POST(req: Request) {
         ide: isi.ide,
         kataKunci: isi.kataKunci,
         riwayatEpisode: serial?.episode ?? [],
+        melanjutkanEpisode,
         daftarLatar: konfig.latar,
         daftarMenu,
       });
@@ -361,6 +427,7 @@ export async function POST(req: Request) {
         nomorEpisode,
         penyedia: hasil.pemakaian.penyedia,
         model: hasil.pemakaian.model,
+        ...(melanjutkanEpisode ? { melanjutkanDari: { nomor: melanjutkanEpisode.nomor, judul: melanjutkanEpisode.judul } } : {}),
         ...(teksRisetFinal ? { teksRiset: teksRisetFinal } : {}),
         ...(risetOtomatis ? { riset: risetOtomatis } : {}),
       });
@@ -369,6 +436,7 @@ export async function POST(req: Request) {
     if (isi.aksi === "buat-episode") {
       const gayaCerita: GayaCeritaSerial = isi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
       const temaVisual = isi.temaVisual === "perkamen" ? "perkamen" : "malam";
+      const gayaKarakter: GayaKarakterCerita = isi.gayaKarakter === "siluet" ? "siluet" : "ilustrasi";
       const genderNarator = isi.genderNarator === "wanita" ? "wanita" : "pria";
       const naskahBersih =
         isi.naskahJadi && Array.isArray(isi.naskahJadi.adegan) && isi.naskahJadi.adegan.length > 0
@@ -385,6 +453,7 @@ export async function POST(req: Request) {
         bersambung: Boolean(isi.bersambung),
         gayaCerita,
         temaVisual,
+        gayaKarakter,
         genderNarator,
         hasilRiset: isi.hasilRiset,
         modeJadwal: isi.modeJadwal,

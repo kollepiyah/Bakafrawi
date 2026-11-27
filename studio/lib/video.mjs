@@ -400,7 +400,7 @@ export async function renderIklan({ naskah, aset, folder, musik = null, suara = 
   const props = path.join(folder, 'props.json');
   await writeFile(props, JSON.stringify(n));
   log(`🎬 Remotion: ${n.adegan.length} adegan, ${detik.toFixed(1)} dtk`);
-  await jalankan(process.execPath, [CLI, 'render', 'src/index.ts', 'Iklan', keluar, `--props=${props}`, `--public-dir=${publik}`, '--log=error'], { cwd: REMOTION });
+  await jalankan(process.execPath, [CLI, 'render', 'src/index.ts', 'Iklan', keluar, `--props=${props}`, `--public-dir=${publik}`, '--crf=23', '--pixel-format=yuv420p', '--log=error'], { cwd: REMOTION });
   // Sampul Reels: bingkai detik ke-1,5 (judul pembuka sudah utuh).
   const sampul = path.join(folder, 'sampul.jpg');
   await ffmpeg(['-y', '-ss', '1.5', '-i', keluar, '-frames:v', '1', '-q:v', '3', sampul]);
@@ -567,7 +567,7 @@ export async function renderSinematikRemotion({
   log(`🎬 Remotion Sinematik (${gaya}): ${segmen.length} potongan, ${totalDetik.toFixed(1)} dtk`);
   await jalankan(
     process.execPath,
-    [CLI, 'render', 'src/index.ts', 'Sinematik', keluar, `--props=${propsPath}`, `--public-dir=${publik}`, '--log=error'],
+    [CLI, 'render', 'src/index.ts', 'Sinematik', keluar, `--props=${propsPath}`, `--public-dir=${publik}`, '--crf=23', '--pixel-format=yuv420p', '--log=error'],
     { cwd: REMOTION },
   );
 
@@ -724,7 +724,7 @@ export async function renderWebShowcase({
   log(`🎬 Remotion WebShowcase (${propsData.merek.domain}): 5 babak, ${totalDetik.toFixed(1)} dtk`);
   await jalankan(
     process.execPath,
-    [CLI, 'render', 'src/index.ts', 'WebShowcase', keluar, `--props=${propsPath}`, `--public-dir=${publik}`, '--log=error'],
+    [CLI, 'render', 'src/index.ts', 'WebShowcase', keluar, `--props=${propsPath}`, `--public-dir=${publik}`, '--crf=23', '--pixel-format=yuv420p', '--log=error'],
     { cwd: REMOTION },
   );
 

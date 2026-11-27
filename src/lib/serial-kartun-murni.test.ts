@@ -4,6 +4,7 @@ import {
   bangunPromptKartunkanFoto,
   bersihkanKodeLokasi,
   buatAdeganKosongSerial,
+  buatDrafLanjutanManual,
   buatDrafManualSerial,
   buatPromptNaskahDrafSerial,
   buatPromptRisetCeritaSerial,
@@ -127,7 +128,7 @@ test("buatPromptSaranCeritaSerial & normalisasiSaranCeritaSerial mengolah kata k
   assert.match(prompt, /hujan sore/);
   assert.match(prompt, /Ep 1 "Salah Pesan"/);
   assert.match(prompt, /Kopi Lek \(Rp10\.000\)/);
-  assert.match(prompt, /lek-kopi\.web\.app/);
+  assert.match(prompt, /lekkopi\.bakafrawi\.com/);
 
   const hasil = normalisasiSaranCeritaSerial({
     saran: [
@@ -153,7 +154,7 @@ test("buatPromptNaskahDrafSerial & normalisasiNaskahDrafSerial menormalisasi ade
   assert.match(prompt, /"bar": Meja Bar/);
   assert.match(prompt, /gajian/);
   assert.match(prompt, /Butterscoth Latte \(Rp14\.000\)/);
-  assert.match(prompt, /lek-kopi\.web\.app/);
+  assert.match(prompt, /lekkopi\.bakafrawi\.com/);
 
   const draf = normalisasiNaskahDrafSerial({
     judulEpisode: "Tanggal Dua Tiba",
@@ -399,4 +400,58 @@ test("buatDrafManualSerial dan normalisasiNaskahDrafSerial menjaga metadata Ceri
   assert.equal(rapih.adegan[0].jenisMotion, "perkamen");
   assert.equal(rapih.adegan[0].judulKartu, "Buah Merah di Lereng Yaman");
   assert.deepEqual(rapih.adegan[0].kataSorot, ["ulama", "biji", "merah", "dzikir"]);
+});
+
+test("buatPromptNaskahDrafSerial mode melanjutkanEpisode, buatDrafLanjutanManual & normalisasi karakter", () => {
+  const { prompt } = buatPromptNaskahDrafSerial({
+    judulSerial: "Jejak Kopi Nusantara",
+    nomorEpisode: 2,
+    gayaCerita: "dokumenter",
+    temaVisual: "malam",
+    bersambung: true,
+    melanjutkanEpisode: {
+      nomor: 1,
+      judul: "Jejak Kopi Nusantara",
+      ringkasan: "Lek Aceng menelusuri jejak kopi dari pelabuhan Ternate abad ke-17.",
+      adeganTerakhir: "Lek Aceng menutup buku catatan dan bersiap menuju dataran tinggi Gayo.",
+      kutipanAdeganAkhir: ["Di dermaga tua itu, Lek Aceng menatap peta menuju Gayo."],
+      jembatanBerikutnya: "Apa yang ditemukan Lek Aceng di Gayo? Nantikan Episode 2!",
+    },
+  });
+  assert.match(prompt, /SAMBUNGAN LANGSUNG DARI EPISODE 1 → EPISODE 2/);
+  assert.match(prompt, /Lek Aceng menatap peta menuju Gayo/);
+  assert.match(prompt, /DILARANG mengulang pengenalan dari nol/);
+
+  const manualEp2 = buatDrafLanjutanManual({
+    episodeSebelumnya: {
+      nomor: 1,
+      judul: "Jejak Kopi Nusantara",
+      ringkasan: "Lek Aceng tiba di Banten.",
+      tema: "Sejarah Kopi",
+    },
+    nomorEpisode: 2,
+    gayaCerita: "dokumenter",
+    temaVisual: "malam",
+  });
+  assert.equal(manualEp2.adegan[0].kartuWaktu, "Bagian 2");
+  assert.match(manualEp2.adegan[0].dialog, /Melanjutkan Episode 1/);
+
+  const drafKarakter = normalisasiNaskahDrafSerial(
+    {
+      judulEpisode: "Episode 2",
+      adegan: [
+        {
+          nomor: 1,
+          jenisMotion: "arsip",
+          dialog: "Arsip tua pelabuhan.",
+          karakter: { tokohUtama: "petani", aksi: "duduk_seduh", gaya: "ilustrasi" },
+        },
+      ],
+    },
+    2,
+    { gayaCerita: "dokumenter" },
+  );
+  assert.equal(drafKarakter.adegan[0].jenisMotion, "arsip");
+  assert.equal(drafKarakter.adegan[0].karakter?.tokohUtama, "petani");
+  assert.equal(drafKarakter.adegan[0].karakter?.aksi, "duduk_seduh");
 });

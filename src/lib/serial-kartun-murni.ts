@@ -9,6 +9,59 @@ export type GayaCeritaSerial = "kedai" | "dokumenter";
 export type TemaVisualMotion = "malam" | "perkamen";
 export type JenisAdeganMotion = "pembuka" | "perkamen" | "peta" | "ilustrasi" | "arsip" | "penutup";
 export type GenderNaratorSerial = "pria" | "wanita";
+export type GayaKarakterCerita = "ilustrasi" | "siluet";
+export type TipeKarakterCerita =
+  | "petualang"
+  | "santri"
+  | "petani"
+  | "pedagang"
+  | "wanita"
+  | "pria"
+  | "tetua"
+  | "pemuda";
+export type AksiKarakterCerita =
+  | "jalan_kanan"
+  | "jalan_kiri"
+  | "dialog_dua"
+  | "duduk_seduh"
+  | "tatap_horizon"
+  | "ramai_tiga"
+  | "periksa_arsip"
+  | "tunjuk_arsip"
+  | "berdiri_tenang"
+  | "tanpa";
+
+export type KarakterMotionDraf = {
+  aksi?: AksiKarakterCerita;
+  tokohUtama?: TipeKarakterCerita;
+  tokohKedua?: TipeKarakterCerita;
+  gaya?: GayaKarakterCerita;
+  properti?: string;
+};
+
+export const OPSI_TOKOH_MOTION: { kode: TipeKarakterCerita; label: string }[] = [
+  { kode: "petualang", label: "Petualang / Penjelajah" },
+  { kode: "santri", label: "Santri / Ulama (Peci & Sarung)" },
+  { kode: "petani", label: "Petani Kebun (Caping)" },
+  { kode: "pedagang", label: "Pedagang / Saudagar (Sorban)" },
+  { kode: "wanita", label: "Wanita / Hijab" },
+  { kode: "pria", label: "Pria Klasik" },
+  { kode: "tetua", label: "Tetua / Sesepuh Bijak" },
+  { kode: "pemuda", label: "Pemuda / Barista Modern" },
+];
+
+export const OPSI_AKSI_MOTION: { kode: AksiKarakterCerita; label: string }[] = [
+  { kode: "jalan_kanan", label: "Berjalan ke Kanan" },
+  { kode: "jalan_kiri", label: "Berjalan ke Kiri" },
+  { kode: "dialog_dua", label: "Dialog 2 Tokoh" },
+  { kode: "duduk_seduh", label: "Duduk di Meja Seduh Kopi" },
+  { kode: "tatap_horizon", label: "Tatap Jauh / Horizon" },
+  { kode: "ramai_tiga", label: "Ramai 3 Tokoh Berkumpul" },
+  { kode: "periksa_arsip", label: "Membungkuk Periksa Arsip" },
+  { kode: "tunjuk_arsip", label: "Menjelaskan / Tunjuk Objek" },
+  { kode: "berdiri_tenang", label: "Berdiri Tenang" },
+  { kode: "tanpa", label: "Tanpa Karakter (Ilustrasi Penuh)" },
+];
 export type MenuRingkasSerial = { nama: string; harga?: number; kategori?: string };
 export type TokohKartunId =
   | "mas_barista"
@@ -40,8 +93,25 @@ export type EpisodeSerial = {
   ringkasan: string;
   tema: string;
   mood: MoodSerial;
+  gayaCerita?: GayaCeritaSerial;
+  temaVisual?: TemaVisualMotion;
+  formatSuara?: FormatSuaraSerial;
+  panjangNaskah?: PanjangSerial;
+  genderNarator?: GenderNaratorSerial;
+  adeganTerakhir?: string;
+  jembatanBerikutnya?: string;
   tugasId?: string;
   dibuat: string;
+};
+
+export type KonteksLanjutanEpisode = {
+  nomor: number;
+  judul: string;
+  ringkasan: string;
+  tema?: string;
+  adeganTerakhir?: string;
+  jembatanBerikutnya?: string;
+  kutipanAdeganAkhir?: string[];
 };
 
 export type SerialKartun = {
@@ -269,12 +339,28 @@ export function normalisasiKonfigSerial(mentah: unknown): KonfigSerialLekKopi {
           nomorSudah.add(nomor);
           const epMood = String(e.mood ?? "").trim() as MoodSerial;
           const tugasId = String(e.tugasId ?? "").trim();
+          const epGaya = String(e.gayaCerita ?? "").trim();
+          const epTemaVis = String(e.temaVisual ?? "").trim();
+          const epFmt = String(e.formatSuara ?? "").trim();
+          const epPanjang = String(e.panjangNaskah ?? "").trim();
+          const epGender = String(e.genderNarator ?? "").trim();
+          const epAkhir = String(e.adeganTerakhir ?? "").trim().slice(0, 450);
+          const epJembatan = String(e.jembatanBerikutnya ?? "").trim().slice(0, 180);
           episode.push({
             nomor,
             judul: String(e.judul ?? "").trim().slice(0, 80) || `Episode ${nomor}`,
             ringkasan: String(e.ringkasan ?? "").trim().slice(0, 450),
             tema: String(e.tema ?? "").trim().slice(0, 120),
             mood: MOOD_SAH.has(epMood) ? epMood : "komedi_ceria",
+            ...(epGaya === "dokumenter" || epGaya === "kedai" ? { gayaCerita: epGaya } : {}),
+            ...(epTemaVis === "malam" || epTemaVis === "perkamen" ? { temaVisual: epTemaVis } : {}),
+            ...(epFmt === "dialog" || epFmt === "narator" || epFmt === "campuran" ? { formatSuara: epFmt } : {}),
+            ...(epPanjang === "ringkas" || epPanjang === "sedang" || epPanjang === "panjang"
+              ? { panjangNaskah: epPanjang }
+              : {}),
+            ...(epGender === "pria" || epGender === "wanita" ? { genderNarator: epGender } : {}),
+            ...(epAkhir ? { adeganTerakhir: epAkhir } : {}),
+            ...(epJembatan ? { jembatanBerikutnya: epJembatan } : {}),
             ...(tugasId ? { tugasId } : {}),
             dibuat: String(e.dibuat ?? "").trim() || new Date().toISOString(),
           });
@@ -327,6 +413,13 @@ export function catatEpisodeSelesai(
     ringkasan: String(episodeBaru.ringkasan ?? "").trim().slice(0, 450),
     tema: String(episodeBaru.tema ?? "").trim().slice(0, 120),
     mood: MOOD_SAH.has(episodeBaru.mood) ? episodeBaru.mood : serialLama.moodBawaan,
+    ...(episodeBaru.gayaCerita ? { gayaCerita: episodeBaru.gayaCerita } : {}),
+    ...(episodeBaru.temaVisual ? { temaVisual: episodeBaru.temaVisual } : {}),
+    ...(episodeBaru.formatSuara ? { formatSuara: episodeBaru.formatSuara } : {}),
+    ...(episodeBaru.panjangNaskah ? { panjangNaskah: episodeBaru.panjangNaskah } : {}),
+    ...(episodeBaru.genderNarator ? { genderNarator: episodeBaru.genderNarator } : {}),
+    ...(episodeBaru.adeganTerakhir ? { adeganTerakhir: String(episodeBaru.adeganTerakhir).trim().slice(0, 450) } : {}),
+    ...(episodeBaru.jembatanBerikutnya ? { jembatanBerikutnya: String(episodeBaru.jembatanBerikutnya).trim().slice(0, 180) } : {}),
     ...(episodeBaru.tugasId ? { tugasId: String(episodeBaru.tugasId).trim() } : {}),
     dibuat: episodeBaru.dibuat || new Date().toISOString(),
   };
@@ -428,6 +521,8 @@ export type AdeganDrafSerial = {
   judulKartu?: string;
   /** Kata kunci yang disorot warna emas/kuning pada subtitle kinetik. */
   kataSorot?: string[];
+  /** Pengaturan karakter 2D CeritaMotion per adegan (opsional; kosong = pilih otomatis bervariasi). */
+  karakter?: KarakterMotionDraf;
   sfx: "pop" | "whoosh" | "tanpa";
 };
 
@@ -446,7 +541,29 @@ const EKSPRESI_SAH = new Set(["senyum", "ketawa", "kaget", "mikir", "cemberut", 
 const PROPERTI_SAH = new Set(["tanpa", "es_kopi", "kopi_panas", "matcha_latte", "hp", "uang", "jempol", "tunjuk"]);
 const EFEK_SAH = new Set(["tanpa", "tanda_tanya", "tanda_seru", "keringat", "hati", "lampu_ide", "tawa"]);
 const KAMERA_SAH = new Set(["diam", "zoom_masuk", "zoom_keluar", "geser_kiri", "geser_kanan", "goyang_kaget"]);
-const JENIS_MOTION_SAH = new Set<JenisAdeganMotion>(["pembuka", "perkamen", "peta", "ilustrasi", "penutup"]);
+const JENIS_MOTION_SAH = new Set<JenisAdeganMotion>(["pembuka", "perkamen", "peta", "ilustrasi", "arsip", "penutup"]);
+const TOKOH_MOTION_SAH = new Set<TipeKarakterCerita>([
+  "petualang",
+  "santri",
+  "petani",
+  "pedagang",
+  "wanita",
+  "pria",
+  "tetua",
+  "pemuda",
+]);
+const AKSI_MOTION_SAH = new Set<AksiKarakterCerita>([
+  "jalan_kanan",
+  "jalan_kiri",
+  "dialog_dua",
+  "duduk_seduh",
+  "tatap_horizon",
+  "ramai_tiga",
+  "periksa_arsip",
+  "tunjuk_arsip",
+  "berdiri_tenang",
+  "tanpa",
+]);
 const NAMA_TOKOH_PETA: Record<string, string> = {
   mas_barista: "Mas Lek",
   mas_pelanggan: "Mas Danu",
@@ -534,7 +651,7 @@ export const SKEMA_NASKAH_DRAF_SERIAL = {
           namaPembicara: { type: "string" },
           dialog: { type: "string" },
           promptVisual: { type: "string" },
-          jenisMotion: { type: "string", enum: ["pembuka", "perkamen", "peta", "ilustrasi", "penutup"] },
+          jenisMotion: { type: "string", enum: ["pembuka", "perkamen", "peta", "ilustrasi", "arsip", "penutup"] },
           judulKartu: { type: "string" },
           kataSorot: { type: "array", items: { type: "string" } },
           sfx: { type: "string", enum: ["pop", "whoosh", "tanpa"] },
@@ -577,8 +694,8 @@ export function formatMenuSerialUntukPrompt(daftarMenu?: MenuRingkasSerial[]): s
     })
     .join("\n");
   return (
-    `\n\nMENU RESMI LEK KOPI (sumber: lek-kopi.web.app / database kedai):\n${baris}\n` +
-    `ATURAN MENU: Bila menyebut menu atau harga, WAJIB pakai HANYA menu resmi Lek Kopi dari daftar ini / https://lek-kopi.web.app; DILARANG mengarang menu baru.`
+    `\n\nMENU RESMI LEK KOPI (sumber: lekkopi.bakafrawi.com / database kedai):\n${baris}\n` +
+    `ATURAN MENU: Bila menyebut menu atau harga, WAJIB pakai HANYA menu resmi Lek Kopi dari daftar ini / https://lekkopi.bakafrawi.com; DILARANG mengarang menu baru.`
   );
 }
 
@@ -808,6 +925,75 @@ export function buatDrafManualSerial({
   };
 }
 
+/**
+ * Buat kerangka draf manual Episode N+1 yang sudah membawa konteks sambungan dari Episode N. Murni.
+ */
+export function buatDrafLanjutanManual({
+  episodeSebelumnya,
+  nomorEpisode = 2,
+  gayaCerita = "dokumenter",
+  temaVisual = "malam",
+  latarKode = "outdoor",
+}: {
+  episodeSebelumnya: Pick<EpisodeSerial, "nomor" | "judul" | "ringkasan" | "tema" | "adeganTerakhir" | "jembatanBerikutnya">;
+  nomorEpisode?: number;
+  gayaCerita?: GayaCeritaSerial;
+  temaVisual?: TemaVisualMotion;
+  latarKode?: string;
+}): NaskahDrafSerial {
+  const ep = Math.max(2, Math.round(Number(nomorEpisode) || episodeSebelumnya.nomor + 1));
+  const dasar = buatDrafManualSerial({
+    judulEpisode: `${episodeSebelumnya.judul} (Bagian ${ep})`,
+    nomorEpisode: ep,
+    gayaCerita,
+    temaVisual,
+    latarKode,
+  });
+  const pengingat = episodeSebelumnya.ringkasan
+    ? `Melanjutkan Episode ${episodeSebelumnya.nomor} ("${episodeSebelumnya.judul}"): ${episodeSebelumnya.ringkasan}`
+    : `Melanjutkan Episode ${episodeSebelumnya.nomor} ("${episodeSebelumnya.judul}").`;
+  const adegan = dasar.adegan.map((a, idx) =>
+    idx === 0
+      ? {
+          ...a,
+          kartuWaktu: `Bagian ${ep}`,
+          dialog: `${pengingat}\n`,
+        }
+      : a,
+  );
+  return {
+    ...dasar,
+    tema: episodeSebelumnya.tema || dasar.tema,
+    ringkasanEpisode: `Lanjutan Episode ${episodeSebelumnya.nomor}: `,
+    adegan,
+    pertanyaanPenutup: episodeSebelumnya.jembatanBerikutnya || `Nantikan lanjutan Episode ${ep + 1}!`,
+  };
+}
+
+function bangunBlokLanjutanEpisode(
+  melanjutkanEpisode: KonteksLanjutanEpisode | null | undefined,
+  nomorEpisode: number,
+): string {
+  if (!melanjutkanEpisode) return "";
+  const kutipan = Array.isArray(melanjutkanEpisode.kutipanAdeganAkhir)
+    ? melanjutkanEpisode.kutipanAdeganAkhir.map((k) => String(k ?? "").trim()).filter(Boolean).slice(-3)
+    : [];
+  const bagian: string[] = [
+    `SAMBUNGAN LANGSUNG DARI EPISODE ${melanjutkanEpisode.nomor} → EPISODE ${nomorEpisode}:`,
+    `- Episode ${melanjutkanEpisode.nomor}: "${melanjutkanEpisode.judul}"`,
+    ...(melanjutkanEpisode.ringkasan ? [`- Ringkasan Episode ${melanjutkanEpisode.nomor}: ${melanjutkanEpisode.ringkasan}`] : []),
+    ...(melanjutkanEpisode.adeganTerakhir ? [`- Titik akhir Episode ${melanjutkanEpisode.nomor}: ${melanjutkanEpisode.adeganTerakhir}`] : []),
+    ...(kutipan.length
+      ? [`- Kutipan persis adegan penutup Episode ${melanjutkanEpisode.nomor}:\n${kutipan.map((t, i) => `  ${i + 1}) "${t}"`).join("\n")}`]
+      : []),
+    ...(melanjutkanEpisode.jembatanBerikutnya
+      ? [`- Cliffhanger / pertanyaan penutup Episode ${melanjutkanEpisode.nomor}: ${melanjutkanEpisode.jembatanBerikutnya}`]
+      : []),
+    `ATURAN KETAT SAMBUNGAN: Adegan 1 Episode ${nomorEpisode} WAJIB melanjutkan langsung dari titik akhir Episode ${melanjutkanEpisode.nomor} (pertahankan tokoh utama, nama-nama tokoh, suasana, dan alur yang sedang berjalan; boleh diawali 1 kalimat jembatan singkat "Sebelumnya..." lalu langsung lanjut ke babak baru). DILARANG mengulang pengenalan dari nol seolah ini Episode 1!`,
+  ];
+  return `\n\n${bagian.join("\n")}`;
+}
+
 /** Bangun prompt saran 3 ide cerita serial dari kata kunci Kyai + memori episode sebelumnya. */
 export function buatPromptSaranCeritaSerial({
   judulSerial = "Cerita di Lek Kopi",
@@ -818,6 +1004,7 @@ export function buatPromptSaranCeritaSerial({
   gayaCerita = "kedai",
   hasilRiset = "",
   riwayatEpisode = [],
+  melanjutkanEpisode = null,
   daftarMenu = [],
 }: {
   judulSerial?: string;
@@ -828,11 +1015,13 @@ export function buatPromptSaranCeritaSerial({
   gayaCerita?: GayaCeritaSerial;
   hasilRiset?: string;
   riwayatEpisode?: EpisodeSerial[];
+  melanjutkanEpisode?: KonteksLanjutanEpisode | null;
   daftarMenu?: MenuRingkasSerial[];
 }) {
   const kw = String(kataKunci ?? "").trim().slice(0, 1200);
   const spek = PANJANG_SPEK[panjangNaskah] ?? PANJANG_SPEK.sedang;
   const risetBersih = String(hasilRiset ?? "").trim().slice(0, 2500);
+  const blokLanjutan = bangunBlokLanjutanEpisode(melanjutkanEpisode, nomorEpisode);
   const riwayat = riwayatEpisode.length
     ? `\n\nEPISODE SEBELUMNYA (lanjutkan benang merah, jangan ulang ide/konflik yang sama persis):\n${riwayatEpisode
         .slice(-6)
@@ -852,6 +1041,7 @@ export function buatPromptSaranCeritaSerial({
         (kw ? `\nTopik / bahan cerita dari pemilik:\n"${kw}"` : "\nTopik: pilih satu kisah sejarah kopi atau hikmah peradaban Islam yang autentik dan menginspirasi.") +
         (risetBersih ? `\n\nHASIL RISET FAKTA TERVERIFIKASI:\n${risetBersih}` : "") +
         riwayat +
+        blokLanjutan +
         `\nPastikan setiap saran terasa realistis, faktual, memiliki alur kronologi jelas, pesan hikmah yang mengena, dan ideLengkap yang siap dikembangkan menjadi naskah dokumenter ${spek.rentangAdegan}.`,
     };
   }
@@ -867,6 +1057,7 @@ export function buatPromptSaranCeritaSerial({
       (kw ? `\nKata kunci / pemicu dari pemilik: "${kw}" (wajib diolah menjadi 3 sudut cerita berbeda!).` : "\nKata kunci: bebas seputar nongkrong, kisah inspiratif kopi, gajian, hujan sore, atau obrolan Waru.") +
       formatMenuSerialUntukPrompt(daftarMenu) +
       riwayat +
+      blokLanjutan +
       `\nPastikan setiap saran punya judul menarik, premis jelas, punchline/makna hangat yang mengena, dan ideLengkap kaya detail yang siap dijadikan naskah ${spek.rentangAdegan}.`,
   };
 }
@@ -914,6 +1105,7 @@ export function buatPromptNaskahDrafSerial({
   ide = "",
   kataKunci = "",
   riwayatEpisode = [],
+  melanjutkanEpisode = null,
   daftarLatar = [],
   daftarMenu = [],
 }: {
@@ -929,6 +1121,7 @@ export function buatPromptNaskahDrafSerial({
   ide?: string;
   kataKunci?: string;
   riwayatEpisode?: EpisodeSerial[];
+  melanjutkanEpisode?: KonteksLanjutanEpisode | null;
   daftarLatar?: LatarKartun[];
   daftarMenu?: MenuRingkasSerial[];
 }) {
@@ -939,6 +1132,7 @@ export function buatPromptNaskahDrafSerial({
         .map((e) => `- Ep ${e.nomor} "${e.judul}": ${e.ringkasan}`)
         .join("\n")}`
     : "";
+  const blokLanjutan = bangunBlokLanjutanEpisode(melanjutkanEpisode, nomorEpisode);
 
   const arahanBersambung = bersambung
     ? `\nMODE BERSAMBUNG (EPISODE): Materi cerita dari pemilik boleh dipecah menjadi beberapa episode tanpa memotong emosi cerita. Untuk **Episode ${nomorEpisode}** ini, garap bagian awalnya/porsinya secara mendalam dan utuh, tutup adegan terakhir atau \`pertanyaanPenutup\` dengan jembatan **"Bersambung ke Episode ${nomorEpisode + 1}"**, serta tuliskan \`ringkasanEpisode\` secara jelas mencatat titik akhir cerita Episode ${nomorEpisode} agar Episode ${nomorEpisode + 1} otomatis melanjutkan tepat dari bagian berikutnya.`
@@ -973,6 +1167,7 @@ export function buatPromptNaskahDrafSerial({
           ? `\n\nREFERENSI FAKTA SEJARAH PENDUKUNG (gunakan untuk menjaga akurasi latar sejarah tanpa membuang tokoh/alur pemilik):\n${risetBersih}`
           : `\n\nJaga akurasi fakta era/abad dan lokasi secara cermat; jangan mengarang tahun atau sumber yang tidak pasti.`) +
         teksRiwayat +
+        blokLanjutan +
         arahanBersambung +
         `\n\nAturan narasi & visual per adegan:` +
         `\n- Panjang narasi per adegan: **${spek.kataPerAdegan}** (${spek.durasiAdegan}) — tulis 2–3 kalimat naratif yang mengalir bercerita, BUKAN 1 kalimat ringkas kering.` +
@@ -1012,6 +1207,7 @@ export function buatPromptNaskahDrafSerial({
       `Latar tersedia (isi di \`latarKode\`):\n${teksLatar}` +
       formatMenuSerialUntukPrompt(daftarMenu) +
       teksRiwayat +
+      blokLanjutan +
       `\n\n${topik ? `Bahan cerita / ide / naskah acuan dari pemilik:\n${topik}` : "Topik bebas yang segar, mendalam, dan hangat di kedai kopi."}` +
       arahanBersambung +
       `\n\nAturan panjang dialog & kualitas:` +
@@ -1086,6 +1282,24 @@ export function normalisasiNaskahDrafSerial(
       .filter(Boolean)
       .slice(0, 8);
 
+    let karakter: KarakterMotionDraf | undefined;
+    if (a.karakter && typeof a.karakter === "object") {
+      const km = a.karakter as Record<string, unknown>;
+      const aksi = String(km.aksi ?? "").trim() as AksiKarakterCerita;
+      const tokohUtama = String(km.tokohUtama ?? "").trim() as TipeKarakterCerita;
+      const tokohKedua = String(km.tokohKedua ?? "").trim() as TipeKarakterCerita;
+      const gaya = String(km.gaya ?? "").trim() as GayaKarakterCerita;
+      const properti = String(km.properti ?? "").trim().slice(0, 24);
+      const objek: KarakterMotionDraf = {
+        ...(AKSI_MOTION_SAH.has(aksi) ? { aksi } : {}),
+        ...(TOKOH_MOTION_SAH.has(tokohUtama) ? { tokohUtama } : {}),
+        ...(TOKOH_MOTION_SAH.has(tokohKedua) ? { tokohKedua } : {}),
+        ...(gaya === "ilustrasi" || gaya === "siluet" ? { gaya } : {}),
+        ...(properti ? { properti } : {}),
+      };
+      if (Object.keys(objek).length > 0) karakter = objek;
+    }
+
     return {
       nomor: Number(a.nomor) || idx + 1,
       latarKode: bersihkanKodeLokasi(String(a.latarKode ?? (adalahDokumenter ? "sejarah" : "outdoor")), adalahDokumenter ? "sejarah" : "outdoor"),
@@ -1102,6 +1316,7 @@ export function normalisasiNaskahDrafSerial(
       ...(jenisMotion ? { jenisMotion } : {}),
       ...(judulKartu ? { judulKartu } : {}),
       ...(kataSorot.length ? { kataSorot } : {}),
+      ...(karakter ? { karakter } : {}),
       sfx: sfxMentah === "pop" || sfxMentah === "whoosh" ? sfxMentah : "tanpa",
     };
   });

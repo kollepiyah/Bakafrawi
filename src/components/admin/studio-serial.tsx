@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ArrowRight,
   CalendarClock,
   Check,
   Clapperboard,
@@ -23,22 +24,29 @@ import { DAFTAR_SASARAN_VIDEO, daftarSlotCepatWIB, type SasaranTayang } from "@/
 import {
   bersihkanKodeLokasi,
   buatAdeganKosongSerial,
+  buatDrafLanjutanManual,
   buatDrafManualSerial,
   DAFTAR_TOKOH_LEKKOPI,
   episodeBerikutnya,
   estimasiDurasiNaskahSerial,
   IDE_CEPAT_SERIAL,
   konfigSerialBawaan,
+  OPSI_AKSI_MOTION,
   OPSI_GAYA_KARTUN_LATAR,
   OPSI_LOKASI_LEKKOPI,
   OPSI_MOOD_SERIAL,
   OPSI_PANJANG_SERIAL,
+  OPSI_TOKOH_MOTION,
   type AdeganDrafSerial,
+  type AksiKarakterCerita,
+  type EpisodeSerial,
   type FormatSuaraSerial,
   type GayaCeritaSerial,
+  type GayaKarakterCerita,
   type GayaKartunLatar,
   type GenderNaratorSerial,
   type JenisAdeganMotion,
+  type KarakterMotionDraf,
   type KonfigSerialLekKopi,
   type KonfigSuaraTokoh,
   type MoodSerial,
@@ -46,6 +54,7 @@ import {
   type PanjangSerial,
   type SaranCeritaSerial,
   type TemaVisualMotion,
+  type TipeKarakterCerita,
   type TokohSuaraId,
 } from "@/lib/serial-kartun-murni";
 
@@ -197,7 +206,11 @@ export function PanelSerialKartun({
   const [infoPenyediaSaran, setInfoPenyediaSaran] = useState("");
   const [gayaCerita, setGayaCerita] = useState<GayaCeritaSerial>("kedai");
   const [temaVisual, setTemaVisual] = useState<TemaVisualMotion>("malam");
+  const [gayaKarakter, setGayaKarakter] = useState<GayaKarakterCerita>("ilustrasi");
   const [genderNarator, setGenderNarator] = useState<GenderNaratorSerial>("pria");
+  const [arahLanjutan, setArahLanjutan] = useState("");
+  const [lanjutDariNomor, setLanjutDariNomor] = useState<number | null>(null);
+  const refEditorDraf = useRef<HTMLDivElement | null>(null);
   const [hasilRiset, setHasilRiset] = useState("");
   const [risetOtomatisGoogle, setRisetOtomatisGoogle] = useState(true);
   const [sedangRiset, setSedangRiset] = useState(false);
@@ -276,6 +289,9 @@ export function PanelSerialKartun({
 
   const serialAktif = konfig.serial.find((s) => s.id === konfig.serialAktifId) ?? konfig.serial[0];
   const nomorBerikutnya = episodeBerikutnya(serialAktif);
+  const episodeTerakhir = serialAktif?.episode?.length
+    ? serialAktif.episode[serialAktif.episode.length - 1]
+    : null;
   const daftarSuaraPilih = suaraLokal.length > 0 ? suaraLokal : suaraFavorit;
   const opsiLatarDraf = Array.from(
     new Map(
@@ -373,7 +389,16 @@ export function PanelSerialKartun({
     }
   }
 
-  async function buatDrafNaskah(opsi?: { ideOverride?: string; moodOverride?: MoodSerial }) {
+  async function buatDrafNaskah(opsi?: {
+    ideOverride?: string;
+    moodOverride?: MoodSerial;
+    lanjutDariOverride?: number | null;
+    bersambungOverride?: boolean;
+    gayaCeritaOverride?: GayaCeritaSerial;
+    temaVisualOverride?: TemaVisualMotion;
+    formatSuaraOverride?: FormatSuaraSerial;
+    panjangNaskahOverride?: PanjangSerial;
+  }) {
     if (!serialAktif) return;
     setSedangBuatDraf(true);
     setGalat("");
@@ -383,6 +408,7 @@ export function PanelSerialKartun({
       if (!tok) throw new Error("Sesi login tidak ditemukan — coba muat ulang.");
       const ideKirim = (opsi?.ideOverride ?? ide).trim();
       const moodKirim = opsi?.moodOverride ?? mood;
+      const lanjutNomor = opsi?.lanjutDariOverride !== undefined ? opsi.lanjutDariOverride : lanjutDariNomor;
       const res = await fetch("/api/studio/serial", {
         method: "POST",
         headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
@@ -392,11 +418,13 @@ export function PanelSerialKartun({
           ide: ideKirim,
           kataKunci: kataKunci.trim(),
           mood: moodKirim,
-          formatSuara,
-          panjangNaskah,
-          bersambung,
-          gayaCerita,
-          temaVisual,
+          formatSuara: opsi?.formatSuaraOverride ?? formatSuara,
+          panjangNaskah: opsi?.panjangNaskahOverride ?? panjangNaskah,
+          bersambung: opsi?.bersambungOverride ?? bersambung,
+          gayaCerita: opsi?.gayaCeritaOverride ?? gayaCerita,
+          temaVisual: opsi?.temaVisualOverride ?? temaVisual,
+          gayaKarakter,
+          ...(lanjutNomor ? { lanjutDariNomor: lanjutNomor } : {}),
           hasilRiset: hasilRiset.trim(),
           risetGoogle: risetOtomatisGoogle,
         }),
@@ -411,12 +439,67 @@ export function PanelSerialKartun({
         setHasilRiset(j.teksRiset);
         setInfoPenyediaRiset((prev) => prev || "Riset otomatis Google");
       }
-      setPesan("Draf naskah selesai disusun — silakan periksa atau ubah dialog sebelum render video.");
+      setPesan(
+        j.melanjutkanDari
+          ? `Draf naskah Episode ${nomorBerikutnya} selesai disusun (menyambung dari Ep ${j.melanjutkanDari.nomor} "${j.melanjutkanDari.judul}") — silakan periksa atau ubah sebelum render!`
+          : "Draf naskah selesai disusun — silakan periksa atau ubah dialog sebelum render video.",
+      );
+      setTimeout(() => refEditorDraf.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
     } catch (e) {
       setGalat(e instanceof Error ? e.message : "Gagal menyusun draf naskah.");
     } finally {
       setSedangBuatDraf(false);
     }
+  }
+
+  function tulisNaskahEpisodeBerikutnya(epAcuan: EpisodeSerial, mode: "ai" | "manual") {
+    const gayaTarget: GayaCeritaSerial = epAcuan.gayaCerita ?? gayaCerita;
+    const temaTarget: TemaVisualMotion = epAcuan.temaVisual ?? temaVisual;
+    const formatTarget: FormatSuaraSerial = epAcuan.formatSuara ?? formatSuara;
+    const panjangTarget: PanjangSerial = epAcuan.panjangNaskah ?? panjangNaskah;
+    const genderTarget: GenderNaratorSerial = epAcuan.genderNarator ?? genderNarator;
+    const moodTarget: MoodSerial = epAcuan.mood ?? mood;
+
+    setGayaCerita(gayaTarget);
+    setTemaVisual(temaTarget);
+    setFormatSuara(formatTarget);
+    setPanjangNaskah(panjangTarget);
+    setGenderNarator(genderTarget);
+    setMood(moodTarget);
+    setBersambung(true);
+    setLanjutDariNomor(epAcuan.nomor);
+
+    const arahanSambung = arahLanjutan.trim() || ide.trim();
+    if (arahLanjutan.trim() && !ide.trim()) setIde(arahLanjutan.trim());
+
+    if (mode === "manual") {
+      setGalat("");
+      const draf = buatDrafLanjutanManual({
+        episodeSebelumnya: epAcuan,
+        nomorEpisode: nomorBerikutnya,
+        gayaCerita: gayaTarget,
+        temaVisual: temaTarget,
+        latarKode: konfig.latar[0]?.kode || "outdoor",
+      });
+      setDrafNaskah(draf);
+      setInfoPenyediaDraf(`Manual · Lanjutan Ep ${epAcuan.nomor}`);
+      setPesan(
+        `Editor manual Episode ${nomorBerikutnya} (lanjutan Ep ${epAcuan.nomor} "${epAcuan.judul}") siap diisi!`,
+      );
+      setTimeout(() => refEditorDraf.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+      return;
+    }
+
+    void buatDrafNaskah({
+      ideOverride: arahanSambung,
+      moodOverride: moodTarget,
+      lanjutDariOverride: epAcuan.nomor,
+      bersambungOverride: true,
+      gayaCeritaOverride: gayaTarget,
+      temaVisualOverride: temaTarget,
+      formatSuaraOverride: formatTarget,
+      panjangNaskahOverride: panjangTarget,
+    });
   }
 
   function bukaTulisManual() {
@@ -440,7 +523,16 @@ export function PanelSerialKartun({
     perubahan: Partial<
       Pick<
         AdeganDrafSerial,
-        "namaPembicara" | "latarKode" | "dialog" | "pembicara" | "promptVisual" | "kartuWaktu" | "jenisMotion" | "judulKartu" | "kataSorot"
+        | "namaPembicara"
+        | "latarKode"
+        | "dialog"
+        | "pembicara"
+        | "promptVisual"
+        | "kartuWaktu"
+        | "jenisMotion"
+        | "judulKartu"
+        | "kataSorot"
+        | "karakter"
       >
     >,
   ) {
@@ -492,6 +584,7 @@ export function PanelSerialKartun({
           bersambung,
           gayaCerita,
           temaVisual,
+          gayaKarakter,
           genderNarator,
           hasilRiset: hasilRiset.trim(),
           risetGoogle: risetOtomatisGoogle,
@@ -739,6 +832,58 @@ export function PanelSerialKartun({
           </div>
         </div>
 
+        {/* Banner Khusus Lanjutkan Episode Berikutnya (muncul otomatis setelah ada Ep 1+) */}
+        {episodeTerakhir ? (
+          <div className="space-y-3 rounded-xl border border-amber-400/45 bg-gradient-to-br from-amber-500/[0.12] via-amber-500/[0.04] to-transparent p-3.5 sm:p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0 space-y-1">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-2.5 py-0.5 text-[11px] font-bold text-amber-200">
+                  <Sparkles className="size-3" /> Lanjutkan Cerita · Episode {episodeTerakhir.nomor} → Episode {nomorBerikutnya}
+                </span>
+                <h4 className="text-sm font-semibold text-foreground">
+                  Sambung dari Ep. {episodeTerakhir.nomor}: &ldquo;{episodeTerakhir.judul}&rdquo;
+                </h4>
+                {episodeTerakhir.ringkasan ? (
+                  <p className="text-xs leading-relaxed text-zinc-300">
+                    {episodeTerakhir.ringkasan}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <input
+              type="text"
+              value={arahLanjutan}
+              onChange={(e) => setArahLanjutan(e.target.value)}
+              placeholder={`Arahan lanjutan Episode ${nomorBerikutnya} (opsional — mis. Lek Aceng lanjut perjalanan ke dataran tinggi Gayo…)`}
+              className="h-9 w-full rounded-xl border border-amber-400/30 bg-background/70 px-3 text-xs text-foreground"
+            />
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <button
+                type="button"
+                onClick={() => tulisNaskahEpisodeBerikutnya(episodeTerakhir, "ai")}
+                disabled={sedangBuatDraf || sedangBuatEp || sedangMintaSaran}
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-amber-400 px-4 text-xs font-bold text-zinc-950 transition hover:bg-amber-300 disabled:opacity-50 sm:w-auto"
+              >
+                {sedangBuatDraf ? <Loader2 className="size-3.5 animate-spin" /> : <ArrowRight className="size-3.5" />}
+                {sedangBuatDraf
+                  ? `Menulis Naskah Episode ${nomorBerikutnya}…`
+                  : `Tulis Naskah Episode ${nomorBerikutnya} (Lanjutan AI)`}
+              </button>
+              <button
+                type="button"
+                onClick={() => tulisNaskahEpisodeBerikutnya(episodeTerakhir, "manual")}
+                disabled={sedangBuatDraf || sedangBuatEp}
+                className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-full border border-amber-400/45 bg-amber-500/10 px-4 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50 sm:w-auto"
+              >
+                <FileText className="size-3.5" />
+                Tulis Manual Episode {nomorBerikutnya}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {/* Pilihan Gaya Cerita */}
         <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -840,6 +985,38 @@ export function PanelSerialKartun({
                   >
                     <div className="font-semibold">Wanita · Hangat</div>
                     <div className="text-[10px] opacity-75">Selalu jatuh ke suara wanita</div>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1 sm:col-span-2">
+                <span className="block text-[11px] font-medium text-muted-foreground">
+                  Gaya Visual Karakter 2D (8 Tokoh &amp; 9 Pose Anti-Monoton)
+                </span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setGayaKarakter("ilustrasi")}
+                    className={`rounded-lg border px-2.5 py-1.5 text-left text-[11px] transition ${
+                      gayaKarakter === "ilustrasi"
+                        ? "border-amber-400/70 bg-amber-400/15 text-amber-200"
+                        : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
+                    }`}
+                  >
+                    <div className="font-semibold">Ilustrasi Berwarna (Disarankan)</div>
+                    <div className="text-[10px] opacity-75">Petani, saudagar, santri, petualang, wajah berkedip &amp; kostum era</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGayaKarakter("siluet")}
+                    className={`rounded-lg border px-2.5 py-1.5 text-left text-[11px] transition ${
+                      gayaKarakter === "siluet"
+                        ? "border-amber-400/70 bg-amber-400/15 text-amber-200"
+                        : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
+                    }`}
+                  >
+                    <div className="font-semibold">Siluet Emas Sinematik</div>
+                    <div className="text-[10px] opacity-75">Siluet gelap ber-rimlight emas misterius</div>
                   </button>
                 </div>
               </div>
@@ -1229,7 +1406,7 @@ export function PanelSerialKartun({
 
         {/* Editor Draf Naskah Cerita sebelum render video */}
         {drafNaskah && (
-          <div className="space-y-4 rounded-2xl border border-emas/45 bg-background/80 p-3.5 sm:p-4">
+          <div ref={refEditorDraf} className="space-y-4 rounded-2xl border border-emas/45 bg-background/80 p-3.5 sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -1353,6 +1530,7 @@ export function PanelSerialKartun({
                             <option value="pembuka" className="bg-card">Pembuka Judul (Malam)</option>
                             <option value="ilustrasi" className="bg-card">Ilustrasi Sinematik</option>
                             <option value="perkamen" className="bg-card">Gulungan Perkamen</option>
+                            <option value="arsip" className="bg-card">Close-Up Arsip Berstempel</option>
                             <option value="peta" className="bg-card">Peta Kuno (Otomatis Nusantara / Mokha)</option>
                             <option value="penutup" className="bg-card">Penutup &amp; Kredit</option>
                           </select>
@@ -1377,6 +1555,52 @@ export function PanelSerialKartun({
                             className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
                           />
                         </label>
+                        {a.jenisMotion !== "peta" && a.jenisMotion !== "arsip" ? (
+                          <>
+                            <label className="grid gap-1">
+                              <span className="text-[10px] text-muted-foreground">Karakter Tokoh (Opsional)</span>
+                              <select
+                                value={a.karakter?.tokohUtama ?? ""}
+                                onChange={(e) => {
+                                  const val = e.target.value as TipeKarakterCerita | "";
+                                  const next: KarakterMotionDraf = { ...(a.karakter ?? {}) };
+                                  if (val) next.tokohUtama = val;
+                                  else delete next.tokohUtama;
+                                  ubahAdeganDraf(idx, { karakter: Object.keys(next).length ? next : undefined });
+                                }}
+                                className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
+                              >
+                                <option value="" className="bg-card">Otomatis (Sesuai Narasi)</option>
+                                {OPSI_TOKOH_MOTION.map((o) => (
+                                  <option key={o.kode} value={o.kode} className="bg-card">
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="grid gap-1 sm:col-span-2">
+                              <span className="text-[10px] text-muted-foreground">Aksi / Pose Karakter (Opsional)</span>
+                              <select
+                                value={a.karakter?.aksi ?? ""}
+                                onChange={(e) => {
+                                  const val = e.target.value as AksiKarakterCerita | "";
+                                  const next: KarakterMotionDraf = { ...(a.karakter ?? {}) };
+                                  if (val) next.aksi = val;
+                                  else delete next.aksi;
+                                  ubahAdeganDraf(idx, { karakter: Object.keys(next).length ? next : undefined });
+                                }}
+                                className="h-8 rounded-lg border border-input bg-background/70 px-2.5 text-xs"
+                              >
+                                <option value="" className="bg-card">Otomatis (Anti-Monoton Bervariasi)</option>
+                                {OPSI_AKSI_MOTION.map((o) => (
+                                  <option key={o.kode} value={o.kode} className="bg-card">
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="grid gap-2 sm:grid-cols-3">
@@ -1957,14 +2181,26 @@ export function PanelSerialKartun({
                     </div>
                     {ep.ringkasan && <p className="mt-0.5 text-muted-foreground">{ep.ringkasan}</p>}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void hapusEpisode(ep.nomor)}
-                    className="shrink-0 rounded p-1 text-muted-foreground hover:text-red-400"
-                    title="Hapus memori episode"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => tulisNaskahEpisodeBerikutnya(ep, "ai")}
+                      disabled={sedangBuatDraf || sedangBuatEp}
+                      className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-200 transition hover:bg-amber-500/20 disabled:opacity-50"
+                      title={`Tulis naskah Episode ${nomorBerikutnya} menyambung dari Episode ${ep.nomor}`}
+                    >
+                      Lanjut Ep {nomorBerikutnya}
+                      <ArrowRight className="size-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void hapusEpisode(ep.nomor)}
+                      className="rounded p-1 text-muted-foreground hover:text-red-400"
+                      title="Hapus memori episode"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

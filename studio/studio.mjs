@@ -12,7 +12,7 @@ import { indeksBankMerek, lihatBankMerek, renderBankMerek, siapkanMerekBank } fr
 // Satu modul gambar AI untuk semua merek (versi pindahan Lek Kopi: penyedia berurutan + catatan biaya).
 import { adaGambarAi, buatGambarAi, galatKuota } from './lib/bank/gambar-ai.mjs';
 import { adaInstagram, postingFeed, postingReels, postingStory, segarkanToken } from './lib/instagram.mjs';
-import { ffmpeg, probe } from './lib/bank/alat.mjs';
+import { ffmpeg, kompresVideoJikaBesar, probe } from './lib/bank/alat.mjs';
 import { ASET_LOKAL, deteksiGenderKarakter, kelompokKarakter, keNaskah, maskotAdegan, pilihKarakter, pilihKolamGayaDenganEvaluasi, pilihMusik, renderIklan, renderSinematikRemotion, renderWebShowcase, salinAsetDrive, salinAsetSupabase, SUARA, suaraKarakter, uraiPilihanKarakter, WARNA } from './lib/video.mjs';
 import { buatNaskah, buatNaskahVideo, buatNaskahVideoFullAi, buatNaskahWebShowcase } from './lib/naskah.mjs';
 import { suaraAdegan, uraiPilihanSuara } from './lib/bank/suara.mjs';
@@ -1006,7 +1006,11 @@ async function modeAwan() {
         try {
           const slug = tugas.merek ?? 'bakafrawi';
           if (!merekCache.has(slug)) merekCache.set(slug, await bacaMerek(slug));
-          const simpan = async (b, jenis) => unggah(`${tugas.id}/${path.basename(b)}`, await readFile(b), jenis);
+          const simpan = async (b, jenis) => {
+            // Batas unggah Storage Supabase 50 MB: video besar dikecilkan dulu agar tidak gagal 413.
+            if (jenis === 'video/mp4') await kompresVideoJikaBesar(b, { batasMb: 44 });
+            return unggah(`${tugas.id}/${path.basename(b)}`, await readFile(b), jenis);
+          };
           const merek = merekCache.get(slug);
           let hasilKerja;
           if (tugas.produk_slug === 'rutin-buka') {

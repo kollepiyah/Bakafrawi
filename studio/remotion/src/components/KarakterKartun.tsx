@@ -158,17 +158,20 @@ const EfekReaksiKomik: React.FC<{ efek: EfekKartun; frame: number; fps: number; 
   );
 };
 
-const PropertiTangan: React.FC<{ properti: PropertiKartun; frame: number; balikX?: number }> = ({
+const PropertiTangan: React.FC<{ properti: PropertiKartun; frame: number; balikX?: number; sedangBicara?: boolean }> = ({
   properti,
   frame,
   balikX = 1,
+  sedangBicara = false,
 }) => {
   if (properti === 'tanpa') return null;
   const uapY = (frame * 0.6) % 18;
   const balikTeks = balikX < 0 ? 'scale(-1, 1)' : undefined;
+  const ayunTanganY = sedangBicara ? Math.sin(frame * 0.32) * 7 : Math.sin(frame * 0.1) * 2.5;
+  const ayunTanganRot = sedangBicara ? Math.sin(frame * 0.28) * 6 : Math.sin(frame * 0.08) * 2;
 
   return (
-    <g transform="translate(232, 266)">
+    <g transform={`translate(232, ${266 + ayunTanganY}) rotate(${ayunTanganRot})`}>
       {properti === 'es_kopi' && (
         <g>
           <polygon points="-18,-22 18,-22 14,30 -14,30" fill="#D9A773" stroke={OUTLINE} strokeWidth="4" strokeLinejoin="round" />
@@ -270,8 +273,13 @@ export const KarakterKartun: React.FC<PropsKarakter> = ({
 
   const siklusKedip = (frame + OFFSET_KEDIP[tokoh]) % 105;
   const sedangKedip = siklusKedip >= 98;
-  const napasY = Math.sin(frame * 0.11 + OFFSET_KEDIP[tokoh]) * (sedangBicara ? 4.5 : 2.5);
-  const goyangRot = sedangBicara ? Math.sin(frame * 0.24) * 2.2 : Math.sin(frame * 0.08) * 0.8;
+  const loncatKaget = ekspresi === 'kaget' ? -Math.abs(Math.sin(Math.min(frame, 18) * 0.35)) * 18 : 0;
+  const tawaY = ekspresi === 'ketawa' ? -Math.abs(Math.sin(frame * 0.5)) * 9 : 0;
+  const napasY = Math.sin(frame * 0.11 + OFFSET_KEDIP[tokoh]) * (sedangBicara ? 4.5 : 2.5) + loncatKaget + tawaY;
+  const miringEkspresi =
+    ekspresi === 'mikir' ? 4.5 : ekspresi === 'ngantuk' ? -3.5 + Math.sin(frame * 0.07) * 2 : 0;
+  const goyangRot =
+    (sedangBicara ? Math.sin(frame * 0.24) * 2.6 : Math.sin(frame * 0.08) * 0.9) + miringEkspresi;
   const skalaBicara = sedangBicara ? 1.04 : 0.96;
   const bentukMulut = hitungBentukMulut(sedangBicara, frame, fps, kata);
   const goyangEkor = Math.sin(frame * 0.22) * 14;
@@ -598,7 +606,7 @@ export const KarakterKartun: React.FC<PropsKarakter> = ({
           </g>
 
           {/* Properti di tangan */}
-          <PropertiTangan properti={properti} frame={frame} balikX={balikX} />
+          <PropertiTangan properti={properti} frame={frame} balikX={balikX} sedangBicara={sedangBicara} />
         </g>
 
         <EfekReaksiKomik efek={efek} frame={frame} fps={fps} balikX={balikX} />

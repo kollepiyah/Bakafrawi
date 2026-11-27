@@ -1054,6 +1054,50 @@ export async function simpanKonfigSerialLekKopi(konfig: KonfigSerialLekKopi): Pr
   return bersih;
 }
 
+/** Baca potongan adegan akhir & metadata dari tugas episode sebelumnya (untuk menyambung cerita episode lama). */
+export async function bacaDetailEpisodeDariTugas(tugasId: string): Promise<{
+  kutipanAdeganAkhir: string[];
+  jembatanBerikutnya: string;
+  gayaCerita?: GayaCeritaSerial;
+  temaVisual?: "malam" | "perkamen";
+  formatSuara?: FormatSuaraSerial;
+  panjangNaskah?: PanjangSerial;
+  genderNarator?: "pria" | "wanita";
+} | null> {
+  const idBersih = String(tugasId ?? "").trim();
+  if (!idBersih) return null;
+  const baris = (await rest(
+    `studio_tugas?id=eq.${encodeURIComponent(idBersih)}&select=naskah&limit=1`,
+  )) as { naskah?: Record<string, unknown> | null }[];
+  const naskah = baris?.[0]?.naskah;
+  if (!naskah || typeof naskah !== "object") return null;
+
+  const daftarAdegan = Array.isArray(naskah.adegan) ? (naskah.adegan as Record<string, unknown>[]) : [];
+  const kutipanAdeganAkhir = daftarAdegan
+    .slice(-3)
+    .map((a) => String(a?.dialog ?? a?.narasi ?? "").trim())
+    .filter(Boolean);
+  const jembatanBerikutnya = String(naskah.pertanyaanPenutup ?? "").trim().slice(0, 180);
+  const meta =
+    naskah.serialKartun && typeof naskah.serialKartun === "object"
+      ? (naskah.serialKartun as Record<string, unknown>)
+      : {};
+
+  return {
+    kutipanAdeganAkhir,
+    jembatanBerikutnya,
+    ...(meta.gayaCerita === "dokumenter" || meta.gayaCerita === "kedai" ? { gayaCerita: meta.gayaCerita } : {}),
+    ...(meta.temaVisual === "malam" || meta.temaVisual === "perkamen" ? { temaVisual: meta.temaVisual } : {}),
+    ...(meta.formatSuara === "dialog" || meta.formatSuara === "narator" || meta.formatSuara === "campuran"
+      ? { formatSuara: meta.formatSuara }
+      : {}),
+    ...(meta.panjangNaskah === "ringkas" || meta.panjangNaskah === "sedang" || meta.panjangNaskah === "panjang"
+      ? { panjangNaskah: meta.panjangNaskah }
+      : {}),
+    ...(meta.genderNarator === "pria" || meta.genderNarator === "wanita" ? { genderNarator: meta.genderNarator } : {}),
+  };
+}
+
 /** Masukkan tugas pembuatan 1 episode Serial Kartun 2D Lek Kopi ke antrean mesin Studio. */
 export async function buatTugasSerialKartun(opsi: {
   serialId?: string;
@@ -1064,6 +1108,7 @@ export async function buatTugasSerialKartun(opsi: {
   bersambung?: boolean;
   gayaCerita?: GayaCeritaSerial;
   temaVisual?: "malam" | "perkamen";
+  gayaKarakter?: "ilustrasi" | "siluet";
   genderNarator?: "pria" | "wanita";
   hasilRiset?: string;
   modeJadwal?: "persetujuan" | "prime19" | "custom";
@@ -1089,6 +1134,7 @@ export async function buatTugasSerialKartun(opsi: {
   const bersambung = Boolean(opsi.bersambung);
   const gayaCerita: GayaCeritaSerial = opsi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
   const temaVisual: "malam" | "perkamen" = opsi.temaVisual === "perkamen" ? "perkamen" : "malam";
+  const gayaKarakter: "ilustrasi" | "siluet" = opsi.gayaKarakter === "siluet" ? "siluet" : "ilustrasi";
   const genderNarator: "pria" | "wanita" = opsi.genderNarator === "wanita" ? "wanita" : "pria";
   const hasilRisetBersih = String(opsi.hasilRiset ?? "").trim().slice(0, 2500);
   const ideBersih = String(opsi.ide ?? "").trim().slice(0, 4000);
@@ -1130,6 +1176,7 @@ export async function buatTugasSerialKartun(opsi: {
         bersambung,
         gayaCerita,
         temaVisual,
+        gayaKarakter,
         genderNarator,
         ...(hasilRisetBersih ? { hasilRiset: hasilRisetBersih } : {}),
         ide: ideBersih,
