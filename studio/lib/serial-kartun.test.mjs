@@ -608,3 +608,25 @@ test('gabungRiwayatEpisode menyimpan metadata sambungan episode (gayaCerita, ade
   assert.match(ep.adeganTerakhir, /berlayar ke Gayo/);
   assert.match(ep.jembatanBerikutnya, /Episode 2/);
 });
+
+test('pilihKarakterCeritaOtomatis mengisi shot closeup/medium, posisi pindah-pindah, & beatKedua otomatis', () => {
+  const k1 = pilihKarakterCeritaOtomatis(
+    { dialog: 'Lek Aceng melangkah di malam sunyi membawa lentera menuju pelabuhan tua.' },
+    0,
+    { jenis: 'pembuka', konteksCerita: 'Jejak Kopi Nusantara' },
+  );
+  assert.equal(k1.shot, 'medium');
+  assert.ok(['kiri', 'tengah', 'kanan'].includes(k1.posisi));
+  assert.ok(k1.beatKedua);
+  assert.notEqual(k1.beatKedua.posisi, k1.posisi);
+  assert.equal(k1.beatKedua.shot, 'closeup');
+
+  const k2 = pilihKarakterCeritaOtomatis(
+    { dialog: 'Suasana mendadak tegang di tengah hutan lebat ketika suara aneh terdengar.' },
+    1,
+    { jenis: 'ilustrasi', konteksCerita: 'Jejak Kopi Nusantara', sebelumnya: k1 },
+  );
+  assert.equal(k2.ekspresi, 'tegang');
+  assert.notEqual(k2.posisi, k1.posisi);
+  assert.notEqual(k2.shot, k1.shot);
+});

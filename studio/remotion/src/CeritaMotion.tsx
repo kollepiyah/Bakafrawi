@@ -501,13 +501,14 @@ const AdeganPembuka: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numbe
       <BingkaiSinematik gelap />
       <WatermarkAkun akun={akun} terang />
 
-      {/* Animasi karakter 2D berjalan / berakting di panggung tengah */}
+      {/* Animasi karakter 2D ekspresif & pindah posisi di panggung tengah */}
       {adegan.karakter ? (
         <PanggungKarakterCerita
           konfig={adegan.karakter}
           durasiBingkai={durasiBingkai}
           tema="malam"
-          bottomLantai={810}
+          bottomLantai={760}
+          kata={adegan.kata}
         />
       ) : null}
 
@@ -625,13 +626,14 @@ const AdeganPerkamen: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: numb
       <BingkaiSinematik gelap={false} />
       <WatermarkAkun akun={akun} terang={false} />
 
-      {/* Animasi karakter 2D berjalan / memeriksa arsip / dialog di bawah gulungan perkamen */}
+      {/* Animasi karakter 2D ekspresif di bawah gulungan perkamen */}
       {adegan.karakter ? (
         <PanggungKarakterCerita
           konfig={adegan.karakter}
           durasiBingkai={durasiBingkai}
           tema="perkamen"
           bottomLantai={500}
+          kata={adegan.kata}
         />
       ) : null}
 
@@ -721,13 +723,14 @@ const AdeganIlustrasi: React.FC<{ adegan: AdeganCeritaMotion; durasiBingkai: num
       <BingkaiSinematik gelap />
       <WatermarkAkun akun={akun} terang />
 
-      {/* Animasi karakter 2D berjalan / memeriksa arsip / dialog */}
+      {/* Animasi karakter 2D ekspresif & pindah posisi */}
       {adegan.karakter ? (
         <PanggungKarakterCerita
           konfig={adegan.karakter}
           durasiBingkai={durasiBingkai}
           tema="malam"
           bottomLantai={510}
+          kata={adegan.kata}
         />
       ) : null}
 
@@ -1508,7 +1511,8 @@ const AdeganPenutup: React.FC<{
           konfig={adegan.karakter}
           durasiBingkai={durasiBingkai}
           tema="malam"
-          bottomLantai={740}
+          bottomLantai={720}
+          kata={adegan.kata}
         />
       ) : null}
 

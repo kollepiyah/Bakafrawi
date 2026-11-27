@@ -124,6 +124,149 @@ async function jalankan(hal, l) {
 }
 
 /**
+ * Persiapkan halaman sebelum dipotret `WebShowcase`:
+ * matikan `scroll-behavior: smooth` & animasi tertunda, paksa elemen reveal (`[data-reveal]`,
+ * `[data-cutout-reveal]`, `[data-aos]`) tampil 100%, picu lazy-load gambar, lalu pastikan kembali ke puncak (y=0).
+ */
+async function siapkanHalamanShowcase(hal, { maksScroll = 5200, langkah = 640 } = {}) {
+  await hal
+    .addStyleTag({
+      content: `
+        html, body { scroll-behavior: auto !important; }
+        [data-reveal], [data-cutout-reveal], [data-aos], .aos-init {
+          opacity: 1 !important;
+          transform: none !important;
+          visibility: visible !important;
+          transition: none !important;
+        }
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-delay: 0ms !important;
+          transition-duration: 0.01ms !important;
+          transition-delay: 0ms !important;
+        }
+      `,
+    })
+    .catch(() => {});
+
+  const tinggiTotal = await hal
+    .evaluate(
+      async ({ batas, step }) => {
+        // Tutup / sembunyikan pop-up pengumuman atau modal cookie overlay yang menutupi tampilan Hero website.
+        for (const tombol of document.querySelectorAll(
+          '[role="dialog"] button, [aria-modal="true"] button, button[aria-label*="tutup" i], button[aria-label*="close" i], [id*="modal" i] button, [id*="popup" i] button',
+        )) {
+          const teks = (tombol.textContent || '').trim();
+          const label = (tombol.getAttribute('aria-label') || '').trim();
+          if (/^(×|✕|x|tutup|close)$/i.test(teks) || /(tutup|close)/i.test(label)) {
+            try {
+              tombol.click();
+            } catch {
+              /* abaikan */
+            }
+          }
+        }
+        for (const el of document.querySelectorAll('*')) {
+          const st = window.getComputedStyle(el);
+          if (st.position !== 'fixed') continue;
+          const r = el.getBoundingClientRect();
+          // Overlay backdrop modal yang menutupi hampir seluruh layar (mis. popup pengumuman / banner promo)
+          if (r.width >= window.innerWidth * 0.7 && r.height >= window.innerHeight * 0.6) {
+            el.style.display = 'none';
+          }
+        }
+
+        // Ubah gambar lazy menjadi eager agar segera terunduh sebelum dipotret.
+        for (const img of document.querySelectorAll('img[loading="lazy"]')) {
+          img.setAttribute('loading', 'eager');
+        }
+        for (const el of document.querySelectorAll('[data-reveal]')) {
+          el.setAttribute('data-reveal', 'shown');
+        }
+        for (const el of document.querySelectorAll('[data-cutout-reveal]')) {
+          el.setAttribute('data-cutout-reveal', 'shown');
+        }
+
+        const maks = Math.min(document.documentElement.scrollHeight || document.body.scrollHeight || 900, batas);
+        for (let y = 0; y <= maks; y += step) {
+          window.scrollTo({ top: y, left: 0, behavior: 'instant' });
+          await new Promise((r) => setTimeout(r, 140));
+        }
+
+        // Kembali instan ke puncak & pastikan benar-benar di y = 0 (tidak tertahan smooth scroll).
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+
+        if (document.fonts?.ready) {
+          await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 1800))]);
+        }
+
+        // Tunggu gambar yang sudah terpasang selesai dimuat (maks 2,2 detik).
+        const gambar = [...document.querySelectorAll('img')].filter((img) => img.currentSrc || img.src);
+        await Promise.race([
+          Promise.all(
+            gambar.map((img) =>
+              img.complete
+                ? Promise.resolve()
+                : new Promise((res) => {
+                    img.addEventListener('load', res, { once: true });
+                    img.addEventListener('error', res, { once: true });
+                  }),
+            ),
+          ),
+          new Promise((r) => setTimeout(r, 2200)),
+        ]);
+
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        return Math.max(900, document.documentElement.scrollHeight || document.body.scrollHeight || 900);
+      },
+      { batas: maksScroll, step: langkah },
+    )
+    .catch(() => 900);
+
+  await tidur(280);
+  return tinggiTotal;
+}
+
+/**
+ * Saat mengambil `fullPage: true`, elemen `position: fixed` (tombol WA mengambang / bar tetap)
+ * kadang ikut memanjang atau menutupi isi halaman; sembunyikan sementara selama jepret full-page.
+ */
+async function aturElemenFixedUntukFullPage(hal, sembunyikan) {
+  await hal
+    .evaluate((hide) => {
+      if (hide) {
+        for (const el of document.querySelectorAll('*')) {
+          const st = window.getComputedStyle(el);
+          if (st.position !== 'fixed') continue;
+          const rect = el.getBoundingClientRect();
+          // Biarkan header atas kecil tetap rapi di puncak sebagai absolute; sembunyikan dock/widget melayang di bawah.
+          if (rect.top <= 40 && rect.height <= 140 && rect.width >= window.innerWidth * 0.5) {
+            el.setAttribute('data-studio-fixed', el.style.position || '__kosong__');
+            el.style.position = 'absolute';
+          } else {
+            el.setAttribute('data-studio-hide', el.style.visibility || '__kosong__');
+            el.style.visibility = 'hidden';
+          }
+        }
+      } else {
+        for (const el of document.querySelectorAll('[data-studio-fixed]')) {
+          const lama = el.getAttribute('data-studio-fixed');
+          el.style.position = lama === '__kosong__' ? '' : lama;
+          el.removeAttribute('data-studio-fixed');
+        }
+        for (const el of document.querySelectorAll('[data-studio-hide]')) {
+          const lama = el.getAttribute('data-studio-hide');
+          el.style.visibility = lama === '__kosong__' ? '' : lama;
+          el.removeAttribute('data-studio-hide');
+        }
+      }
+    }, sembunyikan)
+    .catch(() => {});
+}
+
+/**
  * Potret website publik untuk komposisi `WebShowcase`:
  * - Desktop 1440×900 (full-page scroll + hero + tengah halaman)
  * - Mobile 390×844 (tall scroll + hero)
@@ -148,11 +291,12 @@ export async function potretWebShowcase(
   let mobileFull = null;
   let mobileHero = null;
 
-  // 1. DESKTOP (1440×900, DPR 2 → tajam untuk scroll 3D & zoom)
+  // 1. DESKTOP (1440×900, DPR 2, reducedMotion agar elemen reveal langsung terlihat penuh)
   const ctxDesk = await peramban.newContext({
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 2,
     locale: 'id-ID',
+    reducedMotion: 'reduce',
   });
   const halDesk = await ctxDesk.newPage();
   try {
@@ -161,17 +305,7 @@ export async function potretWebShowcase(
     );
     await tidur(tunggu);
 
-    // Gulir bertahap agar lazy-load gambar & animasi reveal muncul penuh, lalu kembali ke atas.
-    const tinggiTotal = await halDesk.evaluate(async () => {
-      const maks = Math.min(document.documentElement.scrollHeight || document.body.scrollHeight || 900, 5200);
-      for (let y = 0; y <= maks; y += 520) {
-        window.scrollTo(0, y);
-        await new Promise((r) => setTimeout(r, 180));
-      }
-      window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 350));
-      return Math.max(900, document.documentElement.scrollHeight || document.body.scrollHeight || 900);
-    }).catch(() => 900);
+    const tinggiTotal = await siapkanHalamanShowcase(halDesk, { maksScroll: maksTinggiDesktop + 200, langkah: 640 });
 
     // Pindai konten asli situs (judul, deskripsi, heading, menu navigasi, warna tema)
     info = await halDesk.evaluate((dom) => {
@@ -197,26 +331,34 @@ export async function potretWebShowcase(
       return { domain: dom, url: location.href, title, deskripsi, heading, navigasi, warnaAksen };
     }, domain).catch(() => info);
 
-    // Hero desktop (1440×900)
+    // Hero desktop (1440×900, pasti di puncak y=0)
     const pHero = path.join(folder, 'web-desktop-hero.jpg');
     await halDesk.screenshot({ path: pHero, type: 'jpeg', quality: 90 });
     desktopHero = { berkas: pHero, lebar: 2880, tinggi: 1800 };
 
-    // Full-page desktop (tinggi dibatasi agar ringan & mulus di Remotion)
+    // Full-page desktop (WAJIB `fullPage: true` bersama `clip` agar bagian bawah viewport ikut terpotret tajam!)
     const tinggiClip = Math.min(Math.max(900, tinggiTotal), maksTinggiDesktop);
     const pFull = path.join(folder, 'web-desktop-full.jpg');
+    await aturElemenFixedUntukFullPage(halDesk, true);
+    await tidur(120);
     await halDesk.screenshot({
       path: pFull,
       type: 'jpeg',
       quality: 88,
+      fullPage: true,
       clip: { x: 0, y: 0, width: 1440, height: tinggiClip },
     });
+    await aturElemenFixedUntukFullPage(halDesk, false);
     desktopFull = { berkas: pFull, lebar: 2880, tinggi: tinggiClip * 2 };
 
-    // Bagian tengah desktop (untuk adegan Spotlight)
-    const yMid = Math.max(0, Math.min(tinggiTotal - 900, Math.round(tinggiClip * 0.36)));
-    await halDesk.evaluate((y) => window.scrollTo(0, y), yMid).catch(() => {});
-    await tidur(450);
+    // Bagian tengah desktop (untuk adegan Spotlight — scroll instan agar langsung mendarat tepat)
+    const yMid = Math.max(0, Math.min(tinggiTotal - 900, Math.round(tinggiClip * 0.34)));
+    await halDesk
+      .evaluate((y) => {
+        window.scrollTo({ top: y, left: 0, behavior: 'instant' });
+      }, yMid)
+      .catch(() => {});
+    await tidur(380);
     const pMid = path.join(folder, 'web-desktop-mid.jpg');
     await halDesk.screenshot({ path: pMid, type: 'jpeg', quality: 90 });
     desktopMid = { berkas: pMid, lebar: 2880, tinggi: 1800 };
@@ -224,13 +366,14 @@ export async function potretWebShowcase(
     await ctxDesk.close();
   }
 
-  // 2. MOBILE (390×844, DPR 2 → untuk adegan Responsive Desktop + HP)
+  // 2. MOBILE (390×844, DPR 2, reducedMotion → untuk adegan Responsive Desktop + HP)
   const ctxMob = await peramban.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 2,
     isMobile: true,
     hasTouch: true,
     locale: 'id-ID',
+    reducedMotion: 'reduce',
   });
   const halMob = await ctxMob.newPage();
   try {
@@ -239,16 +382,7 @@ export async function potretWebShowcase(
     );
     await tidur(Math.min(tunggu, 2200));
 
-    const tinggiMob = await halMob.evaluate(async () => {
-      const maks = Math.min(document.documentElement.scrollHeight || document.body.scrollHeight || 844, 3200);
-      for (let y = 0; y <= maks; y += 450) {
-        window.scrollTo(0, y);
-        await new Promise((r) => setTimeout(r, 140));
-      }
-      window.scrollTo(0, 0);
-      await new Promise((r) => setTimeout(r, 300));
-      return Math.max(844, document.documentElement.scrollHeight || document.body.scrollHeight || 844);
-    }).catch(() => 844);
+    const tinggiMob = await siapkanHalamanShowcase(halMob, { maksScroll: maksTinggiMobile + 200, langkah: 520 });
 
     const pMobHero = path.join(folder, 'web-mobile-hero.jpg');
     await halMob.screenshot({ path: pMobHero, type: 'jpeg', quality: 90 });
@@ -256,12 +390,16 @@ export async function potretWebShowcase(
 
     const tinggiClipMob = Math.min(Math.max(844, tinggiMob), maksTinggiMobile);
     const pMobFull = path.join(folder, 'web-mobile-full.jpg');
+    await aturElemenFixedUntukFullPage(halMob, true);
+    await tidur(120);
     await halMob.screenshot({
       path: pMobFull,
       type: 'jpeg',
       quality: 86,
+      fullPage: true,
       clip: { x: 0, y: 0, width: 390, height: tinggiClipMob },
     });
+    await aturElemenFixedUntukFullPage(halMob, false);
     mobileFull = { berkas: pMobFull, lebar: 780, tinggi: tinggiClipMob * 2 };
   } finally {
     await ctxMob.close();

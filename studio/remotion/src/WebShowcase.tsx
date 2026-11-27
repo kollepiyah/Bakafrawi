@@ -212,18 +212,20 @@ const SubtitleKinetik: React.FC<{
           display: 'inline-flex',
           flexWrap: 'wrap',
           justifyContent: 'center',
-          gap: '4px 16px',
-          maxWidth: 920,
-          padding: '18px 30px',
+          alignItems: 'center',
+          rowGap: 10,
+          columnGap: 22,
+          maxWidth: 940,
+          padding: '18px 34px',
           borderRadius: 26,
-          background: 'rgba(7, 10, 16, 0.76)',
-          border: '1px solid rgba(255,255,255,0.12)',
+          background: 'rgba(7, 10, 16, 0.8)',
+          border: '1px solid rgba(255,255,255,0.14)',
           boxShadow: '0 22px 48px rgba(0,0,0,0.52)',
           fontFamily: SANS,
           fontWeight: 800,
-          fontSize: 48,
-          lineHeight: 1.24,
-          letterSpacing: -0.6,
+          fontSize: 46,
+          lineHeight: 1.28,
+          letterSpacing: 0,
         }}
       >
         {jendela.map((k, i) => {
@@ -240,9 +242,10 @@ const SubtitleKinetik: React.FC<{
               key={`${grup}-${i}`}
               style={{
                 display: 'inline-block',
+                padding: '0 3px',
                 color: sorot || aktif ? aksen : '#F8FAFC',
                 opacity: sudah ? 1 : 0.55,
-                transform: `scale(${aktif ? 1.08 : 0.96 + 0.04 * p}) translateY(${aktif ? -3 : 0}px)`,
+                transform: `scale(${aktif ? 1.04 : 0.97 + 0.03 * p}) translateY(${aktif ? -2 : 0}px)`,
                 textShadow: sorot || aktif ? `0 0 24px ${aksen}66, 0 4px 14px rgba(0,0,0,0.75)` : '0 4px 12px rgba(0,0,0,0.75)',
               }}
             >
@@ -484,24 +487,28 @@ const BabakHook: React.FC<{ p: PropsWebShowcase; durasi: number }> = ({ p, duras
         </div>
       </div>
 
-      {/* Preview kartu mini situs meluncur tipis di bawah address bar */}
-      {p.media.desktopHero ? (
+      {/* Preview kartu mini situs langsung jelas di bawah address bar */}
+      {p.media.desktopHero || p.media.desktopMid ? (
         <div
           style={{
             position: 'absolute',
-            left: 108,
-            right: 108,
-            top: 1110,
-            height: 360,
+            left: 88,
+            right: 88,
+            top: 1098,
+            height: 390,
             borderRadius: 24,
             overflow: 'hidden',
-            border: '1.5px solid rgba(255,255,255,0.16)',
-            boxShadow: '0 30px 70px rgba(0,0,0,0.65)',
-            opacity: interpolate(frame, [klikFrame, klikFrame + 16], [0.22, 0.96], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }),
-            transform: `translateY(${interpolate(frame, [klikFrame, klikFrame + 16], [28, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })}px)`,
+            border: `2px solid ${merek.aksenKedua}55`,
+            boxShadow: `0 30px 70px rgba(0,0,0,0.68), 0 0 36px ${merek.aksen}24`,
+            background: '#0F172A',
+            opacity: interpolate(frame, [10, Math.min(klikFrame + 12, 56)], [0.62, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }),
+            transform: `translateY(${interpolate(frame, [10, Math.min(klikFrame + 12, 56)], [22, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })}px)`,
           }}
         >
-          <Img src={staticFile(p.media.desktopHero)} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }} />
+          <Img
+            src={staticFile(p.media.desktopHero || p.media.desktopMid || '')}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top center' }}
+          />
         </div>
       ) : null}
 
@@ -516,9 +523,9 @@ const BabakBrowserScroll: React.FC<{ p: PropsWebShowcase; durasi: number }> = ({
   const { fps } = useVideoConfig();
   const { merek, media, browser } = p;
 
-  const winW = 940;
+  const winW = 956;
   const barH = 54;
-  const viewH = 620;
+  const viewH = 640;
   const rasioTinggi = media.desktopFullLebar && media.desktopFullTinggi
     ? media.desktopFullTinggi / media.desktopFullLebar
     : 2.6;
@@ -531,10 +538,10 @@ const BabakBrowserScroll: React.FC<{ p: PropsWebShowcase; durasi: number }> = ({
   });
   const scrollY = maksScroll * progresScroll;
 
-  const rotY = interpolate(frame, [0, durasi], [-7, 5], { extrapolateRight: 'clamp' });
-  const rotX = interpolate(frame, [0, durasi], [5, 2], { extrapolateRight: 'clamp' });
+  const rotY = interpolate(frame, [0, durasi], [-4, 3], { extrapolateRight: 'clamp' });
+  const rotX = interpolate(frame, [0, durasi], [3, 1], { extrapolateRight: 'clamp' });
   const kilauX = interpolate(frame, [0, durasi], [-320, 1180], { extrapolateRight: 'clamp' });
-  const gambarSrc = media.desktopFull || media.desktopHero;
+  const gambarSrc = media.desktopFull || media.desktopHero || media.desktopMid;
 
   return (
     <PanggungBabak durasi={durasi}>

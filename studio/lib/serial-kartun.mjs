@@ -297,8 +297,8 @@ export async function buatNaskahSerialKartun({
   if (gayaCerita === 'dokumenter') {
     const gayaGambar =
       temaVisual === 'perkamen'
-        ? 'flat vintage historical storybook illustration with warm parchment paper grain, muted cream ochre terracotta umber palette, soft empty upper sky, vertical 9:16 composition, strictly no text, no letters, no banners, no signage, no watermark, no floating coffee cups'
-        : 'atmospheric dark 2D painterly gouache illustration with subtle paper grain, deep indigo-charcoal shadows and warm glowing amber light, darkened lower third, vertical 9:16 composition, strictly no text, no letters, no signage, no watermark, no floating coffee cups';
+        ? 'EMPTY atmospheric vintage historical scenic environment background ONLY, strictly NO people, NO humans, NO faces, NO hands, NO characters, warm parchment paper grain, muted cream ochre terracotta umber palette, open foreground stage, soft empty upper sky, vertical 9:16 composition, strictly no text, no letters, no banners, no signage, no watermark, no floating coffee cups'
+        : 'EMPTY atmospheric dark 2D painterly gouache scenic environment background ONLY, strictly NO people, NO humans, NO faces, NO hands, NO characters, misty depth, deep indigo-charcoal shadows and warm glowing amber light, open foreground stage, darkened lower third, vertical 9:16 composition, strictly no text, no letters, no signage, no watermark, no floating coffee cups';
     system =
       'Kamu penulis naskah film dokumenter & kisah naratif sinematik (Instagram Reels 9:16) yang setia pada alur cerita pemilik, akurasi fakta, dan adab keilmuan. ' +
       'Bahasa Indonesia baku-hangat yang mengalir hidup, puitis, berwibawa, dan enak didengar sebagai voice-over dokumenter. ' +
@@ -646,11 +646,13 @@ export function pilihKarakterCeritaOtomatis(
 
   const ekspresi =
     manual?.ekspresi ||
-    (/\b(ajaib|takjub|heran|terkejut|luar biasa|indah|megah|cahaya)\b/i.test(narasi)
+    (/\b(tegang|cemas|takut|bahaya|badai|meriam|misteri|kaget|guncang|menegangkan|gelap gulita|hutan lebat)\b/i.test(narasi)
+      ? 'tegang'
+      : /\b(ajaib|takjub|heran|terkejut|luar biasa|indah|megah|cahaya|menemukan|bersinar)\b/i.test(narasi)
       ? 'takjub'
-      : /\b(rahasia|arsip|sejarah|fakta|tercatat|perang|kolonial|voc|keras|sulit)\b/i.test(narasi)
+      : /\b(rahasia|arsip|sejarah|fakta|tercatat|perang|kolonial|voc|keras|sulit|perjuangan)\b/i.test(narasi)
       ? 'serius'
-      : /\b(hangat|senyum|bersama|sahabat|nikmat|harum|bahagia|kopi)\b/i.test(narasi)
+      : /\b(hangat|senyum|bersama|sahabat|nikmat|harum|bahagia|kopi|cangkir|seduh)\b/i.test(narasi)
       ? 'hangat'
       : 'tenang');
 
@@ -717,6 +719,54 @@ export function pilihKarakterCeritaOtomatis(
   const tokohKedua = aksi === 'dialog_dua' || aksi === 'ramai_tiga' ? pilihPasangan(tokohUtama) : undefined;
   const tokohKetiga = aksi === 'ramai_tiga' ? pilihKetiga(tokohUtama, tokohKedua) : undefined;
 
+  // Variasikan shot kamera (closeup / medium / wide) & posisi (kiri / tengah / kanan) agar hidup dan berpindah-pindah!
+  const aksiWajibWide = aksi === 'ramai_tiga' || aksi === 'duduk_seduh' || aksi === 'tatap_horizon';
+  let shot = manual?.shot || '';
+  if (!shot) {
+    if (gaya === 'siluet') {
+      shot = 'wide';
+    } else if (aksiWajibWide) {
+      shot = 'wide';
+    } else if (aksi === 'dialog_dua') {
+      shot = 'medium';
+    } else if (jenis === 'pembuka') {
+      shot = 'medium';
+    } else if (jenis === 'penutup') {
+      shot = 'closeup';
+    } else {
+      const polaShot = ['medium', 'closeup', 'medium', 'wide', 'closeup'];
+      shot = polaShot[idx % polaShot.length];
+      if (sebelumnya?.shot && shot === sebelumnya.shot) {
+        shot = shot === 'closeup' ? 'medium' : 'closeup';
+      }
+    }
+  }
+
+  const polaPosisi = ['kiri', 'kanan', 'tengah', 'kiri', 'kanan'];
+  let posisi = manual?.posisi || polaPosisi[idx % polaPosisi.length];
+  if (!manual?.posisi && sebelumnya?.posisi && posisi === sebelumnya.posisi) {
+    posisi = sebelumnya.posisi === 'kiri' ? 'kanan' : sebelumnya.posisi === 'kanan' ? 'tengah' : 'kiri';
+  }
+  const hadap = manual?.hadap || (posisi === 'kanan' ? 'kiri' : 'kanan');
+
+  // Beat ke-2 otomatis di paruh kedua adegan (pindah posisi & ubah framing agar adegan panjang selalu seru!)
+  const posisiBeat2 = posisi === 'kiri' ? 'kanan' : posisi === 'kanan' ? 'kiri' : idx % 2 === 0 ? 'kanan' : 'kiri';
+  const shotBeat2 = shot === 'closeup' ? 'medium' : 'closeup';
+  const hadapBeat2 = posisiBeat2 === 'kanan' ? 'kiri' : 'kanan';
+  const ekspresiBeat2 =
+    ekspresi === 'tenang' ? 'hangat' : ekspresi === 'hangat' ? 'takjub' : ekspresi === 'serius' ? 'tegang' : ekspresi;
+
+  const beatKedua =
+    gaya === 'ilustrasi'
+      ? {
+          shot: shotBeat2,
+          posisi: posisiBeat2,
+          hadap: hadapBeat2,
+          ekspresi: ekspresiBeat2,
+          mulaiRasio: 0.48,
+        }
+      : undefined;
+
   return {
     aksi,
     tokohUtama,
@@ -725,6 +775,10 @@ export function pilihKarakterCeritaOtomatis(
     properti,
     gaya,
     ekspresi,
+    shot,
+    posisi,
+    hadap,
+    ...(beatKedua ? { beatKedua } : {}),
   };
 }
 
@@ -1059,19 +1113,27 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
   if (gayaCerita === 'dokumenter' && adaGambarAi()) {
     const gayaGambarBawaan =
       temaVisual === 'perkamen'
-        ? 'flat vintage historical storybook illustration with warm parchment paper grain, muted cream ochre terracotta umber palette, soft empty upper sky, vertical 9:16 composition, strictly no text, no letters, no banners, no signage, no watermark, no floating coffee cups'
-        : 'atmospheric dark 2D painterly gouache illustration with subtle paper grain, deep indigo-charcoal shadows and warm glowing amber light, darkened lower third, vertical 9:16 composition, strictly no text, no letters, no signage, no watermark, no floating coffee cups';
+        ? 'EMPTY atmospheric vintage historical scenic environment background ONLY, strictly NO people, NO humans, NO faces, NO hands, NO characters, warm parchment paper grain, muted cream ochre terracotta umber palette, open foreground stage, soft empty upper sky, vertical 9:16 composition, strictly no text, no letters, no banners, no signage, no watermark, no floating coffee cups'
+        : 'EMPTY atmospheric dark 2D painterly gouache scenic environment background ONLY, strictly NO people, NO humans, NO faces, NO hands, NO characters, misty depth, deep indigo-charcoal shadows and warm glowing amber light, open foreground stage, darkened lower third, vertical 9:16 composition, strictly no text, no letters, no signage, no watermark, no floating coffee cups';
+    const pengamanLatarKosong =
+      'EMPTY scenic background environment only, strictly NO people, NO humans, NO faces, NO hands, NO characters, open foreground space for 2D character overlay';
     for (const [idx, a] of (naskah.adegan ?? []).slice(0, 12).entries()) {
       if (String(a?.jenisMotion ?? '').trim().toLowerCase() === 'peta') continue;
+      const tanpaKarakter = a?.karakter?.aksi === 'tanpa';
       const promptAsli = String(a?.promptVisual ?? '')
         .replace(/clean upper sky space for scroll title/gi, 'soft empty upper sky')
         .trim();
       const deskripsiFallback = [a?.judulKartu, a?.kartuWaktu, a?.dialog].filter(Boolean).join('. ').slice(0, 180);
-      const promptVisual =
+      const dasarPrompt =
         promptAsli ||
         (deskripsiFallback
-          ? `Stylized historical storybook scene depicting: ${deskripsiFallback}. ${gayaGambarBawaan}`
+          ? `Stylized historical storybook scenic environment for: ${deskripsiFallback}. ${gayaGambarBawaan}`
           : '');
+      const promptVisual = !dasarPrompt
+        ? ''
+        : !tanpaKarakter && !/\bno people\b/i.test(dasarPrompt)
+        ? `${dasarPrompt}. ${pengamanLatarKosong}`
+        : dasarPrompt;
       if (!promptVisual) continue;
       try {
         const resGambar = await buatGambarAi(promptVisual, '9:16', path.join(publik, `visual-dok-${idx}`), {

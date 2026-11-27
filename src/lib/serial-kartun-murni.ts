@@ -1146,8 +1146,8 @@ export function buatPromptNaskahDrafSerial({
   if (gayaCerita === "dokumenter") {
     const gayaGambar =
       temaVisual === "perkamen"
-        ? "flat vintage historical storybook illustration with warm parchment paper grain, muted cream ochre terracotta umber palette, soft empty upper sky, vertical 9:16 composition, strictly no text, no letters, no banners, no signage, no watermark, no floating coffee cups"
-        : "atmospheric dark 2D painterly gouache illustration with subtle paper grain, deep indigo-charcoal shadows and warm glowing amber light, darkened lower third, vertical 9:16 composition, strictly no text, no letters, no signage, no watermark, no floating coffee cups";
+        ? "EMPTY atmospheric vintage historical scenic environment background ONLY, strictly NO people, NO humans, NO faces, NO hands, NO characters, warm parchment paper grain, muted cream ochre terracotta umber palette, open foreground stage, soft empty upper sky, vertical 9:16 composition, strictly no text, no letters, no banners, no signage, no watermark, no floating coffee cups"
+        : "EMPTY atmospheric dark 2D painterly gouache scenic environment background ONLY, strictly NO people, NO humans, NO faces, NO hands, NO characters, misty depth, deep indigo-charcoal shadows and warm glowing amber light, open foreground stage, darkened lower third, vertical 9:16 composition, strictly no text, no letters, no signage, no watermark, no floating coffee cups";
     return {
       system:
         `Kamu penulis naskah film dokumenter & kisah naratif sinematik (Reels 9:16) yang mengutamakan kesetiaan pada alur cerita pemilik, akurasi fakta, dan adab keilmuan. ` +
