@@ -12,6 +12,7 @@ import {
   normalisasiNaskahDrafSerial,
   normalisasiRisetCeritaSerial,
   normalisasiSaranCeritaSerial,
+  selesaikanGayaCeritaDariPilihan,
   SKEMA_NASKAH_DRAF_SERIAL,
   SKEMA_RISET_CERITA_SERIAL,
   SKEMA_SARAN_CERITA_SERIAL,
@@ -435,16 +436,27 @@ export async function POST(req: Request) {
     }
 
     if (isi.aksi === "buat-episode") {
+      const konfig = await bacaKonfigSerialLekKopi();
+      const serial =
+        konfig.serial.find((s) => s.id === isi.serialId) ??
+        konfig.serial.find((s) => s.id === konfig.serialAktifId) ??
+        konfig.serial[0];
+      const nomorEpisode = episodeBerikutnya(serial);
       const gayaCerita: GayaCeritaPilihan =
         isi.gayaCerita === "dokumenter" || isi.gayaCerita === "kedai" || isi.gayaCerita === "otomatis"
           ? isi.gayaCerita
           : "otomatis";
+      const gayaUntukNaskah = selesaikanGayaCeritaDariPilihan(gayaCerita, {
+        nomorEpisode,
+        riwayatEpisode: serial?.episode ?? [],
+        lanjutEpisode: Boolean(isi.bersambung),
+      });
       const temaVisual = isi.temaVisual === "perkamen" ? "perkamen" : "malam";
       const gayaKarakter: GayaKarakterCerita = isi.gayaKarakter === "siluet" ? "siluet" : "ilustrasi";
       const genderNarator = isi.genderNarator === "wanita" ? "wanita" : "pria";
       const naskahBersih =
         isi.naskahJadi && Array.isArray(isi.naskahJadi.adegan) && isi.naskahJadi.adegan.length > 0
-          ? normalisasiNaskahDrafSerial(isi.naskahJadi, undefined, { gayaCerita })
+          ? normalisasiNaskahDrafSerial(isi.naskahJadi, undefined, { gayaCerita: gayaUntukNaskah })
           : null;
       const panjangNaskah: PanjangSerial =
         isi.panjangNaskah === "ringkas" || isi.panjangNaskah === "panjang" ? isi.panjangNaskah : "sedang";

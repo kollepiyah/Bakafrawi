@@ -302,6 +302,8 @@ export function PanelSerialKartun({
           lanjutEpisode: bersambung,
         })
       : null;
+  const gayaCeritaUntukEditor: GayaCeritaSerial =
+    gayaCerita === "otomatis" ? (profilOtomatisBerikutnya?.gayaCerita ?? "kedai") : gayaCerita;
   const daftarSuaraPilih = suaraLokal.length > 0 ? suaraLokal : suaraFavorit;
   const opsiLatarDraf = Array.from(
     new Map(
@@ -464,7 +466,7 @@ export function PanelSerialKartun({
   }
 
   function tulisNaskahEpisodeBerikutnya(epAcuan: EpisodeSerial, mode: "ai" | "manual") {
-    const gayaTarget: GayaCeritaSerial = epAcuan.gayaCerita ?? gayaCerita;
+    const gayaTarget: GayaCeritaSerial = epAcuan.gayaCerita ?? gayaCeritaUntukEditor;
     const temaTarget: TemaVisualMotion = epAcuan.temaVisual ?? temaVisual;
     const formatTarget: FormatSuaraSerial = epAcuan.formatSuara ?? formatSuara;
     const panjangTarget: PanjangSerial = epAcuan.panjangNaskah ?? panjangNaskah;
@@ -518,7 +520,7 @@ export function PanelSerialKartun({
     const draf = buatDrafManualSerial({
       judulEpisode: ide.trim().split(/\r?\n/)[0]?.slice(0, 80) || kataKunci.trim().slice(0, 80),
       nomorEpisode: nomorBerikutnya,
-      gayaCerita,
+      gayaCerita: gayaCeritaUntukEditor,
       temaVisual,
       latarKode: konfig.latar[0]?.kode || "outdoor",
     });
@@ -558,7 +560,7 @@ export function PanelSerialKartun({
     setDrafNaskah((prev) => {
       if (!prev || prev.adegan.length >= 16) return prev;
       const kodeDefault = prev.adegan[prev.adegan.length - 1]?.latarKode || konfig.latar[0]?.kode || "outdoor";
-      const baru = buatAdeganKosongSerial(prev.adegan.length + 1, kodeDefault, gayaCerita, temaVisual);
+      const baru = buatAdeganKosongSerial(prev.adegan.length + 1, kodeDefault, gayaCeritaUntukEditor, temaVisual);
       return { ...prev, adegan: [...prev.adegan, baru] };
     });
   }

@@ -486,6 +486,19 @@ export function pilihProfilEpisodeOtomatis(opsi: {
   return POLA_VARIASI_EPISODE[idx] ?? POLA_VARIASI_EPISODE[0];
 }
 
+/** Ubah pilihan admin (`otomatis` → rotasi profil) menjadi gaya siap render. */
+export function selesaikanGayaCeritaDariPilihan(
+  pilihan: GayaCeritaPilihan,
+  opsi: {
+    nomorEpisode: number;
+    riwayatEpisode?: EpisodeSerial[];
+    lanjutEpisode?: boolean;
+  },
+): GayaCeritaSerial {
+  if (pilihan === "kedai" || pilihan === "dokumenter") return pilihan;
+  return pilihProfilEpisodeOtomatis(opsi).gayaCerita;
+}
+
 /** Catat atau perbarui episode pada serial secara idempoten (anti-duplikat by tugasId atau nomor). */
 export function catatEpisodeSelesai(
   konfig: KonfigSerialLekKopi,
