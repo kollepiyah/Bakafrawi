@@ -159,10 +159,10 @@ const LatarIlustrasi: React.FC<{
   let geserX = 0;
   let geserY = 0;
   if (kamera === 'zoom_masuk') {
-    skala = 1.0 + progres * 0.08;
-    geserY = -progres * 14;
+    skala = 1.0 + progres * 0.11;
+    geserY = -progres * 18;
   } else if (kamera === 'zoom_keluar') {
-    skala = 1.08 - progres * 0.07;
+    skala = 1.1 - progres * 0.09;
   } else if (kamera === 'geser_kanan') {
     skala = 1.07;
     geserX = -18 + progres * 36;

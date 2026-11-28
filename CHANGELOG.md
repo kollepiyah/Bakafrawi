@@ -1,5 +1,11 @@
 # CHANGELOG — bakafrawi.com
 
+## CeritaMotion Narator Saja (proses kopi / espresso / sejarah singkat) (28 Nov)
+- **Gaya karakter `tanpa`:** CeritaMotion boleh hanya VO narator + ilustrasi AI + subtitle kinetik + kamera hidup — **tanpa tokoh 2D wajib**.
+- **Admin:** pilihan **Narator Saja** di blok Dokumenter; rotasi otomatis ep.3 → CeritaMotion narasi kopi (`gayaKarakter: tanpa`).
+- **Prompt AI dokumenter:** mengizinkan topik proses espresso/racikan; default `karakter.aksi: tanpa` bila tidak ada tokoh manusia.
+- **Render:** `pilihKarakterCeritaOtomatis` menghormati `gayaKarakter: tanpa`; Ken Burns ilustrasi sedikit diperkuat.
+
 ## Serial Kartun Sekali Putar Hidup & Suara ElevenLabs→Gemini (28 Nov)
 - **Kenapa video tanpa bersambung terasa kaku:** rotasi "Campur Otomatis" sering memilih **CeritaMotion** (gulungan/peta/siluet historis), bukan komposisi **SerialKartun** (Mas Lek, latar foto kartun kedai, kamera goyang, dialog)—seperti referensi `serial-kartun.mp4`.
 - **Rotasi ep3** kini **cerita kopi kartun kedai** (`gayaCerita: kedai`, `campuran`) agar video sekali putar memakai Serial Kartun yang hidup.

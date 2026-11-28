@@ -542,6 +542,15 @@ test('hitungTargetBitrateKbps menjaga ukuran video panjang tetap di bawah batas 
   assert.equal(brPendek, 3800);
 });
 
+test('pilihKarakterCeritaOtomatis mengembalikan undefined bila gayaKarakter tanpa (narator saja)', () => {
+  const hasil = pilihKarakterCeritaOtomatis(
+    { dialog: 'Dari biji hijau hingga crema espresso, proses ini penuh ketelitian.' },
+    1,
+    { jenis: 'ilustrasi', gayaKarakter: 'tanpa', konteksCerita: 'espresso' },
+  );
+  assert.equal(hasil, undefined);
+});
+
 test('pilihKarakterCeritaOtomatis memvariasikan 8 tokoh berwarna, pose baru & mencegah aksi monoton berurutan', () => {
   const kPetani = pilihKarakterCeritaOtomatis(
     { dialog: 'Para petani memetik ceri kopi merah di lereng Gayo dan berkumpul ramai bersama warga.' },

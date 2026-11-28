@@ -310,8 +310,8 @@ export async function buatNaskahSerialKartun({
       'Bahasa Indonesia baku-hangat yang mengalir hidup, puitis, berwibawa, dan enak didengar sebagai voice-over dokumenter. ' +
       `ATURAN KETAT DOKUMENTER / CERITA MOTION (tema ${temaVisual}): ` +
       '(1) Set `tokohKiri: null` dan `tokohKanan: null` di SELURUH adegan (dilarang memunculkan tokoh barista/pelanggan komedi kedai). ' +
-      '(2) DILARANG kata gaul/logat receh ("lho", "rek", "cak", "nih", "sih"), DILARANG menyebut kasir, mesin espresso modern, atau daftar harga menu kafe. ' +
-      '(3) WAJIB IKUTI TOKOH & ALUR CERITA PEMILIK dari Adegan 1 sampai penutup (2-3 kalimat mengalir per adegan); DILARANG mengubah cerita pemilik menjadi daftar tahun kering ala Wikipedia. ' +
+      '(2) DILARANG kata gaul/logat receh. Topik proses kopi/espresso/racikan BOLEH menyebut alat seduh modern tanpa daftar harga. ' +
+      '(3) Bila narasi tanpa tokoh (proses kopi, espresso, sejarah singkat), isi `karakter: { aksi: "tanpa" }` di semua adegan; bila ada tokoh manusia dari pemilik, jadikan inti cerita. ' +
       '(4) Gunakan `pembicara: "narator"`. ' +
       '(5) Isi `jenisMotion` bervariasi: pembuka, perkamen, ilustrasi, arsip, peta (maks 1x), penutup — JANGAN semua adegan tengah jenis yang sama. WAJIB isi `judulKartu` + `kataSorot`. ' +
       `(6) WAJIB isi \`promptVisual\` berbahasa Inggris yang benar-benar sesuai peristiwa dialog (jangan menyebut tempat yang tidak ada di cerita) dan akhiri dengan: "${gayaGambar}".`;
@@ -588,6 +588,7 @@ export function pilihKarakterCeritaOtomatis(
   } = {},
 ) {
   if (jenis === 'peta' || jenis === 'arsip') return undefined;
+  if (gayaKarakter === 'tanpa') return undefined;
 
   const gayaFinal = gayaKarakter === 'siluet' ? 'siluet' : 'ilustrasi';
   const manual = adegan?.karakter && typeof adegan.karakter === 'object' ? adegan.karakter : null;
@@ -1060,7 +1061,8 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
   const bersambung = Boolean(metaTugas.bersambung);
   const gayaCerita = metaTugas.gayaCerita === 'dokumenter' ? 'dokumenter' : 'kedai';
   const temaVisual = metaTugas.temaVisual === 'perkamen' ? 'perkamen' : 'malam';
-  const gayaKarakter = metaTugas.gayaKarakter === 'siluet' ? 'siluet' : 'ilustrasi';
+  const gayaKarakter =
+    metaTugas.gayaKarakter === 'siluet' ? 'siluet' : metaTugas.gayaKarakter === 'tanpa' ? 'tanpa' : 'ilustrasi';
   const genderEksplisit =
     metaTugas.genderNarator === 'wanita' || metaTugas.genderNarator === 'pria'
       ? metaTugas.genderNarator

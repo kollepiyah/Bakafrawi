@@ -110,7 +110,8 @@ test("pilihProfilEpisodeOtomatis bergilir format dan menghormati lanjutan", () =
   const ep1 = pilihProfilEpisodeOtomatis({ nomorEpisode: 1, riwayatEpisode: [] });
   assert.equal(ep1.gayaCerita, "kedai");
   const ep3 = pilihProfilEpisodeOtomatis({ nomorEpisode: 3, riwayatEpisode: [] });
-  assert.equal(ep3.gayaCerita, "kedai");
+  assert.equal(ep3.gayaCerita, "dokumenter");
+  assert.equal(ep3.gayaKarakter, "tanpa");
   assert.equal(ep3.bersambung, false);
   const lanjut = pilihProfilEpisodeOtomatis({
     nomorEpisode: 5,

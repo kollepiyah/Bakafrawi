@@ -1022,9 +1022,9 @@ export function PanelSerialKartun({
 
               <div className="space-y-1 sm:col-span-2">
                 <span className="block text-[11px] font-medium text-muted-foreground">
-                  Gaya Visual Karakter 2D (8 Tokoh &amp; 9 Pose Anti-Monoton)
+                  Karakter 2D di CeritaMotion (opsional — narator saja juga boleh)
                 </span>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                   <button
                     type="button"
                     onClick={() => setGayaKarakter("ilustrasi")}
@@ -1048,6 +1048,18 @@ export function PanelSerialKartun({
                   >
                     <div className="font-semibold">Siluet Emas Sinematik</div>
                     <div className="text-[10px] opacity-75">Siluet gelap ber-rimlight emas misterius</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGayaKarakter("tanpa")}
+                    className={`rounded-lg border px-2.5 py-1.5 text-left text-[11px] transition ${
+                      gayaKarakter === "tanpa"
+                        ? "border-emerald-400/70 bg-emerald-400/15 text-emerald-200"
+                        : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
+                    }`}
+                  >
+                    <div className="font-semibold">Narator Saja (Disarankan untuk proses kopi)</div>
+                    <div className="text-[10px] opacity-75">Tanpa tokoh 2D — ilustrasi AI + subtitle kinetik + VO (espresso, sejarah singkat)</div>
                   </button>
                 </div>
               </div>

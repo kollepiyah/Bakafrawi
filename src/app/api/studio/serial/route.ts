@@ -452,7 +452,8 @@ export async function POST(req: Request) {
         lanjutEpisode: Boolean(isi.bersambung),
       });
       const temaVisual = isi.temaVisual === "perkamen" ? "perkamen" : "malam";
-      const gayaKarakter: GayaKarakterCerita = isi.gayaKarakter === "siluet" ? "siluet" : "ilustrasi";
+      const gayaKarakter: GayaKarakterCerita =
+        isi.gayaKarakter === "siluet" ? "siluet" : isi.gayaKarakter === "tanpa" ? "tanpa" : "ilustrasi";
       const genderNarator = isi.genderNarator === "wanita" ? "wanita" : "pria";
       const naskahBersih =
         isi.naskahJadi && Array.isArray(isi.naskahJadi.adegan) && isi.naskahJadi.adegan.length > 0

@@ -9,7 +9,7 @@ export type GayaCeritaSerial = "kedai" | "dokumenter";
 export type TemaVisualMotion = "malam" | "perkamen";
 export type JenisAdeganMotion = "pembuka" | "perkamen" | "peta" | "ilustrasi" | "arsip" | "penutup";
 export type GenderNaratorSerial = "pria" | "wanita";
-export type GayaKarakterCerita = "ilustrasi" | "siluet";
+export type GayaKarakterCerita = "ilustrasi" | "siluet" | "tanpa";
 export type TipeKarakterCerita =
   | "petualang"
   | "santri"
@@ -405,6 +405,8 @@ export type ProfilEpisodeOtomatis = {
   bersambung: boolean;
   formatSuara: FormatSuaraSerial;
   mood: MoodSerial;
+  /** Bila `tanpa`, CeritaMotion hanya narator + ilustrasi AI (tanpa karakter 2D). */
+  gayaKarakter?: GayaKarakterCerita;
   /** Label singkat untuk admin / log. */
   label: string;
 };
@@ -429,13 +431,14 @@ const POLA_VARIASI_EPISODE: ProfilEpisodeOtomatis[] = [
     mood: "komedi_ceria",
   },
   {
-    label: "Cerita kopi kartun kedai (1 video, hidup seperti serial)",
-    gayaCerita: "kedai",
+    label: "CeritaMotion narasi kopi (proses, espresso, sejarah singkat — tanpa tokoh)",
+    gayaCerita: "dokumenter",
     temaVisual: "malam",
     panjangNaskah: "sedang",
     bersambung: false,
-    formatSuara: "campuran",
+    formatSuara: "narator",
     mood: "cerita_kopi",
+    gayaKarakter: "tanpa",
   },
   {
     label: "Cerita malam sinematik (1 video)",
@@ -1358,11 +1361,12 @@ export function buatPromptNaskahDrafSerial({
         `Bahasa Indonesia baku-hangat yang mengalir hidup, puitis, berwibawa, dan enak didengar sebagai voice-over dokumenter. ` +
         `ATURAN KETAT DOKUMENTER / CERITA MOTION (tema ${temaVisual}):\n` +
         `1) Set \`tokohKiri: null\` dan \`tokohKanan: null\` di SELURUH adegan (dilarang memunculkan tokoh barista/pelanggan komedi kedai yang tidak diminta pemilik).\n` +
-        `2) DILARANG kata gaul/logat receh ("lho", "rek", "cak", "nih", "sih"), DILARANG menyebut kasir, mesin espresso modern, atau daftar harga menu kafe.\n` +
-        `3) WAJIB IKUTI TOKOH & ALUR CERITA PEMILIK: Jika pemilik menyebut tokoh atau perjalanan spesifik (mis. perjalanan seseorang ke Aceh/Gayo/daerah tertentu), tokoh dan perjalanan tersebut HARUS menjadi tulang punggung cerita sejak Adegan 1 sampai penutup! DILARANG mengubahnya menjadi daftar tahun kering ala Wikipedia ("Pada tahun X... Pada tahun Y..."). Sisipkan fakta sejarah secara alami di dalam alur cerita yang hidup.\n` +
+        `2) DILARANG kata gaul/logat receh ("lho", "rek", "cak", "nih", "sih"). Untuk topik proses kopi/espresso/racikan/sejarah singkat BOLEH menyebut alat seduh modern (portafilter, ekstraksi, crema) tanpa daftar harga menu.\n` +
+        `3) WAJIB IKUTI ALUR PEMILIK: bila pemilik minta narasi tanpa tokoh (proses kopi, espresso, sejarah singkat), isi \`karakter: { "aksi": "tanpa" }\` di SEMUA adegan — video hidup dari ilustrasi AI, kamera Ken Burns, partikel, dan subtitle kinetik, bukan karakter 2D. Bila pemilik menyebut tokoh/perjalanan manusia, jadikan itu tulang punggung cerita; jangan jadikan daftar tahun kering.\n` +
         `4) Gunakan \`pembicara: "narator"\`.\n` +
         `5) WAJIB isi \`jenisMotion\` bervariasi: "pembuka", "perkamen", "ilustrasi", "arsip", "peta" (maks 1x), dan "penutup" — JANGAN semua adegan tengah jenis yang sama. WAJIB isi \`judulKartu\` pada \`pembuka\`, \`perkamen\`, \`peta\`, \`arsip\`, dan \`kataSorot\` (2–4 kata dari dialog).\n` +
-        `6) WAJIB isi \`promptVisual\` berbahasa Inggris pada setiap adegan non-peta menggambarkan adegan spesifik yang BENAR-BENAR sesuai lokasi & peristiwa dialog (JANGAN pernah menyebut tempat yang tidak relevan dengan cerita), dan akhiri dengan: "${gayaGambar}".`,
+        `6) WAJIB isi \`promptVisual\` berbahasa Inggris pada setiap adegan non-peta: konkret sesuai narasi (biji kopi, roasting, espresso drip, kebun Gayo, dll.) + akhiri "${gayaGambar}".\n` +
+        `7) Variasi kamera per adegan (zoom_masuk, geser_kanan, goyang_kaget, zoom_keluar) agar ilustrasi tetap terasa hidup meski tanpa karakter.`,
       prompt:
         `Susun draf naskah DOKUMENTER / CERITA MOTION (tema ${temaVisual}) untuk "${judulSerial}" EPISODE ${nomorEpisode} berisi **${spek.rentangAdegan}** (target durasi **${spek.durasiLabel}**).\n` +
         `Isi \`latarKode\` dengan 1 kata singkat sesuai lokasi adegan cerita (mis. "pelabuhan", "kebun", "perjalanan", "desa", "peta").` +

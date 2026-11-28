@@ -1110,7 +1110,7 @@ export async function buatTugasSerialKartun(opsi: {
   bersambung?: boolean;
   gayaCerita?: GayaCeritaPilihan;
   temaVisual?: "malam" | "perkamen";
-  gayaKarakter?: "ilustrasi" | "siluet";
+  gayaKarakter?: "ilustrasi" | "siluet" | "tanpa";
   genderNarator?: "pria" | "wanita";
   hasilRiset?: string;
   modeJadwal?: "persetujuan" | "prime19" | "custom";
@@ -1165,7 +1165,14 @@ export async function buatTugasSerialKartun(opsi: {
     opsi.temaVisual === "perkamen" || opsi.temaVisual === "malam"
       ? opsi.temaVisual
       : profilOtomatis?.temaVisual ?? "malam";
-  const gayaKarakter: "ilustrasi" | "siluet" = opsi.gayaKarakter === "siluet" ? "siluet" : "ilustrasi";
+  const gayaKarakter: "ilustrasi" | "siluet" | "tanpa" =
+    gayaPilihan === "otomatis" && profilOtomatis?.gayaKarakter
+      ? profilOtomatis.gayaKarakter
+      : opsi.gayaKarakter === "siluet"
+      ? "siluet"
+      : opsi.gayaKarakter === "tanpa"
+      ? "tanpa"
+      : "ilustrasi";
   const genderNarator: "pria" | "wanita" = opsi.genderNarator === "wanita" ? "wanita" : "pria";
   const hasilRisetBersih = String(opsi.hasilRiset ?? "").trim().slice(0, 2500);
   const ideBersih = String(opsi.ide ?? "").trim().slice(0, 4000);
