@@ -107,6 +107,18 @@ export function jalurSuara() {
   return process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? 'azure' : 'edge'
 }
 
+/** Jalur suara Serial Kartun / CeritaMotion — bawaan lewati ElevenLabs agar langsung Gemini/Edge Indonesia. */
+export function jalurSuaraSerial() {
+  const paksa = String(process.env.STUDIO_JALUR_SUARA ?? '').trim().toLowerCase()
+  if (['elevenlabs', 'gemini', 'azure', 'edge'].includes(paksa)) return paksa
+  const lewati = String(process.env.STUDIO_SERIAL_LEWATI_ELEVENLABS ?? '1').trim()
+  if (!/^(0|tidak|false|no)$/i.test(lewati)) {
+    if (process.env.GEMINI_API_KEY) return 'gemini'
+    return 'edge'
+  }
+  return jalurSuara()
+}
+
 const aman = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 async function azure(teks, keluar, profil) {
@@ -199,7 +211,7 @@ export function permintaanGemini(teks, { model, suara, gaya }) {
       content: [{ type: 'text', text: isi, annotations: [{ type: 'speech_metadata', style: gaya }] }],
     }],
     response_format: { type: 'audio' },
-    generation_config: { speech_config: [{ voice: suara }] },
+    generation_config: { speech_config: [{ voice: suara, language: 'id' }] },
   }
 }
 

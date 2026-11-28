@@ -41,7 +41,9 @@ import {
   type AksiKarakterCerita,
   type EpisodeSerial,
   type FormatSuaraSerial,
+  type GayaCeritaPilihan,
   type GayaCeritaSerial,
+  pilihProfilEpisodeOtomatis,
   type GayaKarakterCerita,
   type GayaKartunLatar,
   type GenderNaratorSerial,
@@ -204,7 +206,7 @@ export function PanelSerialKartun({
   const [sedangMintaSaran, setSedangMintaSaran] = useState(false);
   const [saranCerita, setSaranCerita] = useState<SaranCeritaSerial[]>([]);
   const [infoPenyediaSaran, setInfoPenyediaSaran] = useState("");
-  const [gayaCerita, setGayaCerita] = useState<GayaCeritaSerial>("kedai");
+  const [gayaCerita, setGayaCerita] = useState<GayaCeritaPilihan>("otomatis");
   const [temaVisual, setTemaVisual] = useState<TemaVisualMotion>("malam");
   const [gayaKarakter, setGayaKarakter] = useState<GayaKarakterCerita>("ilustrasi");
   const [genderNarator, setGenderNarator] = useState<GenderNaratorSerial>("pria");
@@ -292,6 +294,14 @@ export function PanelSerialKartun({
   const episodeTerakhir = serialAktif?.episode?.length
     ? serialAktif.episode[serialAktif.episode.length - 1]
     : null;
+  const profilOtomatisBerikutnya =
+    gayaCerita === "otomatis" && serialAktif
+      ? pilihProfilEpisodeOtomatis({
+          nomorEpisode: nomorBerikutnya,
+          riwayatEpisode: serialAktif.episode,
+          lanjutEpisode: bersambung,
+        })
+      : null;
   const daftarSuaraPilih = suaraLokal.length > 0 ? suaraLokal : suaraFavorit;
   const opsiLatarDraf = Array.from(
     new Map(
@@ -302,8 +312,9 @@ export function PanelSerialKartun({
     ).entries(),
   ).map(([kode, label]) => ({ kode, label }));
 
-  function pilihGayaCerita(gayaBaru: GayaCeritaSerial) {
+  function pilihGayaCerita(gayaBaru: GayaCeritaPilihan) {
     setGayaCerita(gayaBaru);
+    if (gayaBaru === "otomatis") return;
     if (gayaBaru === "dokumenter") {
       setMood("cerita_kopi");
       setFormatSuara("narator");
@@ -889,12 +900,30 @@ export function PanelSerialKartun({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs font-semibold text-zinc-100">Gaya Cerita Episode Ini</span>
             <span className="text-[11px] text-muted-foreground">
-              {gayaCerita === "dokumenter"
+              {gayaCerita === "otomatis"
+                ? profilOtomatisBerikutnya
+                  ? `Otomatis: ${profilOtomatisBerikutnya.label}`
+                  : "Campur serial kedai + cerita kartun 1 video"
+                : gayaCerita === "dokumenter"
                 ? "Mode Dokumenter Murni · Narator + Riset Google + Ilustrasi AI"
                 : "Mode Cerita Kedai · Tokoh Lek Aril dkk"}
             </span>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={() => pilihGayaCerita("otomatis")}
+              className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                gayaCerita === "otomatis"
+                  ? "border-teal-400/70 bg-teal-400/15 text-teal-200"
+                  : "border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/25"
+              }`}
+            >
+              <div className="text-xs font-semibold">Campur Otomatis (Disarankan)</div>
+              <div className="mt-0.5 text-[11px] opacity-80">
+                Serial kartun episodik, komedi sekali putar, dan CeritaMotion satu video bergilir.
+              </div>
+            </button>
             <button
               type="button"
               onClick={() => pilihGayaCerita("kedai")}

@@ -16,6 +16,7 @@ import {
   SKEMA_RISET_CERITA_SERIAL,
   SKEMA_SARAN_CERITA_SERIAL,
   type FormatSuaraSerial,
+  type GayaCeritaPilihan,
   type GayaCeritaSerial,
   type GayaKarakterCerita,
   type GayaKartunLatar,
@@ -98,7 +99,7 @@ export async function POST(req: Request) {
     mood?: MoodSerial;
     panjangNaskah?: PanjangSerial;
     bersambung?: boolean;
-    gayaCerita?: GayaCeritaSerial;
+    gayaCerita?: GayaCeritaPilihan;
     temaVisual?: "malam" | "perkamen";
     gayaKarakter?: GayaKarakterCerita;
     genderNarator?: "pria" | "wanita";
@@ -434,7 +435,10 @@ export async function POST(req: Request) {
     }
 
     if (isi.aksi === "buat-episode") {
-      const gayaCerita: GayaCeritaSerial = isi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
+      const gayaCerita: GayaCeritaPilihan =
+        isi.gayaCerita === "dokumenter" || isi.gayaCerita === "kedai" || isi.gayaCerita === "otomatis"
+          ? isi.gayaCerita
+          : "otomatis";
       const temaVisual = isi.temaVisual === "perkamen" ? "perkamen" : "malam";
       const gayaKarakter: GayaKarakterCerita = isi.gayaKarakter === "siluet" ? "siluet" : "ilustrasi";
       const genderNarator = isi.genderNarator === "wanita" ? "wanita" : "pria";

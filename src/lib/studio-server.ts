@@ -15,7 +15,9 @@ import {
 import {
   episodeBerikutnya,
   normalisasiKonfigSerial,
+  pilihProfilEpisodeOtomatis,
   type FormatSuaraSerial,
+  type GayaCeritaPilihan,
   type GayaCeritaSerial,
   type KonfigSerialLekKopi,
   type MenuRingkasSerial,
@@ -1106,7 +1108,7 @@ export async function buatTugasSerialKartun(opsi: {
   formatSuara?: FormatSuaraSerial;
   panjangNaskah?: PanjangSerial;
   bersambung?: boolean;
-  gayaCerita?: GayaCeritaSerial;
+  gayaCerita?: GayaCeritaPilihan;
   temaVisual?: "malam" | "perkamen";
   gayaKarakter?: "ilustrasi" | "siluet";
   genderNarator?: "pria" | "wanita";
@@ -1127,13 +1129,42 @@ export async function buatTugasSerialKartun(opsi: {
   if (!serial) throw new Error("Serial kartun belum dikonfigurasi.");
 
   const nomorEpisode = episodeBerikutnya(serial);
-  const mood: MoodSerial = opsi.mood ?? serial.moodBawaan ?? "komedi_ceria";
-  const formatSuara: FormatSuaraSerial = opsi.formatSuara ?? serial.formatSuara ?? "dialog";
+  const lanjutEpisode = Boolean(opsi.bersambung);
+
+  let profilOtomatis: ReturnType<typeof pilihProfilEpisodeOtomatis> | null = null;
+  const gayaPilihan = opsi.gayaCerita ?? "otomatis";
+  if (gayaPilihan === "otomatis") {
+    profilOtomatis = pilihProfilEpisodeOtomatis({
+      nomorEpisode,
+      riwayatEpisode: serial.episode,
+      lanjutEpisode,
+    });
+  }
+
+  const mood: MoodSerial =
+    opsi.mood ?? profilOtomatis?.mood ?? serial.moodBawaan ?? "komedi_ceria";
+  const formatSuara: FormatSuaraSerial =
+    opsi.formatSuara ?? profilOtomatis?.formatSuara ?? serial.formatSuara ?? "dialog";
   const panjangNaskah: PanjangSerial =
-    opsi.panjangNaskah === "ringkas" || opsi.panjangNaskah === "panjang" ? opsi.panjangNaskah : "sedang";
-  const bersambung = Boolean(opsi.bersambung);
-  const gayaCerita: GayaCeritaSerial = opsi.gayaCerita === "dokumenter" ? "dokumenter" : "kedai";
-  const temaVisual: "malam" | "perkamen" = opsi.temaVisual === "perkamen" ? "perkamen" : "malam";
+    opsi.panjangNaskah === "ringkas" || opsi.panjangNaskah === "panjang"
+      ? opsi.panjangNaskah
+      : profilOtomatis?.panjangNaskah ?? "sedang";
+  const bersambung =
+    gayaPilihan === "otomatis"
+      ? lanjutEpisode
+        ? true
+        : profilOtomatis?.bersambung ?? false
+      : Boolean(opsi.bersambung);
+  const gayaCerita: GayaCeritaSerial =
+    gayaPilihan === "otomatis"
+      ? (profilOtomatis?.gayaCerita ?? "kedai")
+      : gayaPilihan === "dokumenter"
+      ? "dokumenter"
+      : "kedai";
+  const temaVisual: "malam" | "perkamen" =
+    opsi.temaVisual === "perkamen" || opsi.temaVisual === "malam"
+      ? opsi.temaVisual
+      : profilOtomatis?.temaVisual ?? "malam";
   const gayaKarakter: "ilustrasi" | "siluet" = opsi.gayaKarakter === "siluet" ? "siluet" : "ilustrasi";
   const genderNarator: "pria" | "wanita" = opsi.genderNarator === "wanita" ? "wanita" : "pria";
   const hasilRisetBersih = String(opsi.hasilRiset ?? "").trim().slice(0, 2500);
@@ -1152,7 +1183,7 @@ export async function buatTugasSerialKartun(opsi: {
   const sasaran = opsi.sasaran ? normalisasiSasaran(opsi.sasaran) : undefined;
   const judulSementara = naskahJadi?.judulEpisode?.trim() || `${serial.judul} — Episode ${nomorEpisode}`;
   const arahan = [
-    `[Serial: ${serial.id} · Ep ${nomorEpisode} · ${mood} · ${formatSuara} · ${panjangNaskah}${gayaCerita === "dokumenter" ? ` · dokumenter:${temaVisual}` : ""}${bersambung ? " · bersambung" : ""}]`,
+    `[Serial: ${serial.id} · Ep ${nomorEpisode} · ${mood} · ${formatSuara} · ${panjangNaskah}${gayaCerita === "dokumenter" ? ` · dokumenter:${temaVisual}` : ""}${bersambung ? " · bersambung" : ""}${profilOtomatis ? ` · ${profilOtomatis.label}` : ""}]`,
     ideBersih ? ideBersih.slice(0, 280) : `Lanjutkan kisah hangat dan lucu "${serial.judul}" episode ${nomorEpisode} di Lek Kopi.`,
   ].join(" ");
 

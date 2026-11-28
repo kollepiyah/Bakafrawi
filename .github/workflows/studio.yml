@@ -35,6 +35,8 @@ jobs:
       ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
       ELEVENLABS_VOICE_ID: ${{ secrets.ELEVENLABS_VOICE_ID }}
       ELEVENLABS_MODEL: ${{ secrets.ELEVENLABS_MODEL }}
+      # Serial kartun: prioritaskan Gemini/Edge Indonesia (ElevenLabs free sering 402 di Voice Library).
+      STUDIO_SERIAL_LEWATI_ELEVENLABS: "1"
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -92,6 +94,15 @@ jobs:
         with:
           path: ~/apt-ffmpeg
           key: apt-ffmpeg-rclone-${{ steps.cek.outputs.image }}
+
+      - name: Cache latar kartun Supabase
+        if: steps.cek.outputs.kerja == 'true'
+        uses: actions/cache@v4
+        with:
+          path: studio/.cache-latar
+          key: studio-latar-v1-${{ runner.os }}
+          restore-keys: |
+            studio-latar-v1-${{ runner.os }}
 
       - name: Pasang ffmpeg & huruf
         if: steps.cek.outputs.kerja == 'true'
