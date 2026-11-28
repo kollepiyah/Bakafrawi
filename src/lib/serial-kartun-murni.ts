@@ -395,6 +395,97 @@ export function episodeBerikutnya(serial: SerialKartun | null | undefined): numb
   return serial.episode.reduce((maks, ep) => Math.max(maks, Number(ep.nomor) || 0), 0) + 1;
 }
 
+/** Pilihan gaya cerita di admin; `otomatis` dipilih sistem (bergilir format). */
+export type GayaCeritaPilihan = GayaCeritaSerial | "otomatis";
+
+export type ProfilEpisodeOtomatis = {
+  gayaCerita: GayaCeritaSerial;
+  temaVisual: TemaVisualMotion;
+  panjangNaskah: PanjangSerial;
+  bersambung: boolean;
+  formatSuara: FormatSuaraSerial;
+  mood: MoodSerial;
+  /** Label singkat untuk admin / log. */
+  label: string;
+};
+
+const POLA_VARIASI_EPISODE: ProfilEpisodeOtomatis[] = [
+  {
+    label: "Serial kartun kedai (bersambung)",
+    gayaCerita: "kedai",
+    temaVisual: "malam",
+    panjangNaskah: "sedang",
+    bersambung: true,
+    formatSuara: "dialog",
+    mood: "komedi_ceria",
+  },
+  {
+    label: "Kartun komedi sekali putar (tanpa lanjutan)",
+    gayaCerita: "kedai",
+    temaVisual: "malam",
+    panjangNaskah: "ringkas",
+    bersambung: false,
+    formatSuara: "campuran",
+    mood: "komedi_ceria",
+  },
+  {
+    label: "Cerita kartun dokumenter (1 video / CeritaMotion)",
+    gayaCerita: "dokumenter",
+    temaVisual: "perkamen",
+    panjangNaskah: "sedang",
+    bersambung: false,
+    formatSuara: "narator",
+    mood: "cerita_kopi",
+  },
+  {
+    label: "Cerita malam sinematik (1 video)",
+    gayaCerita: "dokumenter",
+    temaVisual: "malam",
+    panjangNaskah: "panjang",
+    bersambung: false,
+    formatSuara: "narator",
+    mood: "cerita_kopi",
+  },
+];
+
+/**
+ * Bergilirkan format supaya feed tidak hanya serial episodik: komedi kedai bersambung,
+ * kartun sekali putar, dan cerita dokumenter/CeritaMotion satu video utuh.
+ * Jika `lanjutEpisode` aktif, tetap kedai bersambung agar alur tidak putus.
+ */
+export function pilihProfilEpisodeOtomatis(opsi: {
+  nomorEpisode: number;
+  riwayatEpisode?: EpisodeSerial[];
+  lanjutEpisode?: boolean;
+}): ProfilEpisodeOtomatis {
+  const riwayat = Array.isArray(opsi.riwayatEpisode) ? opsi.riwayatEpisode : [];
+  const terakhir = riwayat.at(-1);
+
+  if (opsi.lanjutEpisode) {
+    return {
+      label: "Lanjutan episode serial kedai",
+      gayaCerita: terakhir?.gayaCerita === "dokumenter" ? "dokumenter" : "kedai",
+      temaVisual: terakhir?.temaVisual === "perkamen" ? "perkamen" : "malam",
+      panjangNaskah: terakhir?.panjangNaskah ?? "sedang",
+      bersambung: true,
+      formatSuara: terakhir?.formatSuara ?? "dialog",
+      mood: terakhir?.mood ?? "komedi_ceria",
+    };
+  }
+
+  const tigaTerakhir = riwayat.slice(-3);
+  const semuaDokumenter =
+    tigaTerakhir.length >= 2 && tigaTerakhir.every((e) => e.gayaCerita === "dokumenter");
+  const semuaKedai =
+    tigaTerakhir.length >= 2 && tigaTerakhir.every((e) => !e.gayaCerita || e.gayaCerita === "kedai");
+
+  let idx = Math.max(0, (Math.max(1, Math.round(opsi.nomorEpisode)) - 1) % POLA_VARIASI_EPISODE.length);
+  if (semuaKedai) idx = 2;
+  else if (semuaDokumenter) idx = 0;
+
+  return POLA_VARIASI_EPISODE[idx] ?? POLA_VARIASI_EPISODE[0];
+}
+
 /** Catat atau perbarui episode pada serial secara idempoten (anti-duplikat by tugasId atau nomor). */
 export function catatEpisodeSelesai(
   konfig: KonfigSerialLekKopi,
@@ -564,6 +655,132 @@ const AKSI_MOTION_SAH = new Set<AksiKarakterCerita>([
   "berdiri_tenang",
   "tanpa",
 ]);
+
+/** Urutan adegan tengah yang digilir tiap episode agar CeritaMotion tidak monoton. */
+const ISI_MOTION_PER_EPISODE: JenisAdeganMotion[][] = [
+  ["ilustrasi", "arsip", "perkamen", "peta", "ilustrasi"],
+  ["perkamen", "ilustrasi", "arsip", "ilustrasi", "arsip"],
+  ["arsip", "ilustrasi", "perkamen", "ilustrasi", "perkamen"],
+  ["ilustrasi", "perkamen", "arsip", "peta", "ilustrasi"],
+  ["perkamen", "arsip", "ilustrasi", "perkamen", "ilustrasi"],
+  ["ilustrasi", "arsip", "ilustrasi", "perkamen", "peta"],
+];
+
+const KAMERA_MOTION_SAH = ["zoom_masuk", "zoom_keluar", "geser_kanan", "geser_kiri"] as const;
+const POLA_KAMERA_KEDAI = ["zoom_masuk", "diam", "geser_kanan", "goyang_kaget", "geser_kiri", "zoom_keluar", "zoom_masuk", "diam"] as const;
+
+/** Susun `jenisMotion` per indeks adegan sesuai episode & tema visual. */
+export function bangunSkemaJenisMotion(
+  nomorEpisode: number,
+  jumlahAdegan: number,
+  temaVisual: TemaVisualMotion = "malam",
+): JenisAdeganMotion[] {
+  const jumlah = Math.max(1, Math.min(16, Math.round(jumlahAdegan)));
+  if (jumlah === 1) return ["pembuka"];
+  const isiPool = ISI_MOTION_PER_EPISODE[(Math.max(1, nomorEpisode) - 1) % ISI_MOTION_PER_EPISODE.length];
+  const tengah: JenisAdeganMotion[] = [];
+  for (let i = 0; i < jumlah - 2; i++) {
+    let jenis = isiPool[i % isiPool.length];
+    if (temaVisual === "malam" && jenis === "perkamen" && i % 2 === 1) jenis = "ilustrasi";
+    if (temaVisual === "perkamen" && jenis === "ilustrasi" && i % 3 === 2) jenis = "perkamen";
+    tengah.push(jenis);
+  }
+  let sudahPeta = false;
+  const isiRapi = tengah.map((j) => {
+    if (j !== "peta") return j;
+    if (sudahPeta) return "arsip";
+    sudahPeta = true;
+    return "peta";
+  });
+  return ["pembuka", ...isiRapi, "penutup"];
+}
+
+/** Kamera CeritaMotion per adegan (Ken Burns bervariasi). */
+export function pilihKameraMotionOtomatis(
+  idx: number,
+  jenis: JenisAdeganMotion,
+  nomorEpisode = 1,
+): (typeof KAMERA_MOTION_SAH)[number] {
+  if (jenis === "penutup") return "zoom_keluar";
+  if (jenis === "peta" || jenis === "arsip") return idx % 2 === 0 ? "geser_kiri" : "geser_kanan";
+  const pola = KAMERA_MOTION_SAH;
+  return pola[(idx + nomorEpisode) % pola.length];
+}
+
+/** Kamera Serial Kartun kedai — hindari semua adegan `zoom_masuk`. */
+export function pilihKameraKedaiOtomatis(idx: number, nomorEpisode = 1): string {
+  return POLA_KAMERA_KEDAI[(idx + nomorEpisode) % POLA_KAMERA_KEDAI.length];
+}
+
+/** Teks resep motion untuk prompt AI (dokumenter). */
+export function teksSkemaMotionUntukPrompt(
+  nomorEpisode: number,
+  jumlahAdegan: number,
+  temaVisual: TemaVisualMotion,
+): string {
+  const skema = bangunSkemaJenisMotion(nomorEpisode, jumlahAdegan, temaVisual);
+  return (
+    `VARIASI LAYAR WAJIB EPISODE ${nomorEpisode} (ikuti urutan jenisMotion per adegan agar video tidak monoton):\n` +
+    skema.map((j, i) => `  - Adegan ${i + 1}: jenisMotion "${j}"`).join("\n") +
+    `\n- Berganti kamera: zoom_masuk, geser_kanan, geser_kiri, zoom_keluar (jangan semua sama).` +
+    `\n- Sesekali isi karakter { aksi, tokohUtama }: jalan_kanan, dialog_dua, periksa_arsip, tatap_horizon, ramai_tiga (maks 1x peta).`
+  );
+}
+
+/** Lengkapi jenisMotion/kamera hasil AI untuk dokumenter & kedai. */
+export function terapkanVariasiMotionAdegan(
+  adegan: AdeganDrafSerial[],
+  opsi: { nomorEpisode?: number; gayaCerita?: GayaCeritaSerial; temaVisual?: TemaVisualMotion },
+): AdeganDrafSerial[] {
+  const nomorEpisode = Math.max(1, Math.round(Number(opsi.nomorEpisode) || 1));
+  const dokumenter = opsi.gayaCerita === "dokumenter";
+  const temaVisual = opsi.temaVisual === "perkamen" ? "perkamen" : "malam";
+  const skema = dokumenter ? bangunSkemaJenisMotion(nomorEpisode, adegan.length, temaVisual) : null;
+
+  const jenisTerisi = adegan.filter((a) => a.jenisMotion && JENIS_MOTION_SAH.has(a.jenisMotion)).length;
+  const jenisUnik = new Set(adegan.map((a) => a.jenisMotion).filter(Boolean)).size;
+  const paksaSkemaDokumenter =
+    dokumenter && skema && adegan.length >= 5 && (jenisUnik <= 2 || jenisTerisi < Math.ceil(adegan.length * 0.6));
+
+  return adegan.map((a, idx) => {
+    const jenisMotion =
+      dokumenter && skema
+        ? paksaSkemaDokumenter || !a.jenisMotion || !JENIS_MOTION_SAH.has(a.jenisMotion)
+          ? skema[idx]
+          : a.jenisMotion
+        : a.jenisMotion;
+
+    const kameraMentah = String(a.kamera ?? "").trim();
+    const kameraKosong = !kameraMentah || !KAMERA_SAH.has(kameraMentah);
+    const kameraBaku = dokumenter ? kameraKosong || kameraMentah === "zoom_masuk" : kameraKosong;
+    let kamera = kameraBaku
+      ? dokumenter && jenisMotion
+        ? pilihKameraMotionOtomatis(idx, jenisMotion, nomorEpisode)
+        : pilihKameraKedaiOtomatis(idx, nomorEpisode)
+      : kameraMentah;
+    if (!KAMERA_SAH.has(kamera)) kamera = "zoom_masuk";
+
+    let tokohKiri = a.tokohKiri;
+    let tokohKanan = a.tokohKanan;
+    if (!dokumenter && tokohKiri && idx % 3 === 1 && tokohKiri.efek === "tanpa" && tokohKiri.ekspresi === "senyum") {
+      const efekBergilir = ["tanda_tanya", "lampu_ide", "tawa", "keringat", "hati"] as const;
+      tokohKiri = { ...tokohKiri, efek: efekBergilir[(idx + nomorEpisode) % efekBergilir.length] };
+    }
+    if (!dokumenter && tokohKanan && idx % 4 === 2 && tokohKanan.ekspresi === "senyum") {
+      const eksp = ["kaget", "ketawa", "mikir", "bangga", "malu"] as const;
+      tokohKanan = { ...tokohKanan, ekspresi: eksp[(idx + nomorEpisode) % eksp.length] };
+    }
+
+    return {
+      ...a,
+      kamera,
+      ...(jenisMotion ? { jenisMotion } : {}),
+      tokohKiri,
+      tokohKanan,
+    };
+  });
+}
+
 const NAMA_TOKOH_PETA: Record<string, string> = {
   mas_barista: "Mas Lek",
   mas_pelanggan: "Mas Danu",
@@ -860,50 +1077,24 @@ export function buatDrafManualSerial({
   const ep = Math.max(1, Math.round(Number(nomorEpisode) || 1));
   const judul = String(judulEpisode ?? "").trim().slice(0, 88) || `Episode ${ep}`;
   if (gayaCerita === "dokumenter") {
-    const tengah: JenisAdeganMotion = temaVisual === "perkamen" ? "perkamen" : "ilustrasi";
+    const skema = bangunSkemaJenisMotion(ep, 6, temaVisual);
     return {
       judulEpisode: judul,
       ringkasanEpisode: "",
       tema: temaVisual === "perkamen" ? "Sejarah Perkamen" : "Dokumenter Sinematik",
-      adegan: [
-        {
-          ...buatAdeganKosongSerial(1, "sejarah", "dokumenter", temaVisual),
-          jenisMotion: "pembuka",
-          judulKartu: judul,
-          kartuWaktu: `Bagian ${ep}`,
+      adegan: skema.map((jenisMotion, idx) => {
+        const dasar = buatAdeganKosongSerial(idx + 1, "sejarah", "dokumenter", temaVisual);
+        return {
+          ...dasar,
+          jenisMotion,
+          kamera: pilihKameraMotionOtomatis(idx, jenisMotion, ep),
+          judulKartu: jenisMotion === "pembuka" ? judul : "",
+          kartuWaktu: jenisMotion === "pembuka" ? `Bagian ${ep}` : "",
           dialog: "",
           kataSorot: [],
           promptVisual: "",
-        },
-        {
-          ...buatAdeganKosongSerial(2, "sejarah", "dokumenter", temaVisual),
-          jenisMotion: tengah,
-          judulKartu: "",
-          kartuWaktu: "",
-          dialog: "",
-          kataSorot: [],
-          promptVisual: "",
-        },
-        {
-          ...buatAdeganKosongSerial(3, "sejarah", "dokumenter", temaVisual),
-          jenisMotion: temaVisual === "perkamen" ? "peta" : tengah,
-          judulKartu: "",
-          kartuWaktu: "",
-          dialog: "",
-          kataSorot: [],
-          promptVisual: "",
-        },
-        {
-          ...buatAdeganKosongSerial(4, "sejarah", "dokumenter", temaVisual),
-          jenisMotion: "penutup",
-          judulKartu: "",
-          kartuWaktu: "",
-          kamera: "zoom_keluar",
-          dialog: "",
-          kataSorot: [],
-          promptVisual: "",
-        },
-      ],
+        };
+      }),
       pertanyaanPenutup: "Simpan & bagikan kisah ini jika bermanfaat.",
       caption: "",
       hashtag: ["sejarahkopi", "qahwah", "lekkopi"],
@@ -1157,7 +1348,7 @@ export function buatPromptNaskahDrafSerial({
         `2) DILARANG kata gaul/logat receh ("lho", "rek", "cak", "nih", "sih"), DILARANG menyebut kasir, mesin espresso modern, atau daftar harga menu kafe.\n` +
         `3) WAJIB IKUTI TOKOH & ALUR CERITA PEMILIK: Jika pemilik menyebut tokoh atau perjalanan spesifik (mis. perjalanan seseorang ke Aceh/Gayo/daerah tertentu), tokoh dan perjalanan tersebut HARUS menjadi tulang punggung cerita sejak Adegan 1 sampai penutup! DILARANG mengubahnya menjadi daftar tahun kering ala Wikipedia ("Pada tahun X... Pada tahun Y..."). Sisipkan fakta sejarah secara alami di dalam alur cerita yang hidup.\n` +
         `4) Gunakan \`pembicara: "narator"\`.\n` +
-        `5) WAJIB isi \`jenisMotion\` ("pembuka" untuk adegan 1, "${temaVisual === "perkamen" ? "perkamen" : "ilustrasi"}" untuk adegan isi, boleh "peta" maksimal 1x HANYA jika membahas penyebaran wilayah geografis, dan "penutup" untuk adegan terakhir), WAJIB isi \`judulKartu\` singkat 2–4 kata pada setiap adegan \`pembuka\`, \`perkamen\`, dan \`peta\`, serta \`kataSorot\` (2–4 kata kunci persis dari dialog).\n` +
+        `5) WAJIB isi \`jenisMotion\` bervariasi: "pembuka", "perkamen", "ilustrasi", "arsip", "peta" (maks 1x), dan "penutup" — JANGAN semua adegan tengah jenis yang sama. WAJIB isi \`judulKartu\` pada \`pembuka\`, \`perkamen\`, \`peta\`, \`arsip\`, dan \`kataSorot\` (2–4 kata dari dialog).\n` +
         `6) WAJIB isi \`promptVisual\` berbahasa Inggris pada setiap adegan non-peta menggambarkan adegan spesifik yang BENAR-BENAR sesuai lokasi & peristiwa dialog (JANGAN pernah menyebut tempat yang tidak relevan dengan cerita), dan akhiri dengan: "${gayaGambar}".`,
       prompt:
         `Susun draf naskah DOKUMENTER / CERITA MOTION (tema ${temaVisual}) untuk "${judulSerial}" EPISODE ${nomorEpisode} berisi **${spek.rentangAdegan}** (target durasi **${spek.durasiLabel}**).\n` +
@@ -1174,7 +1365,8 @@ export function buatPromptNaskahDrafSerial({
         `\n- Adegan 1 (\`jenisMotion: "pembuka"\`) dibuka dengan hook sinematik yang kuat + \`judulKartu\` singkat (2–4 kata).` +
         `\n- Pada setiap adegan \`perkamen\`, WAJIB isi \`judulKartu\` singkat (2–4 kata) agar gulungan perkamen tampil rapi + \`kartuWaktu\` singkat (mis. "ACEH · BENER MERIAH" atau era sesuai cerita).` +
         `\n- Isi \`kataSorot\` (2–4 kata kunci yang persis ada di \`dialog\`) agar subtitle kinetik menyorot kata penting.` +
-        `\n- Isi \`promptVisual\` (Bahasa Inggris, 15–35 kata) pada SETIAP adegan non-peta dengan adegan konkret sesuai cerita + gaya "${gayaGambar}".`,
+        `\n- Isi \`promptVisual\` (Bahasa Inggris, 15–35 kata) pada SETIAP adegan non-peta dengan adegan konkret sesuai cerita + gaya "${gayaGambar}".` +
+        `\n\n${teksSkemaMotionUntukPrompt(nomorEpisode, panjangNaskah === "panjang" ? 12 : panjangNaskah === "ringkas" ? 7 : 9, temaVisual)}`,
     };
   }
 
@@ -1213,7 +1405,8 @@ export function buatPromptNaskahDrafSerial({
       `\n\nAturan panjang dialog & kualitas:` +
       `\n- Panjang setiap dialog/narasi: **${spek.kataPerAdegan}** (${spek.durasiAdegan})! JANGAN tulis dialog kelewat pendek (di bawah 12 kata) kecuali memang sahutan cepat satu kalimat; berikan kalimat utuh, berirama, dan bernyawa.` +
       `\n- Adegan 1 langsung dibuka dengan hook kuat yang memancing rasa ingin tahu.` +
-      `\n- Gunakan variasi ekspresi, properti, efek reaksi komik, kartuWaktu saat berganti waktu/bab, dan gerak kamera agar panggung tetap dinamis.`,
+      `\n- Gunakan variasi ekspresi, properti, efek reaksi komik, kartuWaktu saat berganti waktu/bab, dan gerak kamera bergilir (zoom_masuk, diam, geser_kanan, goyang_kaget, geser_kiri, zoom_keluar) — jangan semua adegan sama.\n` +
+      `- Contoh pola kamera per episode ${nomorEpisode}: ${POLA_KAMERA_KEDAI.slice(0, 6).join(" → ")}.`,
   };
 }
 
@@ -1237,7 +1430,7 @@ function normalisasiTokohDraf(mentah: unknown): TokohDrafSerial | null {
 export function normalisasiNaskahDrafSerial(
   mentah: unknown,
   nomorEpisode = 1,
-  opsi?: { gayaCerita?: GayaCeritaSerial },
+  opsi?: { gayaCerita?: GayaCeritaSerial; temaVisual?: TemaVisualMotion },
 ): NaskahDrafSerial {
   const adalahDokumenter = opsi?.gayaCerita === "dokumenter";
   const akar = mentah && typeof mentah === "object" && !Array.isArray(mentah) ? (mentah as Record<string, unknown>) : {};
@@ -1326,11 +1519,17 @@ export function normalisasiNaskahDrafSerial(
     .filter(Boolean)
     .slice(0, 8);
 
+  const adeganVariasi = terapkanVariasiMotionAdegan(adegan, {
+    nomorEpisode,
+    gayaCerita: opsi?.gayaCerita,
+    temaVisual: opsi?.temaVisual,
+  });
+
   return {
     judulEpisode: String(obj.judulEpisode ?? "").trim().slice(0, 88) || `Episode ${nomorEpisode}`,
     ringkasanEpisode: String(obj.ringkasanEpisode ?? "").trim().slice(0, 450),
     tema: String(obj.tema ?? "").trim().slice(0, 80) || (adalahDokumenter ? "Dokumenter Sejarah" : "Cerita Kedai"),
-    adegan,
+    adegan: adeganVariasi,
     pertanyaanPenutup: String(obj.pertanyaanPenutup ?? "").trim().slice(0, 180) || "Menurutmu gimana cerita kali ini? Komen ya!",
     caption: String(obj.caption ?? "").trim().slice(0, 1000),
     hashtag,

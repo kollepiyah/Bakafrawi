@@ -12,6 +12,9 @@ import {
   catatEpisodeSelesai,
   episodeBerikutnya,
   estimasiDurasiNaskahSerial,
+  pilihProfilEpisodeOtomatis,
+  bangunSkemaJenisMotion,
+  terapkanVariasiMotionAdegan,
   formatRisetCeritaKeTeks,
   konfigSerialBawaan,
   normalisasiKonfigSerial,
@@ -71,6 +74,50 @@ test("konfigSerialBawaan dan normalisasiKonfigSerial menjaga serial bawaan tetap
     hasil.serial[0].episode.map((e) => e.nomor),
     [1, 2],
   );
+});
+
+test("bangunSkemaJenisMotion & terapkanVariasiMotionAdegan memecah pola monoton", () => {
+  const skemaEp3 = bangunSkemaJenisMotion(3, 8, "perkamen");
+  assert.equal(skemaEp3[0], "pembuka");
+  assert.equal(skemaEp3.at(-1), "penutup");
+  assert.ok(new Set(skemaEp3).size >= 4);
+  const skemaEp4 = bangunSkemaJenisMotion(4, 8, "perkamen");
+  assert.equal(skemaEp4.filter((j) => j === "peta").length, 1);
+
+  const monoton = Array.from({ length: 7 }, (_, i) => ({
+    nomor: i + 1,
+    latarKode: "sejarah",
+    kartuWaktu: "",
+    kamera: "zoom_masuk",
+    tokohKiri: null,
+    tokohKanan: null,
+    pembicara: "narator" as const,
+    namaPembicara: "Narator",
+    dialog: "Narasi uji.",
+    jenisMotion: "ilustrasi" as const,
+    sfx: "tanpa" as const,
+  }));
+  const diperkaya = terapkanVariasiMotionAdegan(monoton, {
+    nomorEpisode: 2,
+    gayaCerita: "dokumenter",
+    temaVisual: "malam",
+  });
+  assert.ok(new Set(diperkaya.map((a) => a.jenisMotion)).size >= 4);
+  assert.ok(diperkaya.some((a) => a.kamera !== "zoom_masuk"));
+});
+
+test("pilihProfilEpisodeOtomatis bergilir format dan menghormati lanjutan", () => {
+  const ep1 = pilihProfilEpisodeOtomatis({ nomorEpisode: 1, riwayatEpisode: [] });
+  assert.equal(ep1.gayaCerita, "kedai");
+  const ep3 = pilihProfilEpisodeOtomatis({ nomorEpisode: 3, riwayatEpisode: [] });
+  assert.equal(ep3.gayaCerita, "dokumenter");
+  const lanjut = pilihProfilEpisodeOtomatis({
+    nomorEpisode: 5,
+    riwayatEpisode: [{ nomor: 4, judul: "x", ringkasan: "y", tema: "z", mood: "komedi_ceria", gayaCerita: "kedai" }],
+    lanjutEpisode: true,
+  });
+  assert.equal(lanjut.bersambung, true);
+  assert.equal(lanjut.gayaCerita, "kedai");
 });
 
 test("episodeBerikutnya dan catatEpisodeSelesai bersifat idempoten", () => {
@@ -366,11 +413,12 @@ test("buatDrafManualSerial dan normalisasiNaskahDrafSerial menjaga metadata Ceri
     gayaCerita: "dokumenter",
     temaVisual: "perkamen",
   });
-  assert.equal(manualPerkamen.adegan.length, 4);
+  assert.equal(manualPerkamen.adegan.length, 6);
+  assert.ok(new Set(manualPerkamen.adegan.map((a) => a.jenisMotion)).size >= 4);
   assert.equal(manualPerkamen.adegan[0].jenisMotion, "pembuka");
   assert.equal(manualPerkamen.adegan[1].jenisMotion, "perkamen");
-  assert.equal(manualPerkamen.adegan[2].jenisMotion, "peta");
-  assert.equal(manualPerkamen.adegan[3].jenisMotion, "penutup");
+  assert.ok(manualPerkamen.adegan.some((a) => a.jenisMotion === "peta" || a.jenisMotion === "arsip"));
+  assert.equal(manualPerkamen.adegan.at(-1)?.jenisMotion, "penutup");
 
   const manualMalam = buatDrafManualSerial({
     judulEpisode: "Malam di Lembah",

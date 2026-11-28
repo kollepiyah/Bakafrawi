@@ -7,10 +7,16 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { ffmpeg, jalankan, probe } from './bank/alat.mjs';
 import { adaGambarAi, buatGambarAi, galatKuota } from './bank/gambar-ai.mjs';
-import { deteksiGenderCerita, suaraDialogSerial } from './bank/suara.mjs';
+import { deteksiGenderCerita, jalurSuaraSerial, suaraDialogSerial } from './bank/suara.mjs';
 import { buatMusikKafe, buatSfxOpening } from './opening-audio.mjs';
 import { panggilRouterWorkerJson, urutanPenyediaWorker } from './router-worker.mjs';
 import { pilihMusik } from './video.mjs';
+import {
+  bangunSkemaJenisMotion,
+  pilihKameraKedaiOtomatis,
+  pilihKameraMotionOtomatis,
+  teksSkemaMotionUntukPrompt,
+} from './motion-variasi.mjs';
 import { hitungDurasiSerialKartun } from '../remotion/src/data/serial-waktu.ts';
 import { FPS_MOTION, hitungDurasiCeritaMotion } from '../remotion/src/data/cerita-motion.ts';
 
@@ -307,7 +313,7 @@ export async function buatNaskahSerialKartun({
       '(2) DILARANG kata gaul/logat receh ("lho", "rek", "cak", "nih", "sih"), DILARANG menyebut kasir, mesin espresso modern, atau daftar harga menu kafe. ' +
       '(3) WAJIB IKUTI TOKOH & ALUR CERITA PEMILIK dari Adegan 1 sampai penutup (2-3 kalimat mengalir per adegan); DILARANG mengubah cerita pemilik menjadi daftar tahun kering ala Wikipedia. ' +
       '(4) Gunakan `pembicara: "narator"`. ' +
-      '(5) Isi `jenisMotion` ("pembuka", "perkamen" atau "ilustrasi", boleh "peta" maksimal 1x jika membahas sebaran wilayah, dan "penutup"), WAJIB isi `judulKartu` singkat 2-4 kata pada `pembuka`, `perkamen`, dan `peta`, serta `kataSorot` (2-4 kata kunci penting). ' +
+      '(5) Isi `jenisMotion` bervariasi: pembuka, perkamen, ilustrasi, arsip, peta (maks 1x), penutup — JANGAN semua adegan tengah jenis yang sama. WAJIB isi `judulKartu` + `kataSorot`. ' +
       `(6) WAJIB isi \`promptVisual\` berbahasa Inggris yang benar-benar sesuai peristiwa dialog (jangan menyebut tempat yang tidak ada di cerita) dan akhiri dengan: "${gayaGambar}".`;
 
     prompt = [
@@ -325,6 +331,11 @@ export async function buatNaskahSerialKartun({
       '- Pada setiap adegan `perkamen`, WAJIB isi `judulKartu` singkat (2–4 kata) + `kartuWaktu` singkat.',
       '- Isi `kataSorot` (2–4 kata kunci penting dari `dialog`) agar teks kinetik menyorot kata kunci.',
       `- Isi \`promptVisual\` (Bahasa Inggris, 15–35 kata) pada SETIAP adegan non-peta dengan visual konkret sesuai cerita + "${gayaGambar}".`,
+      teksSkemaMotionUntukPrompt(
+        nomorEpisode,
+        panjangNaskah === 'panjang' ? 12 : panjangNaskah === 'ringkas' ? 7 : 9,
+        temaVisual,
+      ),
     ]
       .filter(Boolean)
       .join('\n\n');
@@ -489,7 +500,10 @@ export function siapkanPropsSerialKartun(naskah, konteks = {}) {
       latarKode: kode,
       ...(latarBerkas ? { latarBerkas } : {}),
       ...(a?.kartuWaktu ? { kartuWaktu: String(a.kartuWaktu).trim().slice(0, 48) } : {}),
-      kamera: KAMERA_SAH.includes(a?.kamera) ? a.kamera : 'zoom_masuk',
+      kamera:
+        a?.kamera && a.kamera !== 'zoom_masuk' && KAMERA_SAH.includes(a.kamera)
+          ? a.kamera
+          : pilihKameraKedaiOtomatis(idx, Math.max(1, Math.round(Number(konteks.nomorEpisode) || 1))),
       tokohKiri,
       tokohKanan,
       pembicara,
@@ -801,18 +815,16 @@ export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
   const konteksCerita = `${judulSerial} ${judulEpisode} ${naskah?.tema ?? ''}`;
 
   const sumberAdegan = (naskah?.adegan ?? []).slice(0, 16);
+  const skemaJenis = bangunSkemaJenisMotion(nomorEpisode, sumberAdegan.length, temaBawaan);
+  const jenisUnik = new Set(sumberAdegan.map((a) => String(a?.jenisMotion ?? '').trim().toLowerCase()).filter(Boolean)).size;
+  const paksaSkema = sumberAdegan.length >= 5 && jenisUnik <= 2;
   let karakterSebelumnya = null;
   const adegan = sumberAdegan.map((a, idx) => {
     const jenisEksplisit = String(a?.jenisMotion ?? '').trim().toLowerCase();
-    const jenis = JENIS_MOTION_SAH.includes(jenisEksplisit)
-      ? jenisEksplisit
-      : idx === 0
-      ? 'pembuka'
-      : idx === sumberAdegan.length - 1 && sumberAdegan.length >= 2
-      ? 'penutup'
-      : temaBawaan === 'perkamen'
-      ? 'perkamen'
-      : 'ilustrasi';
+    const jenis =
+      paksaSkema || !JENIS_MOTION_SAH.includes(jenisEksplisit)
+        ? skemaJenis[idx]
+        : jenisEksplisit;
 
     const kodeMentah = String(a?.latarKode ?? 'sejarah').trim().toLowerCase();
     const gambarBerkas = jenis === 'peta' ? undefined : petaVisualAi[idx] || petaLatar[kodeMentah] || fallbackBerkas;
@@ -903,13 +915,10 @@ export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
       pitaEra = kartuWaktu || judulKartuAsli || undefined;
     }
 
-    const kamera = KAMERA_MOTION_SAH.includes(a?.kamera)
-      ? a.kamera
-      : jenis === 'penutup'
-      ? 'zoom_keluar'
-      : idx % 2 === 0
-      ? 'zoom_masuk'
-      : 'geser_kanan';
+    const kamera =
+      a?.kamera && a.kamera !== 'zoom_masuk' && KAMERA_MOTION_SAH.includes(a.kamera)
+        ? a.kamera
+        : pilihKameraMotionOtomatis(idx, jenis, nomorEpisode);
 
     const karakter = pilihKarakterCeritaOtomatis(a, idx, {
       jenis,
@@ -1089,18 +1098,31 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
   const publik = path.join(folder, 'publik-serial');
   await mkdir(publik, { recursive: true });
 
-  // 1. Unduh gambar latar kartun dari Supabase Storage ke folder publik Remotion
+  // 1. Salin latar kartun ke folder publik Remotion (cache disk supaya CDN Supabase tidak di-hit ulang tiap render → hemat cache egress)
   const petaLatar = {};
+  const folderCacheLatar = path.join(DIR, '..', '.cache-latar');
+  await mkdir(folderCacheLatar, { recursive: true });
   for (const [i, l] of daftarLatar.entries()) {
     const url = String(l?.urlKartun ?? '').trim();
     const kode = String(l?.kode ?? '').trim().toLowerCase();
+    const jalur = String(l?.jalurKartun ?? '').trim().replace(/^\/+/, '');
     if (!kode || !/^https?:\/\//i.test(url) || petaLatar[kode]) continue;
+    const ext = /\.png(\?|$)/i.test(url) ? '.png' : '.jpg';
+    const namaBerkas = `latar-${i}-${kode}${ext}`;
+    const tujuan = path.join(publik, namaBerkas);
+    const kunciCache = (jalur || kode).replace(/[^a-zA-Z0-9._-]+/g, '_');
+    const berkasCache = path.join(folderCacheLatar, `${kunciCache}${ext}`);
     try {
+      if (existsSync(berkasCache)) {
+        await copyFile(berkasCache, tujuan);
+        petaLatar[kode] = namaBerkas;
+        continue;
+      }
       const r = await fetch(url, { signal: AbortSignal.timeout(20_000) });
       if (!r.ok) continue;
-      const ext = /\.png(\?|$)/i.test(url) ? '.png' : '.jpg';
-      const namaBerkas = `latar-${i}-${kode}${ext}`;
-      await writeFile(path.join(publik, namaBerkas), Buffer.from(await r.arrayBuffer()));
+      const buf = Buffer.from(await r.arrayBuffer());
+      await writeFile(berkasCache, buf);
+      await writeFile(tujuan, buf);
       petaLatar[kode] = namaBerkas;
     } catch (e) {
       log(`Latar kartun ${kode} gagal diunduh (pakai bawaan): ${String(e?.message ?? e).slice(0, 100)}`);
@@ -1182,7 +1204,18 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
     };
   });
 
-  const suaraHasil = await suaraDialogSerial(itemDialog, publik, { suaraTokoh, daftarVoice });
+  const suaraHasil = await suaraDialogSerial(itemDialog, publik, {
+    suaraTokoh,
+    daftarVoice,
+    jalur: jalurSuaraSerial(),
+  });
+  let adeganTanpaSuara = 0;
+  for (let ai = 0; ai < itemDialog.length; ai++) {
+    if (itemDialog[ai]?.teks && !suaraHasil.item[ai]?.berkas) adeganTanpaSuara++;
+  }
+  if (adeganTanpaSuara > 0) {
+    log(`⚠ ${adeganTanpaSuara} adegan tanpa audio — cek GEMINI_API_KEY / STUDIO_JALUR_SUARA atau set STUDIO_SERIAL_LEWATI_ELEVENLABS=1 di GitHub Actions.`);
+  }
   const durasiSuara = [];
   for (const s of suaraHasil.item) {
     if (!s?.berkas) {
