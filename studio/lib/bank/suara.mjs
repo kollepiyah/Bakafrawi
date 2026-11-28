@@ -107,12 +107,12 @@ export function jalurSuara() {
   return process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION ? 'azure' : 'edge'
 }
 
-/** Jalur suara Serial Kartun / CeritaMotion — bawaan lewati ElevenLabs agar langsung Gemini/Edge Indonesia. */
+/** Jalur suara Serial Kartun / CeritaMotion — bawaan sama dengan video lain: ElevenLabs dulu, gagal → Gemini (lihat suaraDialogSerial). */
 export function jalurSuaraSerial() {
   const paksa = String(process.env.STUDIO_JALUR_SUARA ?? '').trim().toLowerCase()
   if (['elevenlabs', 'gemini', 'azure', 'edge'].includes(paksa)) return paksa
-  const lewati = String(process.env.STUDIO_SERIAL_LEWATI_ELEVENLABS ?? '1').trim()
-  if (!/^(0|tidak|false|no)$/i.test(lewati)) {
+  const lewati = String(process.env.STUDIO_SERIAL_LEWATI_ELEVENLABS ?? '0').trim()
+  if (/^(1|ya|true|yes)$/i.test(lewati)) {
     if (process.env.GEMINI_API_KEY) return 'gemini'
     return 'edge'
   }
@@ -524,6 +524,29 @@ async function elevenlabs(teks, keluar, profil, opsi = {}) {
   return mintaElevenLabs(teks, keluar, profil, opsi)
 }
 
+/**
+ * Estimasi waktu per kata agar lip-sync & subtitle kartun tetap hidup bila Gemini/Edge
+ * tidak mengembalikan alignment (format { teks, mulai, selesai } detik).
+ */
+export function kataProporsionalSerial(teks, durasiDetik, jedaAwal = 0.12) {
+  const kata = String(teks ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!kata.length || !(Number(durasiDetik) > 0)) return []
+  const bobot = kata.map((k) => Math.max(2, k.replace(/[^a-zA-Z0-9À-ɏ]/g, '').length))
+  const totalBobot = bobot.reduce((s, b) => s + b, 0)
+  const rentang = Math.max(0.9, durasiDetik - jedaAwal - 0.2)
+  let kursor = jedaAwal
+  return kata.map((k, idx) => {
+    const porsi = (bobot[idx] / totalBobot) * rentang
+    const mulai = Number(kursor.toFixed(3))
+    kursor += porsi
+    const selesai = Number(Math.min(durasiDetik, kursor).toFixed(3))
+    return { teks: k, mulai, selesai: Math.max(mulai + 0.05, selesai) }
+  })
+}
+
 // --------------------------------------------------------------- pemakai
 
 const PEMBUAT = { elevenlabs, gemini, azure, edge }
@@ -778,9 +801,14 @@ export async function suaraDialogSerial(daftarItem = [], folder, opsi = {}) {
             `suara ${pembicara} (${gender}) memakai ${j} natural (${labelVoice}) — ${alasanPindah}`,
           )
         }
+        let kata = Array.isArray(r?.kata) ? r.kata : []
+        if (!kata.length && teks) {
+          const estimasi = Math.max(1.8, Math.min(24, teks.split(/\s+/).length * 0.44 + 0.6))
+          kata = kataProporsionalSerial(teks, estimasi)
+        }
         selesaiItem = {
           berkas,
-          kata: Array.isArray(r?.kata) ? r.kata : [],
+          kata,
           jalur: j,
           voiceId: labelVoice || null,
         }

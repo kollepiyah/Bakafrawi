@@ -64,7 +64,7 @@ export type AdeganCeritaMotion = {
   /** Penanda waktu tiap kata dari ElevenLabs / Edge TTS atau estimasi proporsional. */
   kata?: KataWaktuMotion[];
   /** Gerak kamera perlahan. */
-  kamera?: 'zoom_masuk' | 'zoom_keluar' | 'geser_kanan' | 'geser_kiri';
+  kamera?: 'zoom_masuk' | 'zoom_keluar' | 'geser_kanan' | 'geser_kiri' | 'goyang_kaget';
   /** Konfigurasi karakter kartun 2D berjalan / memeriksa arsip / dialog di panggung. */
   karakter?: KonfigPanggungKarakter;
   /** Teks stempel merah miring untuk adegan close-up `arsip` (opsional). */

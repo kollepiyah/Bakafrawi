@@ -58,6 +58,8 @@ export type PropsSerialKartun = {
   akun: string;
   mood: 'komedi_ceria' | 'kehidupan_santai' | 'cerita_kopi';
   gayaCerita?: 'kedai' | 'dokumenter';
+  /** Video sekali putar (tanpa serial episodik): intro/penutup tanpa ajakan episode berikutnya. */
+  sekaliPutar?: boolean;
   pertanyaanPenutup: string;
   infoKedai: string;
   latarIntroBerkas?: string;

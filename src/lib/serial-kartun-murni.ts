@@ -429,12 +429,12 @@ const POLA_VARIASI_EPISODE: ProfilEpisodeOtomatis[] = [
     mood: "komedi_ceria",
   },
   {
-    label: "Cerita kartun dokumenter (1 video / CeritaMotion)",
-    gayaCerita: "dokumenter",
-    temaVisual: "perkamen",
+    label: "Cerita kopi kartun kedai (1 video, hidup seperti serial)",
+    gayaCerita: "kedai",
+    temaVisual: "malam",
     panjangNaskah: "sedang",
     bersambung: false,
-    formatSuara: "narator",
+    formatSuara: "campuran",
     mood: "cerita_kopi",
   },
   {
@@ -679,7 +679,7 @@ const ISI_MOTION_PER_EPISODE: JenisAdeganMotion[][] = [
   ["ilustrasi", "arsip", "ilustrasi", "perkamen", "peta"],
 ];
 
-const KAMERA_MOTION_SAH = ["zoom_masuk", "zoom_keluar", "geser_kanan", "geser_kiri"] as const;
+const KAMERA_MOTION_SAH = ["zoom_masuk", "zoom_keluar", "geser_kanan", "geser_kiri", "goyang_kaget"] as const;
 const POLA_KAMERA_KEDAI = ["zoom_masuk", "diam", "geser_kanan", "goyang_kaget", "geser_kiri", "zoom_keluar", "zoom_masuk", "diam"] as const;
 
 /** Susun `jenisMotion` per indeks adegan sesuai episode & tema visual. */

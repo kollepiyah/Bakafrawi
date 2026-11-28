@@ -216,7 +216,7 @@ const KartuIntro: React.FC<{ props: PropsSerialKartun; durasi: number }> = ({ pr
               textTransform: 'uppercase',
             }}
           >
-            EPISODE {props.nomorEpisode} · {props.judulSerial}
+            {props.sekaliPutar ? props.judulSerial : `EPISODE ${props.nomorEpisode} · ${props.judulSerial}`}
           </div>
           <div
             style={{
@@ -279,7 +279,7 @@ const KartuPenutup: React.FC<{ props: PropsSerialKartun; durasi: number }> = ({ 
             textTransform: 'uppercase',
           }}
         >
-          Tunggu Episode {props.nomorEpisode + 1}!
+          {props.sekaliPutar ? 'Sampai Jumpa di Lek Kopi!' : `Tunggu Episode ${props.nomorEpisode + 1}!`}
         </div>
         <div
           style={{
@@ -391,7 +391,7 @@ const AdeganPanggung: React.FC<{
             letterSpacing: 0.4,
           }}
         >
-          {props.akun} · {props.judulSerial} • EP {props.nomorEpisode}
+          {props.akun} · {props.judulSerial}{props.sekaliPutar ? '' : ` • EP ${props.nomorEpisode}`}
         </div>
       </div>
 

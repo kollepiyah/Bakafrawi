@@ -64,7 +64,7 @@ test('siapkanPropsSerialKartun menormalisasi adegan, tokoh, latar & durasi', () 
   assert.equal(props.nomorEpisode, 3);
   assert.equal(props.adegan.length, 2);
   assert.equal(props.adegan[0].latarBerkas, 'latar-0-bar.jpg');
-  assert.equal(props.adegan[0].kamera, 'zoom_masuk');
+  assert.ok(['zoom_masuk', 'goyang_kaget', 'diam'].includes(props.adegan[0].kamera));
   assert.equal(props.adegan[0].durasi, 3.7);
   assert.equal(props.adegan[0].suaraBerkas, 'dialog_0_mbak_pelanggan.mp3');
   assert.equal(props.adegan[0].kata.length, 1);

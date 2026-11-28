@@ -518,6 +518,7 @@ export function siapkanPropsSerialKartun(naskah, konteks = {}) {
   const latarIntroBerkas = adegan[0]?.latarBerkas || fallbackBerkas;
   const latarIntroKode = adegan[0]?.latarKode || 'outdoor';
 
+  const sekaliPutar = konteks.bersambung === false
   return {
     judulSerial: String(konteks.judulSerial || 'Cerita di Lek Kopi').slice(0, 60),
     nomorEpisode: Math.max(1, Math.round(Number(konteks.nomorEpisode) || 1)),
@@ -525,6 +526,7 @@ export function siapkanPropsSerialKartun(naskah, konteks = {}) {
     akun: konteks.akun || '@lekkopi.id',
     mood: ['komedi_ceria', 'kehidupan_santai', 'cerita_kopi'].includes(konteks.mood) ? konteks.mood : 'komedi_ceria',
     gayaCerita: adalahDokumenter ? 'dokumenter' : 'kedai',
+    ...(sekaliPutar ? { sekaliPutar: true } : {}),
     pertanyaanPenutup: String(naskah?.pertanyaanPenutup || 'Menurutmu gimana cerita kali ini? Tulis di komentar!').slice(0, 180),
     infoKedai: konteks.infoKedai || 'Panjunan, Waru, Sidoarjo · Senin–Sabtu 14.00–23.00 WIB',
     ...(latarIntroBerkas ? { latarIntroBerkas } : {}),
@@ -538,7 +540,7 @@ export function siapkanPropsSerialKartun(naskah, konteks = {}) {
   };
 }
 
-const KAMERA_MOTION_SAH = ['zoom_masuk', 'zoom_keluar', 'geser_kanan', 'geser_kiri'];
+const KAMERA_MOTION_SAH = ['zoom_masuk', 'zoom_keluar', 'geser_kanan', 'geser_kiri', 'goyang_kaget'];
 const STOPWORD_SOROT = new Set([
   'yang', 'dengan', 'untuk', 'dalam', 'adalah', 'sebagai', 'seperti', 'ketika', 'karena',
   'namun', 'tetapi', 'hingga', 'sampai', 'setiap', 'bahwa', 'mereka', 'beliau', 'semua',
@@ -827,7 +829,16 @@ export function siapkanPropsCeritaMotion(naskah, konteks = {}) {
         : jenisEksplisit;
 
     const kodeMentah = String(a?.latarKode ?? 'sejarah').trim().toLowerCase();
-    const gambarBerkas = jenis === 'peta' ? undefined : petaVisualAi[idx] || petaLatar[kodeMentah] || fallbackBerkas;
+    const kodeKedai = ['bar', 'outdoor', 'meja', 'depan'][idx % 4];
+    const nilaiLatar = Object.values(petaLatar).filter(Boolean);
+    const gambarBerkas =
+      jenis === 'peta'
+        ? undefined
+        : petaVisualAi[idx] ||
+          petaLatar[kodeMentah] ||
+          petaLatar[kodeKedai] ||
+          nilaiLatar[idx % Math.max(1, nilaiLatar.length)] ||
+          fallbackBerkas;
 
     const narasi = String(a?.dialog ?? a?.narasi ?? '').trim();
     const itemSuara = daftarSuara[idx] ?? {};
@@ -1247,6 +1258,7 @@ export async function renderSerialKartun({ tugas, merek, merekBakafrawi, folder,
         nomorEpisode,
         mood,
         gayaCerita,
+        bersambung,
         petaLatar,
         petaVisualAi,
         suaraHasil: suaraHasil.item,

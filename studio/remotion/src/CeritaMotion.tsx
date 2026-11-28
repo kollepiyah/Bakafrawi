@@ -169,6 +169,11 @@ const LatarIlustrasi: React.FC<{
   } else if (kamera === 'geser_kiri') {
     skala = 1.07;
     geserX = 18 - progres * 36;
+  } else if (kamera === 'goyang_kaget') {
+    const decay = Math.max(0, 1 - frame / 20);
+    skala = 1.06;
+    geserX = Math.sin(frame * 1.9) * 12 * decay;
+    geserY = Math.cos(frame * 2.3) * 8 * decay;
   }
 
   return (
