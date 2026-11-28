@@ -1,5 +1,14 @@
 # CHANGELOG — bakafrawi.com
 
+## Serial Kartun Sekali Putar Hidup & Suara ElevenLabs→Gemini (28 Nov)
+- **Kenapa video tanpa bersambung terasa kaku:** rotasi "Campur Otomatis" sering memilih **CeritaMotion** (gulungan/peta/siluet historis), bukan komposisi **SerialKartun** (Mas Lek, latar foto kartun kedai, kamera goyang, dialog)—seperti referensi `serial-kartun.mp4`.
+- **Rotasi ep3** kini **cerita kopi kartun kedai** (`gayaCerita: kedai`, `campuran`) agar video sekali putar memakai Serial Kartun yang hidup.
+- **Mode `sekaliPutar`** (`bersambung: false`): intro/penutup tanpa badge "Episode N" & tanpa "Tunggu Episode berikutnya".
+- **Suara:** `jalurSuaraSerial()` default **coba ElevenLabs dulu**, gagal/kuota → **Gemini** → Edge (`STUDIO_SERIAL_LEWATI_ELEVENLABS=1` hanya bila ingin paksa lewati ElevenLabs).
+- **Lip-sync:** Gemini/Edge tanpa alignment dapat **estimasi kata** (`kataProporsionalSerial`) supaya mulut karakter tetap bergerak.
+- **CeritaMotion:** latar kartun kedai dipakai bila ilustrasi AI kosong; kamera `goyang_kaget` didukung.
+- **Diuji:** 16/16 `serial-kartun.test.mjs`, 15/15 `serial-kartun-murni.test.ts`.
+
 ## Perbaikan Layar WebShowcase (almanshur.id) & Rombak Karakter 2D Ekspresif Berpindah Posisi di CeritaMotion (27 Nov)
 - **Perbaikan Layar Blank/Tertutup Modal & Subtitle Menempel pada `WebShowcase` (`studio/lib/peramban.mjs`, `studio/remotion/src/WebShowcase.tsx`):**
   - Menemukan 3 akar penyebab layar website tidak terlihat di `WebShowcase` (contoh `almanshur.id`): (1) `html { scroll-behavior: smooth }` membuat `window.scrollTo(0, 0)` dengan jeda 350ms belum kembali ke puncak Hero saat dipotret; (2) `hal.screenshot({ clip })` dipanggil **tanpa `fullPage: true`** sehingga bagian di bawah lipatan viewport gagal terpotret; (3) pop-up pengumuman (`position: fixed` modal) menutupi Hero awal.
